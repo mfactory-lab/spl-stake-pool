@@ -1,0 +1,1 @@
+# jfactory-stake-pool
