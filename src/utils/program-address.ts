@@ -26,10 +26,10 @@
  * The developer of this program can be contacted at <info@mfactory.ch>.
  */
 
-import { PublicKey } from "@solana/web3.js";
-import BN from "bn.js";
-import { Buffer } from 'buffer';
-import { TRANSIENT_STAKE_SEED_PREFIX } from "../constants";
+import {PublicKey} from '@solana/web3.js'
+import BN from 'bn.js'
+import {Buffer} from 'buffer'
+import {TRANSIENT_STAKE_SEED_PREFIX} from '../constants'
 
 /**
  * Generates the withdraw authority program address for the stake pool
@@ -41,8 +41,8 @@ export async function findWithdrawAuthorityProgramAddress(
   const [publicKey] = await PublicKey.findProgramAddress(
     [stakePoolAddress.toBuffer(), Buffer.from('withdraw')],
     programId,
-  );
-  return publicKey;
+  )
+  return publicKey
 }
 
 /**
@@ -56,8 +56,8 @@ export async function findStakeProgramAddress(
   const [publicKey] = await PublicKey.findProgramAddress(
     [voteAccountAddress.toBuffer(), stakePoolAddress.toBuffer()],
     programId,
-  );
-  return publicKey;
+  )
+  return publicKey
 }
 
 /**
@@ -77,6 +77,6 @@ export async function findTransientStakeProgramAddress(
       new Uint8Array(seed.toArray('le', 8)),
     ],
     programId,
-  );
-  return publicKey;
+  )
+  return publicKey
 }
