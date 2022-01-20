@@ -37,7 +37,7 @@ import {
   SystemProgram,
   TransactionInstruction,
 } from '@solana/web3.js'
-import {ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_PROGRAM_ID, Token} from '@solana/spl-token'
+import { ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_PROGRAM_ID, Token } from '@solana/spl-token'
 import {
   ValidatorAccount,
   addAssociatedTokenAccount,
@@ -48,12 +48,13 @@ import {
   findWithdrawAuthorityProgramAddress,
   getTokenAccount,
   getValidatorListAccount,
-  lamportsToSol,
   newStakeAccount,
   prepareWithdrawAccounts,
+  getTokenMint,
+  lamportsToSol,
   solToLamports,
 } from './utils'
-import {StakePoolInstruction} from './instructions'
+import { StakePoolInstruction } from './instructions'
 import {
   StakePool,
   StakePoolLayout,
@@ -68,8 +69,8 @@ import {
   STAKE_STATE_LEN,
 } from './constants'
 
-export type {StakePool, AccountType, ValidatorList, ValidatorStakeInfo} from './layouts'
-export {STAKE_POOL_PROGRAM_ID} from './constants'
+export type { StakePool, AccountType, ValidatorList, ValidatorStakeInfo } from './layouts'
+export { STAKE_POOL_PROGRAM_ID } from './constants'
 export * from './instructions'
 
 export interface ValidatorListAccount {
@@ -821,5 +822,118 @@ export async function updateStakePool(connection: Connection, stakePoolAddress: 
   return {
     updateListInstructions,
     instructions,
+  }
+}
+
+/**
+ * Retrieves detailed information about the StakePool.
+ */
+export async function stakePoolInfo(connection: Connection, stakePoolAddress: PublicKey) {
+  const stakePool = await getStakePoolAccount(connection, stakePoolAddress);
+  const reserveAccountStakeAddress = stakePool.account.data.reserveStake;
+  const totalLamports = stakePool.account.lamports;
+  const lastUpdateEpoch = stakePool.account.data.lastUpdateEpoch;
+
+  const validatorList = await getValidatorListAccount(
+    connection,
+    stakePool.account.data.validatorList,
+  );
+
+  const maxNumberOfValidators = validatorList.account.data.maxValidators;
+  const currentNumberOfValidators = validatorList.account.data.validators.length;
+
+  const epochInfo = await connection.getEpochInfo();
+  const reserveStake = await connection.getAccountInfo(reserveAccountStakeAddress);
+  const withdrawAuthority = await findWithdrawAuthorityProgramAddress(
+    STAKE_POOL_PROGRAM_ID,
+    stakePoolAddress,
+  );
+
+  const minimumReserveStakeBalance = (await connection.getMinimumBalanceForRentExemption(STAKE_STATE_LEN)) + 1;
+
+  const stakeAccounts = validatorList.account.data.validators.map(async (validator) => {
+    const stakeAccountAddress = await findStakeProgramAddress(
+      STAKE_POOL_PROGRAM_ID,
+      validator.voteAccountAddress,
+      stakePoolAddress,
+    );
+    const transientStakeAccountAddress = await findTransientStakeProgramAddress(
+      STAKE_POOL_PROGRAM_ID,
+      validator.voteAccountAddress,
+      stakePoolAddress,
+      validator.transientSeedSuffixStart,
+    );
+    const updateRequired = !validator.lastUpdateEpoch.eqn(epochInfo.epoch);
+    return {
+      voteAccountAddress: validator.voteAccountAddress.toBase58(),
+      stakeAccountAddress: stakeAccountAddress.toBase58(),
+      validatorActiveStakeLamports: validator.activeStakeLamports.toString(),
+      validatorLastUpdateEpoch: validator.lastUpdateEpoch.toString(),
+      validatorLamports: validator.activeStakeLamports.add(validator.transientStakeLamports).toString(),
+      validatorTransientStakeAccountAddress: transientStakeAccountAddress.toBase58(),
+      validatorTransientStakeLamports: validator.transientStakeLamports.toString(),
+      updateRequired,
+    }
+  });
+
+  const totalPoolTokens = lamportsToSol(stakePool.account.data.poolTokenSupply)
+  const updateRequired = !lastUpdateEpoch.eqn(epochInfo.epoch);
+
+  return {
+    address: stakePoolAddress.toBase58(),
+    poolWithdrawAuthority: withdrawAuthority.toBase58(),
+    manager: stakePool.account.data.manager.toBase58(),
+    staker: stakePool.account.data.staker.toBase58(),
+    stakeDepositAuthority: stakePool.account.data.stakeDepositAuthority.toBase58(),
+    stakeWithdrawBumpSeed: stakePool.account.data.stakeWithdrawBumpSeed,
+    maxValidators: maxNumberOfValidators,
+    validatorList: validatorList.account.data.validators.map(validator => {
+      return {
+        activeStakeLamports: validator.activeStakeLamports.toString(),
+        transientStakeLamports: validator.transientStakeLamports.toString(),
+        lastUpdateEpoch: validator.lastUpdateEpoch.toString(),
+        transientSeedSuffixStart: validator.transientSeedSuffixStart.toString(),
+        transientSeedSuffixEnd: validator.transientSeedSuffixEnd.toString(),
+        status: validator.status.toString(),
+        voteAccountAddress: validator.voteAccountAddress.toString(),
+      };
+    }), // CliStakePoolValidator
+    validatorListStorageAccount: stakePool.account.data.validatorList.toBase58(),
+    reserveStake: stakePool.account.data.reserveStake.toBase58(),
+    poolMint: stakePool.account.data.poolMint.toBase58(),
+    managerFeeAccount: stakePool.account.data.managerFeeAccount.toBase58(),
+    tokenProgramId: stakePool.account.data.tokenProgramId.toBase58(),
+    totalLamports: stakePool.account.data.totalLamports.toString(),
+    poolTokenSupply: stakePool.account.data.poolTokenSupply.toString(),
+    lastUpdateEpoch: stakePool.account.data.lastUpdateEpoch.toString(),
+    lockup: stakePool.account.data.lockup, // pub lockup: CliStakePoolLockup
+    epochFee: stakePool.account.data.epochFee,
+    nextEpochFee: stakePool.account.data.nextEpochFee,
+    preferredDepositValidatorVoteAddress: stakePool.account.data.preferredDepositValidatorVoteAddress,
+    preferredWithdrawValidatorVoteAddress: stakePool.account.data.preferredWithdrawValidatorVoteAddress,
+    stakeDepositFee: stakePool.account.data.stakeDepositFee,
+    stakeWithdrawalFee: stakePool.account.data.stakeWithdrawalFee,
+    // CliStakePool the same
+    nextStakeWithdrawalFee: stakePool.account.data.nextSolWithdrawalFee,
+    stakeReferralFee: stakePool.account.data.stakeReferralFee,
+    solDepositAuthority: stakePool.account.data.solDepositAuthority?.toBase58(),
+    solDepositFee: stakePool.account.data.solDepositFee,
+    solReferralFee: stakePool.account.data.solReferralFee,
+    solWithdrawAuthority: stakePool.account.data.solWithdrawAuthority?.toBase58(),
+    solWithdrawalFee: stakePool.account.data.solWithdrawalFee,
+    nextSolWithdrawalFee: stakePool.account.data.nextSolWithdrawalFee,
+    lastEpochPoolTokenSupply: stakePool.account.data.lastEpochPoolTokenSupply.toString(),
+    lastEpochTotalLamports: stakePool.account.data.lastEpochTotalLamports.toString(),
+    details: {
+      reserveStakeLamports: reserveStake?.lamports,
+      reserveAccountStakeAddress,
+      minimumReserveStakeBalance,
+      stakeAccounts,
+      totalLamports,
+      totalPoolTokens,
+      currentNumberOfValidators,
+      maxNumberOfValidators,
+      updateRequired,
+    } // CliStakePoolDetails
   }
 }
