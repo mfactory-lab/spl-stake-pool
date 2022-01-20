@@ -851,7 +851,7 @@ export async function stakePoolInfo(connection: Connection, stakePoolAddress: Pu
 
   const minimumReserveStakeBalance = (await connection.getMinimumBalanceForRentExemption(STAKE_STATE_LEN)) + 1;
 
-  const stakeAccounts = validatorList.account.data.validators.map(async (validator) => {
+  const stakeAccounts = await Promise.all(validatorList.account.data.validators.map(async (validator) => {
     const stakeAccountAddress = await findStakeProgramAddress(
       STAKE_POOL_PROGRAM_ID,
       validator.voteAccountAddress,
@@ -874,7 +874,7 @@ export async function stakePoolInfo(connection: Connection, stakePoolAddress: Pu
       validatorTransientStakeLamports: validator.transientStakeLamports.toString(),
       updateRequired,
     }
-  });
+  }));
 
   const totalPoolTokens = lamportsToSol(stakePool.account.data.poolTokenSupply)
   const updateRequired = !lastUpdateEpoch.eqn(epochInfo.epoch);
@@ -926,7 +926,7 @@ export async function stakePoolInfo(connection: Connection, stakePoolAddress: Pu
     lastEpochTotalLamports: stakePool.account.data.lastEpochTotalLamports.toString(),
     details: {
       reserveStakeLamports: reserveStake?.lamports,
-      reserveAccountStakeAddress,
+      reserveAccountStakeAddress: reserveAccountStakeAddress.toBase58(),
       minimumReserveStakeBalance,
       stakeAccounts,
       totalLamports,
