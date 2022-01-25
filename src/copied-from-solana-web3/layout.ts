@@ -26,7 +26,7 @@
  * The developer of this program can be contacted at <info@mfactory.ch>.
  */
 
-import {Buffer} from 'buffer';
+import { Buffer } from 'buffer';
 import * as BufferLayout from '@solana/buffer-layout';
 
 /**

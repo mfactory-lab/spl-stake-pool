@@ -26,10 +26,10 @@
  * The developer of this program can be contacted at <info@mfactory.ch>.
  */
 
-import {PublicKey} from '@solana/web3.js'
+import { PublicKey } from '@solana/web3.js'
 import BN from 'bn.js'
-import {Buffer} from 'buffer'
-import {TRANSIENT_STAKE_SEED_PREFIX} from '../constants'
+import { Buffer } from 'buffer'
+import { TRANSIENT_STAKE_SEED_PREFIX } from '../constants'
 
 /**
  * Generates the withdraw authority program address for the stake pool

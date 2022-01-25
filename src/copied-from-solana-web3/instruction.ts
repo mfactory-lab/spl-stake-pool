@@ -68,7 +68,7 @@ export function decodeData(type: InstructionType, buffer: Buffer): any {
 
   if (data.instruction !== type.index) {
     throw new Error(
-        `invalid instruction; instruction index mismatch ${data.instruction} != ${type.index}`,
+      `invalid instruction; instruction index mismatch ${data.instruction} != ${type.index}`,
     );
   }
 

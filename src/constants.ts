@@ -26,9 +26,9 @@
  * The developer of this program can be contacted at <info@mfactory.ch>.
  */
 
-import {Buffer} from 'buffer'
-import {PublicKey} from '@solana/web3.js'
-import {solToLamports} from './utils'
+import { Buffer } from 'buffer'
+import { PublicKey } from '@solana/web3.js'
+import { solToLamports } from './utils'
 
 // Public key that identifies the SPL Stake Pool program.
 export const STAKE_POOL_PROGRAM_ID = new PublicKey('SPoo1Ku8WFXoNDMHPsrGSTSG1Y47rzgn41SLUNakuHy')
