@@ -1,5 +1,5 @@
 import {Connection, PublicKey} from '@solana/web3.js';
-import BN from 'bn.js';
+import * as BN from 'bn.js';
 import {StakePoolAccount, getStakePoolAccounts} from '../src';
 
 export function isStakePoolAccount(account: any): account is StakePoolAccount {
