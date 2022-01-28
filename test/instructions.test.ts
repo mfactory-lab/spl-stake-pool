@@ -104,7 +104,7 @@ describe('StakePoolProgram', () => {
     it.only('should throw an error with invalid account', async () => {
       connection.getAccountInfo = jest.fn(async () => null);
       await expect(depositSol(connection, stakePoolAddress, from, balance)).rejects.toThrow(
-        Error('Invalid account'),
+        Error('Invalid stake pool account'),
       );
     });
 
@@ -137,7 +137,7 @@ describe('StakePoolProgram', () => {
       connection.getAccountInfo = jest.fn(async () => null);
       await expect(
         withdrawSol(connection, stakePoolAddress, tokenOwner, solReceiver, 1),
-      ).rejects.toThrowError('Invalid account');
+      ).rejects.toThrowError('Invalid stake pool account');
     });
 
     it.only('should throw an error with invalid token account', async () => {
