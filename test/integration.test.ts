@@ -8,5 +8,5 @@
 
 // @ts-ignore
 describe('Integration test', () => {
-
+  // ...
 });
