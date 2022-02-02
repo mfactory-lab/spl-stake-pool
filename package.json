@@ -29,6 +29,7 @@
     "access": "public"
   },
   "browser": "dist.browser/index.js",
+  "module": "dist.browser/index.esm.js",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "browserslist": [
