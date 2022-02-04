@@ -295,7 +295,7 @@ export class StakePoolInstruction {
       {pubkey: withdrawAuthority, isSigner: false, isWritable: false},
       {pubkey: validatorList, isSigner: false, isWritable: true},
       {pubkey: reserveStake, isSigner: false, isWritable: false},
-      {pubkey: managerFeeAccount, isSigner: false, isWritable: false},
+      {pubkey: managerFeeAccount, isSigner: false, isWritable: true},
       {pubkey: poolMint, isSigner: false, isWritable: true},
       {pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false},
     ];

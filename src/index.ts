@@ -93,13 +93,13 @@ export async function getStakePoolAccount(
 /**
  * Retrieves all StakePool and ValidatorList accounts that are running a particular StakePool program.
  * @param connection: An active web3js connection.
- * @param stakePoolAddress: The public key (address) of the StakePool program.
+ * @param stakePoolProgramAddress: The public key (address) of the StakePool program.
  */
 export async function getStakePoolAccounts(
   connection: Connection,
-  stakePoolAddress: PublicKey,
+  stakePoolProgramAddress: PublicKey,
 ): Promise<(StakePoolAccount | ValidatorListAccount)[] | undefined> {
-  const response = await connection.getProgramAccounts(stakePoolAddress);
+  const response = await connection.getProgramAccounts(stakePoolProgramAddress);
 
   return response.map(a => {
     let decodedData;
@@ -146,7 +146,7 @@ export async function depositStake(
   authorizedPubkey: PublicKey,
   validatorVote: PublicKey,
   depositStake: PublicKey,
-  poolTokenReceiverAccount?: PublicKey | undefined,
+  poolTokenReceiverAccount?: PublicKey,
 ) {
   const stakePool = await getStakePoolAccount(connection, stakePoolAddress);
 
@@ -170,15 +170,14 @@ export async function depositStake(
 
   // Create token account if not specified
   if (!poolTokenReceiverAccount) {
-    poolTokenReceiverAccount = await addAssociatedTokenAccount(
+    const {associatedAddress, rentFee: fee} = await addAssociatedTokenAccount(
       connection,
       authorizedPubkey,
       poolMint,
       instructions,
     );
-    if (instructions.length > 0) {
-      rentFee = await connection.getMinimumBalanceForRentExemption(StakeProgram.space);
-    }
+    poolTokenReceiverAccount = associatedAddress;
+    rentFee += fee;
   }
 
   instructions.push(
@@ -264,15 +263,14 @@ export async function depositSol(
 
   // Create token account if not specified
   if (!destinationTokenAccount) {
-    destinationTokenAccount = await addAssociatedTokenAccount(
+    const {associatedAddress, rentFee: fee} = await addAssociatedTokenAccount(
       connection,
       from,
       stakePool.poolMint,
       instructions,
     );
-    if (instructions.length > 1) {
-      rentFee = await connection.getMinimumBalanceForRentExemption(StakeProgram.space);
-    }
+    destinationTokenAccount = associatedAddress;
+    rentFee += fee;
   }
 
   const withdrawAuthority = await findWithdrawAuthorityProgramAddress(
@@ -702,7 +700,6 @@ export async function updateStakePool(
   stakePool: StakePoolAccount,
   noMerge = false,
 ) {
-  // const stakePool = await getStakePoolAccount(connection, stakePoolAddress)
   const stakePoolAddress = stakePool.pubkey;
 
   const validatorList = await getValidatorListAccount(
@@ -788,7 +785,7 @@ export async function updateStakePool(
 export async function stakePoolInfo(connection: Connection, stakePoolAddress: PublicKey) {
   const stakePool = await getStakePoolAccount(connection, stakePoolAddress);
   const reserveAccountStakeAddress = stakePool.account.data.reserveStake;
-  const totalLamports = stakePool.account.lamports;
+  const totalLamports = stakePool.account.data.totalLamports;
   const lastUpdateEpoch = stakePool.account.data.lastUpdateEpoch;
 
   const validatorList = await getValidatorListAccount(
@@ -878,7 +875,7 @@ export async function stakePoolInfo(connection: Connection, stakePoolAddress: Pu
     stakeDepositFee: stakePool.account.data.stakeDepositFee,
     stakeWithdrawalFee: stakePool.account.data.stakeWithdrawalFee,
     // CliStakePool the same
-    nextStakeWithdrawalFee: stakePool.account.data.nextSolWithdrawalFee,
+    nextStakeWithdrawalFee: stakePool.account.data.nextStakeWithdrawalFee,
     stakeReferralFee: stakePool.account.data.stakeReferralFee,
     solDepositAuthority: stakePool.account.data.solDepositAuthority?.toBase58(),
     solDepositFee: stakePool.account.data.solDepositFee,
