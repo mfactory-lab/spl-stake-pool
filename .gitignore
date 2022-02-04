@@ -1,4 +1,4 @@
-#dist
-#dist.browser
+dist
+dist.browser
 .idea
 node_modules
