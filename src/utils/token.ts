@@ -1,4 +1,4 @@
-import {Connection, PublicKey, StakeProgram, TransactionInstruction} from '@solana/web3.js';
+import {Connection, PublicKey, TransactionInstruction} from '@solana/web3.js';
 import {
   AccountInfo,
   ASSOCIATED_TOKEN_PROGRAM_ID,
@@ -64,7 +64,7 @@ export async function addAssociatedTokenAccount(
           owner,
         ),
       );
-      rentFee = await connection.getMinimumBalanceForRentExemption(StakeProgram.space);
+      rentFee = await connection.getMinimumBalanceForRentExemption(AccountLayout.span);
     } else {
       throw err;
     }
