@@ -1,37 +1,9 @@
-/*
- * This file is part of Solana Reference Stake Pool code.
- *
- * Copyright © 2021, mFactory GmbH
- *
- * Solana Reference Stake Pool is free software: you can redistribute it
- * and/or modify it under the terms of the GNU Affero General Public License
- * as published by the Free Software Foundation, either version 3
- * of the License, or (at your option) any later version.
- *
- * Solana Reference Stake Pool is distributed in the hope that it
- * will be useful, but WITHOUT ANY WARRANTY; without even the implied
- * warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
- * See the GNU Affero General Public License for more details.
- *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.
- * If not, see <https://www.gnu.org/licenses/agpl-3.0.html>.
- *
- * You can be released from the requirements of the Affero GNU General Public License
- * by purchasing a commercial license. The purchase of such a license is
- * mandatory as soon as you develop commercial activities using the
- * Solana Reference Stake Pool code without disclosing the source code of
- * your own applications.
- *
- * The developer of this program can be contacted at <info@mfactory.ch>.
- */
-
 import { Keypair, StakeAuthorizationLayout, StakeProgram, SystemProgram, } from '@solana/web3.js';
 import { ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_PROGRAM_ID, Token } from '@solana/spl-token';
 import { addAssociatedTokenAccount, arrayChunk, calcLamportsWithdrawAmount, findStakeProgramAddress, findTransientStakeProgramAddress, findWithdrawAuthorityProgramAddress, getTokenAccount, getValidatorListAccount, newStakeAccount, prepareWithdrawAccounts, lamportsToSol, solToLamports, } from './utils';
 import { StakePoolInstruction } from './instructions';
 import { StakePoolLayout, ValidatorListLayout, } from './layouts';
-import { MAX_VALIDATORS_TO_UPDATE, MIN_STAKE_BALANCE, STAKE_POOL_PROGRAM_ID, STAKE_STATE_LEN, } from './constants';
+import { MAX_VALIDATORS_TO_UPDATE, MIN_STAKE_BALANCE, STAKE_POOL_PROGRAM_ID } from './constants';
 export { STAKE_POOL_PROGRAM_ID } from './constants';
 export * from './instructions';
 /**
@@ -111,7 +83,7 @@ export async function depositStake(connection, stakePoolAddress, authorizedPubke
     if (!poolTokenReceiverAccount) {
         poolTokenReceiverAccount = await addAssociatedTokenAccount(connection, authorizedPubkey, poolMint, instructions);
         if (instructions.length > 0) {
-            rentFee = await connection.getMinimumBalanceForRentExemption(STAKE_STATE_LEN);
+            rentFee = await connection.getMinimumBalanceForRentExemption(StakeProgram.space);
         }
     }
     instructions.push(...StakeProgram.authorize({
@@ -170,7 +142,7 @@ export async function depositSol(connection, stakePoolAddress, from, lamports, d
     if (!destinationTokenAccount) {
         destinationTokenAccount = await addAssociatedTokenAccount(connection, from, stakePool.poolMint, instructions);
         if (instructions.length > 1) {
-            rentFee = await connection.getMinimumBalanceForRentExemption(STAKE_STATE_LEN);
+            rentFee = await connection.getMinimumBalanceForRentExemption(StakeProgram.space);
         }
     }
     const withdrawAuthority = await findWithdrawAuthorityProgramAddress(STAKE_POOL_PROGRAM_ID, stakePoolAddress);
@@ -468,7 +440,7 @@ export async function stakePoolInfo(connection, stakePoolAddress) {
     const epochInfo = await connection.getEpochInfo();
     const reserveStake = await connection.getAccountInfo(reserveAccountStakeAddress);
     const withdrawAuthority = await findWithdrawAuthorityProgramAddress(STAKE_POOL_PROGRAM_ID, stakePoolAddress);
-    const minimumReserveStakeBalance = (await connection.getMinimumBalanceForRentExemption(STAKE_STATE_LEN)) + 1;
+    const minimumReserveStakeBalance = (await connection.getMinimumBalanceForRentExemption(StakeProgram.space)) + 1;
     const stakeAccounts = await Promise.all(validatorList.account.data.validators.map(async (validator) => {
         const stakeAccountAddress = await findStakeProgramAddress(STAKE_POOL_PROGRAM_ID, validator.voteAccountAddress, stakePoolAddress);
         const transientStakeAccountAddress = await findTransientStakeProgramAddress(STAKE_POOL_PROGRAM_ID, validator.voteAccountAddress, stakePoolAddress, validator.transientSeedSuffixStart);
