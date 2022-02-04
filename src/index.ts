@@ -33,12 +33,7 @@ import {
   ValidatorListLayout,
   ValidatorStakeInfo,
 } from './layouts';
-import {
-  MAX_VALIDATORS_TO_UPDATE,
-  MIN_STAKE_BALANCE,
-  STAKE_POOL_PROGRAM_ID,
-  STAKE_STATE_LEN,
-} from './constants';
+import {MAX_VALIDATORS_TO_UPDATE, MIN_STAKE_BALANCE, STAKE_POOL_PROGRAM_ID} from './constants';
 
 export type {StakePool, AccountType, ValidatorList, ValidatorStakeInfo} from './layouts';
 export {STAKE_POOL_PROGRAM_ID} from './constants';
@@ -182,7 +177,7 @@ export async function depositStake(
       instructions,
     );
     if (instructions.length > 0) {
-      rentFee = await connection.getMinimumBalanceForRentExemption(STAKE_STATE_LEN);
+      rentFee = await connection.getMinimumBalanceForRentExemption(StakeProgram.space);
     }
   }
 
@@ -276,7 +271,7 @@ export async function depositSol(
       instructions,
     );
     if (instructions.length > 1) {
-      rentFee = await connection.getMinimumBalanceForRentExemption(STAKE_STATE_LEN);
+      rentFee = await connection.getMinimumBalanceForRentExemption(StakeProgram.space);
     }
   }
 
@@ -812,7 +807,7 @@ export async function stakePoolInfo(connection: Connection, stakePoolAddress: Pu
   );
 
   const minimumReserveStakeBalance =
-    (await connection.getMinimumBalanceForRentExemption(STAKE_STATE_LEN)) + 1;
+    (await connection.getMinimumBalanceForRentExemption(StakeProgram.space)) + 1;
 
   const stakeAccounts = await Promise.all(
     validatorList.account.data.validators.map(async validator => {

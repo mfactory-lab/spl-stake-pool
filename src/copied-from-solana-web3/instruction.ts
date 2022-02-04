@@ -18,7 +18,7 @@ export type InstructionType = {
  * @internal
  */
 export function encodeData(type: InstructionType, fields?: any): Buffer {
-  const allocLength = type.layout.span >= 0 ? type.layout.span : Layout.getAlloc(type, fields);
+  const allocLength = type.layout.span;
   const data = Buffer.alloc(allocLength);
   const layoutFields = Object.assign({instruction: type.index}, fields);
   type.layout.encode(layoutFields, data);
