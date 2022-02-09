@@ -6,19 +6,19 @@ import {
   AccountInfo,
   LAMPORTS_PER_SOL,
 } from '@solana/web3.js';
-import {StakePoolLayout} from '../src/layouts';
-import {STAKE_POOL_PROGRAM_ID} from '../src/constants';
-import {decodeData} from '../src/copied-from-solana-web3/instruction';
+import { StakePoolLayout } from '../src/layouts';
 import {
   STAKE_POOL_INSTRUCTION_LAYOUTS,
+  STAKE_POOL_PROGRAM_ID,
   DepositSolParams,
   StakePoolInstruction,
   depositSol,
   withdrawSol,
   withdrawStake,
+  decodeData,
 } from '../src';
 
-import {mockTokenAccount, mockValidatorList, stakePoolMock} from './mocks';
+import { mockTokenAccount, mockValidatorList, stakePoolMock } from './mocks';
 
 describe('StakePoolProgram', () => {
   const connection = new Connection('http://127.0.0.1:8899');

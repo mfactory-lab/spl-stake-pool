@@ -6,13 +6,18 @@ import {
   SystemProgram,
   TransactionInstruction,
 } from '@solana/web3.js';
-import {findStakeProgramAddress, findTransientStakeProgramAddress} from './program-address';
+import { findStakeProgramAddress, findTransientStakeProgramAddress } from './program-address';
 import BN from 'bn.js';
 
-import {lamportsToSol} from './math';
-import {WithdrawAccount} from '../index';
-import {StakePool, ValidatorList, ValidatorListLayout, ValidatorStakeInfoStatus} from '../layouts';
-import {STAKE_POOL_PROGRAM_ID} from '../constants';
+import { lamportsToSol } from './math';
+import { WithdrawAccount } from '../index';
+import {
+  StakePool,
+  ValidatorList,
+  ValidatorListLayout,
+  ValidatorStakeInfoStatus,
+} from '../layouts';
+import { STAKE_POOL_PROGRAM_ID } from '../constants';
 
 export async function getValidatorListAccount(connection: Connection, pubkey: PublicKey) {
   const account = await connection.getAccountInfo(pubkey);
@@ -119,7 +124,7 @@ export async function prepareWithdrawAccounts(
   for (const type of ['preferred', 'active', 'transient', 'reserve']) {
     const filteredAccounts = accounts.filter(a => a.type == type);
 
-    for (const {stakeAddress, voteAddress, lamports} of filteredAccounts) {
+    for (const { stakeAddress, voteAddress, lamports } of filteredAccounts) {
       let availableForWithdrawal = Math.floor(calcPoolTokensForDeposit(stakePool, lamports));
       if (!stakePool.stakeWithdrawalFee.denominator.isZero()) {
         availableForWithdrawal = divideBnToNumber(
@@ -134,7 +139,7 @@ export async function prepareWithdrawAccounts(
       }
 
       // Those accounts will be withdrawn completely with `claim` instruction
-      withdrawFrom.push({stakeAddress, voteAddress, poolAmount});
+      withdrawFrom.push({ stakeAddress, voteAddress, poolAmount });
       remainingAmount -= poolAmount;
       if (remainingAmount == 0) {
         break;

@@ -9,7 +9,7 @@ import {
   SystemProgram,
   TransactionInstruction,
 } from '@solana/web3.js';
-import {ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_PROGRAM_ID, Token} from '@solana/spl-token';
+import { ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_PROGRAM_ID, Token } from '@solana/spl-token';
 import {
   ValidatorAccount,
   addAssociatedTokenAccount,
@@ -25,7 +25,7 @@ import {
   lamportsToSol,
   solToLamports,
 } from './utils';
-import {StakePoolInstruction} from './instructions';
+import { StakePoolInstruction } from './instructions';
 import {
   StakePool,
   StakePoolLayout,
@@ -33,10 +33,10 @@ import {
   ValidatorListLayout,
   ValidatorStakeInfo,
 } from './layouts';
-import {MAX_VALIDATORS_TO_UPDATE, MIN_STAKE_BALANCE, STAKE_POOL_PROGRAM_ID} from './constants';
+import { MAX_VALIDATORS_TO_UPDATE, MIN_STAKE_BALANCE, STAKE_POOL_PROGRAM_ID } from './constants';
 
-export type {StakePool, AccountType, ValidatorList, ValidatorStakeInfo} from './layouts';
-export {STAKE_POOL_PROGRAM_ID} from './constants';
+export type { StakePool, AccountType, ValidatorList, ValidatorStakeInfo } from './layouts';
+export { STAKE_POOL_PROGRAM_ID } from './constants';
 export * from './instructions';
 
 export interface ValidatorListAccount {
@@ -170,7 +170,7 @@ export async function depositStake(
 
   // Create token account if not specified
   if (!poolTokenReceiverAccount) {
-    const {associatedAddress, rentFee: fee} = await addAssociatedTokenAccount(
+    const { associatedAddress, rentFee: fee } = await addAssociatedTokenAccount(
       connection,
       authorizedPubkey,
       poolMint,
@@ -263,7 +263,7 @@ export async function depositSol(
 
   // Create token account if not specified
   if (!destinationTokenAccount) {
-    const {associatedAddress, rentFee: fee} = await addAssociatedTokenAccount(
+    const { associatedAddress, rentFee: fee } = await addAssociatedTokenAccount(
       connection,
       from,
       stakePool.poolMint,
