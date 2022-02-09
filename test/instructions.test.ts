@@ -15,8 +15,9 @@ import {
   depositSol,
   withdrawSol,
   withdrawStake,
-  decodeData,
 } from '../src';
+
+import { decodeData } from '../src/utils';
 
 import { mockTokenAccount, mockValidatorList, stakePoolMock } from './mocks';
 
@@ -83,7 +84,7 @@ describe('StakePoolProgram', () => {
 
     connection.getBalance = jest.fn(async () => balance);
 
-    connection.getAccountInfo = jest.fn(async pubKey => {
+    connection.getAccountInfo = jest.fn(async (pubKey) => {
       if (pubKey == stakePoolAddress) {
         return stakePoolAccount;
       }
@@ -109,7 +110,7 @@ describe('StakePoolProgram', () => {
     });
 
     it.only('should call successfully', async () => {
-      connection.getAccountInfo = jest.fn(async pubKey => {
+      connection.getAccountInfo = jest.fn(async (pubKey) => {
         if (pubKey == stakePoolAddress) {
           return stakePoolAccount;
         }
