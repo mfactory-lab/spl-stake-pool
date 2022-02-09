@@ -15,5 +15,8 @@
     "isolatedModules": true,
     "noFallthroughCasesInSwitch": true,
     "noImplicitReturns": true
-  }
+  },
+  "include": [
+    "src/**/*.ts"
+  ]
 }

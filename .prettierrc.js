@@ -3,6 +3,5 @@ module.exports = {
   trailingComma: 'all',
   printWidth: 100,
   endOfLine: 'lf',
-  arrowParens: 'avoid',
   semi: true,
 };
