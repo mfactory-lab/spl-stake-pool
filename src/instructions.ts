@@ -262,7 +262,7 @@ export class StakePoolInstruction {
       { pubkey: SYSVAR_CLOCK_PUBKEY, isSigner: false, isWritable: false },
       { pubkey: SYSVAR_STAKE_HISTORY_PUBKEY, isSigner: false, isWritable: false },
       { pubkey: StakeProgram.programId, isSigner: false, isWritable: false },
-      ...validatorAndTransientStakePairs.map(pubkey => ({
+      ...validatorAndTransientStakePairs.map((pubkey) => ({
         pubkey,
         isSigner: false,
         isWritable: true,

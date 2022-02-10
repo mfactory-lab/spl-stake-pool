@@ -12,6 +12,7 @@ import BN from 'bn.js';
 import { lamportsToSol } from './math';
 import { WithdrawAccount } from '../index';
 import {
+  Fee,
   StakePool,
   ValidatorList,
   ValidatorListLayout,
@@ -48,6 +49,7 @@ export async function prepareWithdrawAccounts(
   stakePoolAddress: PublicKey,
   amount: number,
   compareFn?: (a: ValidatorAccount, b: ValidatorAccount) => number,
+  skipFee?: boolean,
 ): Promise<WithdrawAccount[]> {
   const validatorListAcc = await connection.getAccountInfo(stakePool.validatorList);
   const validatorList = ValidatorListLayout.decode(validatorListAcc?.data) as ValidatorList;
@@ -112,7 +114,6 @@ export async function prepareWithdrawAccounts(
 
   const reserveStake = await connection.getAccountInfo(stakePool.reserveStake);
   if (reserveStake && reserveStake.lamports > 0) {
-    console.log('Reserve Stake: ', reserveStake.lamports);
     accounts.push({
       type: 'reserve',
       stakeAddress: stakePool.reserveStake,
@@ -124,6 +125,12 @@ export async function prepareWithdrawAccounts(
   const withdrawFrom: WithdrawAccount[] = [];
   let remainingAmount = amount;
 
+  const fee = stakePool.stakeWithdrawalFee;
+  const inverseFee: Fee = {
+    numerator: fee.denominator.sub(fee.numerator),
+    denominator: fee.denominator,
+  };
+
   for (const type of ['preferred', 'active', 'transient', 'reserve']) {
     const filteredAccounts = accounts.filter((a) => a.type == type);
 
@@ -132,11 +139,12 @@ export async function prepareWithdrawAccounts(
         continue;
       }
 
-      let availableForWithdrawal = Math.floor(calcPoolTokensForDeposit(stakePool, lamports));
-      if (!stakePool.stakeWithdrawalFee.denominator.isZero()) {
+      let availableForWithdrawal = calcPoolTokensForDeposit(stakePool, lamports - minBalance);
+
+      if (!skipFee && !inverseFee.numerator.isZero()) {
         availableForWithdrawal = divideBnToNumber(
-          new BN(availableForWithdrawal).mul(stakePool.stakeWithdrawalFee.denominator),
-          stakePool.stakeWithdrawalFee.denominator.sub(stakePool.stakeWithdrawalFee.numerator),
+          new BN(availableForWithdrawal).mul(inverseFee.denominator),
+          inverseFee.numerator,
         );
       }
 
@@ -147,7 +155,6 @@ export async function prepareWithdrawAccounts(
 
       // Those accounts will be withdrawn completely with `claim` instruction
       withdrawFrom.push({ stakeAddress, voteAddress, poolAmount });
-
       remainingAmount -= poolAmount;
 
       if (remainingAmount == 0) {
@@ -179,9 +186,8 @@ export function calcPoolTokensForDeposit(stakePool: StakePool, stakeLamports: nu
   if (stakePool.poolTokenSupply.isZero() || stakePool.totalLamports.isZero()) {
     return stakeLamports;
   }
-  return divideBnToNumber(
-    new BN(stakeLamports).mul(stakePool.poolTokenSupply),
-    stakePool.totalLamports,
+  return Math.floor(
+    divideBnToNumber(new BN(stakeLamports).mul(stakePool.poolTokenSupply), stakePool.totalLamports),
   );
 }
 
