@@ -17,7 +17,7 @@ import {
   ValidatorListLayout,
   ValidatorStakeInfoStatus,
 } from '../layouts';
-import { STAKE_POOL_PROGRAM_ID } from '../constants';
+import { MINIMUM_ACTIVE_STAKE, STAKE_POOL_PROGRAM_ID } from '../constants';
 
 export async function getValidatorListAccount(connection: Connection, pubkey: PublicKey) {
   const account = await connection.getAccountInfo(pubkey);
@@ -55,6 +55,9 @@ export async function prepareWithdrawAccounts(
   if (!validatorList?.validators || validatorList?.validators.length == 0) {
     throw new Error('No accounts found');
   }
+
+  const minBalance =
+    (await connection.getMinimumBalanceForRentExemption(StakeProgram.space)) + MINIMUM_ACTIVE_STAKE;
 
   let accounts = [] as Array<{
     type: 'preferred' | 'active' | 'transient' | 'reserve';
@@ -122,9 +125,13 @@ export async function prepareWithdrawAccounts(
   let remainingAmount = amount;
 
   for (const type of ['preferred', 'active', 'transient', 'reserve']) {
-    const filteredAccounts = accounts.filter(a => a.type == type);
+    const filteredAccounts = accounts.filter((a) => a.type == type);
 
     for (const { stakeAddress, voteAddress, lamports } of filteredAccounts) {
+      if (lamports <= minBalance) {
+        continue;
+      }
+
       let availableForWithdrawal = Math.floor(calcPoolTokensForDeposit(stakePool, lamports));
       if (!stakePool.stakeWithdrawalFee.denominator.isZero()) {
         availableForWithdrawal = divideBnToNumber(
@@ -140,11 +147,14 @@ export async function prepareWithdrawAccounts(
 
       // Those accounts will be withdrawn completely with `claim` instruction
       withdrawFrom.push({ stakeAddress, voteAddress, poolAmount });
+
       remainingAmount -= poolAmount;
+
       if (remainingAmount == 0) {
         break;
       }
     }
+
     if (remainingAmount == 0) {
       break;
     }
