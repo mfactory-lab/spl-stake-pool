@@ -1,4 +1,21 @@
-dist
-dist.browser
+# IDE & OS specific
+.DS_Store
 .idea
+.vscode
+
+# Logs
+logs
+*.log
+
+# Dependencies
 node_modules
+
+# Coverage
+coverage
+.nyc_output
+
+# Release
+dist
+
+# TypeScript
+declarations
