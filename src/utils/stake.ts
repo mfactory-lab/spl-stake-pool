@@ -101,12 +101,13 @@ export async function prepareWithdrawAccounts(
       validator.transientSeedSuffixStart,
     );
 
-    if (!validator.transientStakeLamports?.isZero()) {
+    const transientStakeLamports = validator.transientStakeLamports.toNumber() - minBalance;
+    if (transientStakeLamports > 0) {
       accounts.push({
         type: 'transient',
         voteAddress: validator.voteAccountAddress,
         stakeAddress: transientStakeAccountAddress,
-        lamports: validator.transientStakeLamports.toNumber() - minBalance,
+        lamports: transientStakeLamports,
       });
     }
   }
