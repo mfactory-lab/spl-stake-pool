@@ -94,15 +94,14 @@ export async function prepareWithdrawAccounts(
       });
     }
 
-    const transientStakeAccountAddress = await findTransientStakeProgramAddress(
-      STAKE_POOL_PROGRAM_ID,
-      validator.voteAccountAddress,
-      stakePoolAddress,
-      validator.transientSeedSuffixStart,
-    );
-
     const transientStakeLamports = validator.transientStakeLamports.toNumber() - minBalance;
     if (transientStakeLamports > 0) {
+      const transientStakeAccountAddress = await findTransientStakeProgramAddress(
+        STAKE_POOL_PROGRAM_ID,
+        validator.voteAccountAddress,
+        stakePoolAddress,
+        validator.transientSeedSuffixStart,
+      );
       accounts.push({
         type: 'transient',
         voteAddress: validator.voteAccountAddress,
@@ -116,11 +115,12 @@ export async function prepareWithdrawAccounts(
   accounts = accounts.sort(compareFn ? compareFn : (a, b) => b.lamports - a.lamports);
 
   const reserveStake = await connection.getAccountInfo(stakePool.reserveStake);
-  if (reserveStake && reserveStake.lamports > 0) {
+  const reserveStakeBalance = (reserveStake?.lamports ?? 0) - minBalanceForRentExemption - 1;
+  if (reserveStakeBalance > 0) {
     accounts.push({
       type: 'reserve',
       stakeAddress: stakePool.reserveStake,
-      lamports: reserveStake?.lamports - minBalanceForRentExemption - 1,
+      lamports: reserveStakeBalance,
     });
   }
 
