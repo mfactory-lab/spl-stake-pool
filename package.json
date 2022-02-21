@@ -9,8 +9,7 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
-    "clean": "rimraf ./dist",
-    "deploy:dist": "push-dir --dir=dist --branch=dist --cleanup"
+    "clean": "rimraf ./dist"
   },
   "keywords": [],
   "contributors": [
@@ -69,7 +68,6 @@
     "eslint-plugin-prettier": "^4.0.0",
     "jest": "^27.5.1",
     "prettier": "^2.5.1",
-    "push-dir": "^0.4.1",
     "rimraf": "^3.0.2",
     "rollup": "^2.66.1",
     "rollup-plugin-dts": "^4.1.0",
