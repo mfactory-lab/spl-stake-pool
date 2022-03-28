@@ -82,16 +82,18 @@ export async function prepareWithdrawAccounts(
       stakePoolAddress,
     );
 
+    const isPreferred = stakePool?.preferredWithdrawValidatorVoteAddress?.equals(
+      validator.voteAccountAddress,
+    );
+
     if (!validator.activeStakeLamports.isZero()) {
-      const isPreferred = stakePool?.preferredWithdrawValidatorVoteAddress?.equals(
-        validator.voteAccountAddress,
-      );
       accounts.push({
         type: isPreferred ? 'preferred' : 'active',
         voteAddress: validator.voteAccountAddress,
         stakeAddress: stakeAccountAddress,
         lamports: validator.activeStakeLamports.toNumber(),
       });
+      continue;
     }
 
     const transientStakeLamports = validator.transientStakeLamports.toNumber() - minBalance;
@@ -103,7 +105,7 @@ export async function prepareWithdrawAccounts(
         validator.transientSeedSuffixStart,
       );
       accounts.push({
-        type: 'transient',
+        type: isPreferred ? 'preferred' : 'transient',
         voteAddress: validator.voteAccountAddress,
         stakeAddress: transientStakeAccountAddress,
         lamports: transientStakeLamports,
