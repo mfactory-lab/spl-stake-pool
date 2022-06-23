@@ -36829,7 +36829,9 @@ var solanaStakePool = (function (exports) {
 	const TRANSIENT_STAKE_SEED_PREFIX = buffer$1.Buffer.from('transient');
 	// Minimum amount of staked SOL required in a validator stake account to allow
 	// for merges without a mismatch on credits observed
-	const MINIMUM_ACTIVE_STAKE = LAMPORTS_PER_SOL / 1000;
+	const MINIMUM_ACTIVE_STAKE = LAMPORTS_PER_SOL;
+	/// Minimum amount of SOL in the reserve
+	const MINIMUM_RESERVE_LAMPORTS = LAMPORTS_PER_SOL;
 
 	/**
 	 * Generates the withdraw authority program address for the stake pool
@@ -39798,20 +39800,21 @@ var solanaStakePool = (function (exports) {
 	            continue;
 	        }
 	        const stakeAccountAddress = await findStakeProgramAddress(STAKE_POOL_PROGRAM_ID, validator.voteAccountAddress, stakePoolAddress);
+	        const isPreferred = (_a = stakePool === null || stakePool === void 0 ? void 0 : stakePool.preferredWithdrawValidatorVoteAddress) === null || _a === void 0 ? void 0 : _a.equals(validator.voteAccountAddress);
 	        if (!validator.activeStakeLamports.isZero()) {
-	            const isPreferred = (_a = stakePool === null || stakePool === void 0 ? void 0 : stakePool.preferredWithdrawValidatorVoteAddress) === null || _a === void 0 ? void 0 : _a.equals(validator.voteAccountAddress);
 	            accounts.push({
 	                type: isPreferred ? 'preferred' : 'active',
 	                voteAddress: validator.voteAccountAddress,
 	                stakeAddress: stakeAccountAddress,
 	                lamports: validator.activeStakeLamports.toNumber(),
 	            });
+	            continue;
 	        }
 	        const transientStakeLamports = validator.transientStakeLamports.toNumber() - minBalance;
 	        if (transientStakeLamports > 0) {
 	            const transientStakeAccountAddress = await findTransientStakeProgramAddress(STAKE_POOL_PROGRAM_ID, validator.voteAccountAddress, stakePoolAddress, validator.transientSeedSuffixStart);
 	            accounts.push({
-	                type: 'transient',
+	                type: isPreferred ? 'preferred' : 'transient',
 	                voteAddress: validator.voteAccountAddress,
 	                stakeAddress: transientStakeAccountAddress,
 	                lamports: transientStakeLamports,
@@ -39821,7 +39824,7 @@ var solanaStakePool = (function (exports) {
 	    // Sort from highest to lowest balance
 	    accounts = accounts.sort(compareFn ? compareFn : (a, b) => b.lamports - a.lamports);
 	    const reserveStake = await connection.getAccountInfo(stakePool.reserveStake);
-	    const reserveStakeBalance = ((_b = reserveStake === null || reserveStake === void 0 ? void 0 : reserveStake.lamports) !== null && _b !== void 0 ? _b : 0) - minBalanceForRentExemption - 1;
+	    const reserveStakeBalance = ((_b = reserveStake === null || reserveStake === void 0 ? void 0 : reserveStake.lamports) !== null && _b !== void 0 ? _b : 0) - minBalanceForRentExemption - MINIMUM_RESERVE_LAMPORTS;
 	    if (reserveStakeBalance > 0) {
 	        accounts.push({
 	            type: 'reserve',
@@ -39840,7 +39843,7 @@ var solanaStakePool = (function (exports) {
 	    for (const type of ['preferred', 'active', 'transient', 'reserve']) {
 	        const filteredAccounts = accounts.filter((a) => a.type == type);
 	        for (const { stakeAddress, voteAddress, lamports } of filteredAccounts) {
-	            if (lamports <= minBalance) {
+	            if (lamports <= minBalance && type == 'transient') {
 	                continue;
 	            }
 	            let availableForWithdrawal = calcPoolTokensForDeposit(stakePool, lamports);
