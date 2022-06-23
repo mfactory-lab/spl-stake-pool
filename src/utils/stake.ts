@@ -18,7 +18,11 @@ import {
   ValidatorListLayout,
   ValidatorStakeInfoStatus,
 } from '../layouts';
-import { MINIMUM_ACTIVE_STAKE, STAKE_POOL_PROGRAM_ID } from '../constants';
+import {
+  MINIMUM_ACTIVE_STAKE,
+  MINIMUM_RESERVE_LAMPORTS,
+  STAKE_POOL_PROGRAM_ID,
+} from '../constants';
 
 export async function getValidatorListAccount(connection: Connection, pubkey: PublicKey) {
   const account = await connection.getAccountInfo(pubkey);
@@ -63,8 +67,10 @@ export async function prepareWithdrawAccounts(
   );
   const minBalance = minBalanceForRentExemption + MINIMUM_ACTIVE_STAKE;
 
+  type AccountType = 'preferred' | 'active' | 'transient' | 'reserve';
+
   let accounts = [] as Array<{
-    type: 'preferred' | 'active' | 'transient' | 'reserve';
+    type: AccountType;
     voteAddress?: PublicKey | undefined;
     stakeAddress: PublicKey;
     lamports: number;
@@ -82,16 +88,18 @@ export async function prepareWithdrawAccounts(
       stakePoolAddress,
     );
 
+    const isPreferred = stakePool?.preferredWithdrawValidatorVoteAddress?.equals(
+      validator.voteAccountAddress,
+    );
+
     if (!validator.activeStakeLamports.isZero()) {
-      const isPreferred = stakePool?.preferredWithdrawValidatorVoteAddress?.equals(
-        validator.voteAccountAddress,
-      );
       accounts.push({
         type: isPreferred ? 'preferred' : 'active',
         voteAddress: validator.voteAccountAddress,
         stakeAddress: stakeAccountAddress,
         lamports: validator.activeStakeLamports.toNumber(),
       });
+      continue;
     }
 
     const transientStakeLamports = validator.transientStakeLamports.toNumber() - minBalance;
@@ -103,7 +111,7 @@ export async function prepareWithdrawAccounts(
         validator.transientSeedSuffixStart,
       );
       accounts.push({
-        type: 'transient',
+        type: isPreferred ? 'preferred' : 'transient',
         voteAddress: validator.voteAccountAddress,
         stakeAddress: transientStakeAccountAddress,
         lamports: transientStakeLamports,
@@ -115,7 +123,9 @@ export async function prepareWithdrawAccounts(
   accounts = accounts.sort(compareFn ? compareFn : (a, b) => b.lamports - a.lamports);
 
   const reserveStake = await connection.getAccountInfo(stakePool.reserveStake);
-  const reserveStakeBalance = (reserveStake?.lamports ?? 0) - minBalanceForRentExemption - 1;
+  const reserveStakeBalance =
+    (reserveStake?.lamports ?? 0) - minBalanceForRentExemption - MINIMUM_RESERVE_LAMPORTS;
+
   if (reserveStakeBalance > 0) {
     accounts.push({
       type: 'reserve',
@@ -134,7 +144,7 @@ export async function prepareWithdrawAccounts(
     denominator: fee.denominator,
   };
 
-  for (const type of ['preferred', 'active', 'transient', 'reserve']) {
+  for (const type of <AccountType[]>['preferred', 'active', 'transient', 'reserve']) {
     const filteredAccounts = accounts.filter((a) => a.type == type);
 
     for (const { stakeAddress, voteAddress, lamports } of filteredAccounts) {
