@@ -119,7 +119,7 @@ export async function prepareWithdrawAccounts(
     }
   }
 
-  // Sort from highest to lowest balance
+  // Sort from highest to lowest balance by default
   accounts = accounts.sort(compareFn ? compareFn : (a, b) => b.lamports - a.lamports);
 
   const reserveStake = await connection.getAccountInfo(stakePool.reserveStake);
@@ -148,7 +148,7 @@ export async function prepareWithdrawAccounts(
     const filteredAccounts = accounts.filter((a) => a.type == type);
 
     for (const { stakeAddress, voteAddress, lamports } of filteredAccounts) {
-      if (lamports <= minBalance && type == 'transient') {
+      if (lamports <= minBalance) {
         continue;
       }
 
@@ -183,9 +183,8 @@ export async function prepareWithdrawAccounts(
   // Not enough stake to withdraw the specified amount
   if (remainingAmount > 0) {
     throw new Error(
-      `No stake accounts found in this pool with enough balance to withdraw ${lamportsToSol(
-        amount,
-      )} pool tokens.`,
+      `No stake accounts found in this pool with enough balance to withdraw
+      ${lamportsToSol(amount)} pool tokens.`,
     );
   }
 
