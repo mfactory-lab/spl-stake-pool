@@ -1,20 +1,20 @@
+import BN from 'bn.js';
 import { LAMPORTS_PER_SOL } from '@solana/web3.js';
+const SOL_DECIMALS = Math.log10(LAMPORTS_PER_SOL);
 export function solToLamports(amount) {
-    if (isNaN(amount))
+    if (isNaN(amount)) {
         return Number(0);
-    return Number(amount * LAMPORTS_PER_SOL);
+    }
+    return new BN(amount.toFixed(SOL_DECIMALS).replace('.', '')).toNumber();
 }
 export function lamportsToSol(lamports) {
     if (typeof lamports === 'number') {
         return Math.abs(lamports) / LAMPORTS_PER_SOL;
     }
-    let signMultiplier = 1;
-    if (lamports.isNeg()) {
-        signMultiplier = -1;
-    }
     const absLamports = lamports.abs();
+    const signMultiplier = lamports.isNeg() ? -1 : 1;
     const lamportsString = absLamports.toString(10).padStart(10, '0');
-    const splitIndex = lamportsString.length - 9;
+    const splitIndex = lamportsString.length - SOL_DECIMALS;
     const solString = lamportsString.slice(0, splitIndex) + '.' + lamportsString.slice(splitIndex);
     return signMultiplier * parseFloat(solString);
 }

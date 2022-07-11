@@ -219,14 +219,8 @@ export async function withdrawStake(connection, stakePoolAddress, tokenOwner, am
     const signers = [userTransferAuthority];
     instructions.push(Token.createApproveInstruction(TOKEN_PROGRAM_ID, poolTokenAccount, userTransferAuthority.publicKey, tokenOwner, [], poolAmount));
     let totalRentFreeBalances = 0;
-    // Max 5 accounts to prevent an error: "Transaction too large"
-    const maxWithdrawAccounts = 5;
-    let i = 0;
     // Go through prepared accounts and withdraw/claim them
     for (const withdrawAccount of withdrawAccounts) {
-        if (i > maxWithdrawAccounts) {
-            break;
-        }
         // Convert pool tokens amount to lamports
         const solWithdrawAmount = Math.ceil(calcLamportsWithdrawAmount(stakePool.account.data, withdrawAccount.poolAmount));
         let infoMsg = `Withdrawing ◎${solWithdrawAmount},
@@ -259,7 +253,6 @@ export async function withdrawStake(connection, stakePoolAddress, tokenOwner, am
             poolTokens: withdrawAccount.poolAmount,
             withdrawAuthority,
         }));
-        i++;
     }
     return {
         instructions,

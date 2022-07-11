@@ -36801,22 +36801,21 @@ var solanaStakePool = (function (exports) {
 
 	}
 
+	const SOL_DECIMALS = Math.log10(LAMPORTS_PER_SOL);
 	function solToLamports(amount) {
-	    if (isNaN(amount))
+	    if (isNaN(amount)) {
 	        return Number(0);
-	    return Number(amount * LAMPORTS_PER_SOL);
+	    }
+	    return new BN$9(amount.toFixed(SOL_DECIMALS).replace('.', '')).toNumber();
 	}
 	function lamportsToSol(lamports) {
 	    if (typeof lamports === 'number') {
 	        return Math.abs(lamports) / LAMPORTS_PER_SOL;
 	    }
-	    let signMultiplier = 1;
-	    if (lamports.isNeg()) {
-	        signMultiplier = -1;
-	    }
 	    const absLamports = lamports.abs();
+	    const signMultiplier = lamports.isNeg() ? -1 : 1;
 	    const lamportsString = absLamports.toString(10).padStart(10, '0');
-	    const splitIndex = lamportsString.length - 9;
+	    const splitIndex = lamportsString.length - SOL_DECIMALS;
 	    const solString = lamportsString.slice(0, splitIndex) + '.' + lamportsString.slice(splitIndex);
 	    return signMultiplier * parseFloat(solString);
 	}
@@ -36830,7 +36829,7 @@ var solanaStakePool = (function (exports) {
 	// Minimum amount of staked SOL required in a validator stake account to allow
 	// for merges without a mismatch on credits observed
 	const MINIMUM_ACTIVE_STAKE = LAMPORTS_PER_SOL;
-	/// Minimum amount of SOL in the reserve
+	// Minimum amount of SOL in the reserve
 	const MINIMUM_RESERVE_LAMPORTS = LAMPORTS_PER_SOL;
 
 	/**
@@ -39821,7 +39820,7 @@ var solanaStakePool = (function (exports) {
 	            });
 	        }
 	    }
-	    // Sort from highest to lowest balance
+	    // Sort from highest to lowest balance by default
 	    accounts = accounts.sort(compareFn ? compareFn : (a, b) => b.lamports - a.lamports);
 	    const reserveStake = await connection.getAccountInfo(stakePool.reserveStake);
 	    const reserveStakeBalance = ((_b = reserveStake === null || reserveStake === void 0 ? void 0 : reserveStake.lamports) !== null && _b !== void 0 ? _b : 0) - minBalanceForRentExemption - MINIMUM_RESERVE_LAMPORTS;
@@ -39843,7 +39842,7 @@ var solanaStakePool = (function (exports) {
 	    for (const type of ['preferred', 'active', 'transient', 'reserve']) {
 	        const filteredAccounts = accounts.filter((a) => a.type == type);
 	        for (const { stakeAddress, voteAddress, lamports } of filteredAccounts) {
-	            if (lamports <= minBalance && type == 'transient') {
+	            if (lamports <= minBalance) {
 	                continue;
 	            }
 	            let availableForWithdrawal = calcPoolTokensForDeposit(stakePool, lamports);
@@ -39867,7 +39866,8 @@ var solanaStakePool = (function (exports) {
 	    }
 	    // Not enough stake to withdraw the specified amount
 	    if (remainingAmount > 0) {
-	        throw new Error(`No stake accounts found in this pool with enough balance to withdraw ${lamportsToSol(amount)} pool tokens.`);
+	        throw new Error(`No stake accounts found in this pool with enough balance to withdraw
+      ${lamportsToSol(amount)} pool tokens.`);
 	    }
 	    return withdrawFrom;
 	}
@@ -42879,14 +42879,8 @@ var solanaStakePool = (function (exports) {
 	    const signers = [userTransferAuthority];
 	    instructions.push(Token.createApproveInstruction(TOKEN_PROGRAM_ID, poolTokenAccount, userTransferAuthority.publicKey, tokenOwner, [], poolAmount));
 	    let totalRentFreeBalances = 0;
-	    // Max 5 accounts to prevent an error: "Transaction too large"
-	    const maxWithdrawAccounts = 5;
-	    let i = 0;
 	    // Go through prepared accounts and withdraw/claim them
 	    for (const withdrawAccount of withdrawAccounts) {
-	        if (i > maxWithdrawAccounts) {
-	            break;
-	        }
 	        // Convert pool tokens amount to lamports
 	        const solWithdrawAmount = Math.ceil(calcLamportsWithdrawAmount(stakePool.account.data, withdrawAccount.poolAmount));
 	        let infoMsg = `Withdrawing ◎${solWithdrawAmount},
@@ -42919,7 +42913,6 @@ var solanaStakePool = (function (exports) {
 	            poolTokens: withdrawAccount.poolAmount,
 	            withdrawAuthority,
 	        }));
-	        i++;
 	    }
 	    return {
 	        instructions,

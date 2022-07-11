@@ -56,7 +56,7 @@ export async function prepareWithdrawAccounts(connection, stakePool, stakePoolAd
             });
         }
     }
-    // Sort from highest to lowest balance
+    // Sort from highest to lowest balance by default
     accounts = accounts.sort(compareFn ? compareFn : (a, b) => b.lamports - a.lamports);
     const reserveStake = await connection.getAccountInfo(stakePool.reserveStake);
     const reserveStakeBalance = ((_b = reserveStake === null || reserveStake === void 0 ? void 0 : reserveStake.lamports) !== null && _b !== void 0 ? _b : 0) - minBalanceForRentExemption - MINIMUM_RESERVE_LAMPORTS;
@@ -78,7 +78,7 @@ export async function prepareWithdrawAccounts(connection, stakePool, stakePoolAd
     for (const type of ['preferred', 'active', 'transient', 'reserve']) {
         const filteredAccounts = accounts.filter((a) => a.type == type);
         for (const { stakeAddress, voteAddress, lamports } of filteredAccounts) {
-            if (lamports <= minBalance && type == 'transient') {
+            if (lamports <= minBalance) {
                 continue;
             }
             let availableForWithdrawal = calcPoolTokensForDeposit(stakePool, lamports);
@@ -102,7 +102,8 @@ export async function prepareWithdrawAccounts(connection, stakePool, stakePoolAd
     }
     // Not enough stake to withdraw the specified amount
     if (remainingAmount > 0) {
-        throw new Error(`No stake accounts found in this pool with enough balance to withdraw ${lamportsToSol(amount)} pool tokens.`);
+        throw new Error(`No stake accounts found in this pool with enough balance to withdraw
+      ${lamportsToSol(amount)} pool tokens.`);
     }
     return withdrawFrom;
 }
