@@ -47,14 +47,27 @@ export interface ValidatorAccount {
   lamports: number;
 }
 
+interface PrepareWithdrawAccountsProps {
+  connection: Connection;
+  stakePool: StakePool;
+  stakePoolAddress: PublicKey;
+  amount: number;
+  skipFee?: boolean;
+  comparator?: (a: ValidatorAccount, b: ValidatorAccount) => number;
+  limiter?: (vote: ValidatorAccount) => number;
+}
+
+enum AccountType {
+  preferred = 'preferred',
+  active = 'active',
+  transient = 'transient',
+  reserve = 'reserve',
+}
+
 export async function prepareWithdrawAccounts(
-  connection: Connection,
-  stakePool: StakePool,
-  stakePoolAddress: PublicKey,
-  amount: number,
-  compareFn?: (a: ValidatorAccount, b: ValidatorAccount) => number,
-  skipFee?: boolean,
+  props: PrepareWithdrawAccountsProps,
 ): Promise<WithdrawAccount[]> {
+  const { connection, stakePool, stakePoolAddress, amount } = props;
   const validatorListAcc = await connection.getAccountInfo(stakePool.validatorList);
   const validatorList = ValidatorListLayout.decode(validatorListAcc?.data) as ValidatorList;
 
@@ -66,8 +79,6 @@ export async function prepareWithdrawAccounts(
     StakeProgram.space,
   );
   const minBalance = minBalanceForRentExemption + MINIMUM_ACTIVE_STAKE;
-
-  type AccountType = 'preferred' | 'active' | 'transient' | 'reserve';
 
   let accounts = [] as Array<{
     type: AccountType;
@@ -94,7 +105,7 @@ export async function prepareWithdrawAccounts(
 
     if (!validator.activeStakeLamports.isZero()) {
       accounts.push({
-        type: isPreferred ? 'preferred' : 'active',
+        type: isPreferred ? AccountType.preferred : AccountType.active,
         voteAddress: validator.voteAccountAddress,
         stakeAddress: stakeAccountAddress,
         lamports: validator.activeStakeLamports.toNumber(),
@@ -111,7 +122,7 @@ export async function prepareWithdrawAccounts(
         validator.transientSeedSuffixStart,
       );
       accounts.push({
-        type: isPreferred ? 'preferred' : 'transient',
+        type: isPreferred ? AccountType.preferred : AccountType.transient,
         voteAddress: validator.voteAccountAddress,
         stakeAddress: transientStakeAccountAddress,
         lamports: transientStakeLamports,
@@ -120,7 +131,7 @@ export async function prepareWithdrawAccounts(
   }
 
   // Sort from highest to lowest balance by default
-  accounts = accounts.sort(compareFn ? compareFn : (a, b) => b.lamports - a.lamports);
+  accounts = accounts.sort(props.comparator ? props.comparator : (a, b) => b.lamports - a.lamports);
 
   const reserveStake = await connection.getAccountInfo(stakePool.reserveStake);
   const reserveStakeBalance =
@@ -128,11 +139,15 @@ export async function prepareWithdrawAccounts(
 
   if (reserveStakeBalance > 0) {
     accounts.push({
-      type: 'reserve',
+      type: AccountType.reserve,
       stakeAddress: stakePool.reserveStake,
       lamports: reserveStakeBalance,
     });
   }
+
+  // Sort by type
+  const types = Object.values(AccountType);
+  accounts = accounts.sort((a, b) => types.indexOf(a.type) - types.indexOf(b.type));
 
   // Prepare the list of accounts to withdraw from
   const withdrawFrom: WithdrawAccount[] = [];
@@ -144,37 +159,40 @@ export async function prepareWithdrawAccounts(
     denominator: fee.denominator,
   };
 
-  for (const type of <AccountType[]>['preferred', 'active', 'transient', 'reserve']) {
-    const filteredAccounts = accounts.filter((a) => a.type == type);
-
-    for (const { stakeAddress, voteAddress, lamports } of filteredAccounts) {
+  for (const withLimiter of props.limiter ? [true, false] : [false]) {
+    for (const account of accounts) {
+      const { stakeAddress, voteAddress, lamports } = account;
       if (lamports <= minBalance) {
         continue;
       }
 
       let availableForWithdrawal = calcPoolTokensForDeposit(stakePool, lamports);
 
-      if (!skipFee && !inverseFee.numerator.isZero()) {
+      if (!props.skipFee && !inverseFee.numerator.isZero()) {
         availableForWithdrawal = divideBnToNumber(
           new BN(availableForWithdrawal).mul(inverseFee.denominator),
           inverseFee.numerator,
         );
       }
 
-      const poolAmount = Math.min(availableForWithdrawal, remainingAmount);
+      let poolAmount = Math.min(availableForWithdrawal, remainingAmount);
       if (poolAmount <= 0) {
         continue;
+      }
+
+      if (withLimiter && props.limiter) {
+        poolAmount = Math.min(poolAmount, props.limiter(account));
       }
 
       // Those accounts will be withdrawn completely with `claim` instruction
       withdrawFrom.push({ stakeAddress, voteAddress, poolAmount });
       remainingAmount -= poolAmount;
+      account.lamports -= poolAmount;
 
       if (remainingAmount == 0) {
         break;
       }
     }
-
     if (remainingAmount == 0) {
       break;
     }
