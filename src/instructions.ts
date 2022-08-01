@@ -10,8 +10,14 @@ import {
 } from '@solana/web3.js';
 import * as BufferLayout from '@solana/buffer-layout';
 import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
-import { METADATA_PROGRAM_ID, STAKE_POOL_PROGRAM_ID } from './constants';
-import { InstructionType, encodeData, decodeData } from './utils';
+import {
+  METADATA_MAX_NAME_LENGTH,
+  METADATA_MAX_SYMBOL_LENGTH,
+  METADATA_MAX_URI_LENGTH,
+  METADATA_PROGRAM_ID,
+  STAKE_POOL_PROGRAM_ID,
+} from './constants';
+import { InstructionType, encodeData } from './utils';
 
 /**
  * An enumeration of valid StakePoolInstructionType's
@@ -43,9 +49,9 @@ const UPDATE_VALIDATOR_LIST_BALANCE_LAYOUT = BufferLayout.struct<any>([
 
 const TOKEN_METADATA_LAYOUT = BufferLayout.struct<any>([
   BufferLayout.u8('instruction'),
-  BufferLayout.blob(32, 'name'),
-  BufferLayout.blob(10, 'symbol'),
-  BufferLayout.blob(200, 'uri'),
+  BufferLayout.blob(METADATA_MAX_NAME_LENGTH, 'name'),
+  BufferLayout.blob(METADATA_MAX_SYMBOL_LENGTH, 'symbol'),
+  BufferLayout.blob(METADATA_MAX_URI_LENGTH, 'uri'),
 ]);
 
 /**
@@ -673,9 +679,9 @@ export class StakePoolInstruction {
     ];
 
     const data = encodeData(STAKE_POOL_INSTRUCTION_LAYOUTS.CreateTokenMetadata, {
-      name,
-      symbol,
-      uri,
+      name: new TextEncoder().encode(name.padEnd(METADATA_MAX_NAME_LENGTH, '\0')),
+      symbol: new TextEncoder().encode(symbol.padEnd(METADATA_MAX_SYMBOL_LENGTH, '\0')),
+      uri: new TextEncoder().encode(uri.padEnd(METADATA_MAX_URI_LENGTH, '\0')),
     });
 
     return new TransactionInstruction({
@@ -701,9 +707,9 @@ export class StakePoolInstruction {
     ];
 
     const data = encodeData(STAKE_POOL_INSTRUCTION_LAYOUTS.UpdateTokenMetadata, {
-      name,
-      symbol,
-      uri,
+      name: new TextEncoder().encode(name.padEnd(METADATA_MAX_NAME_LENGTH, '\0')),
+      symbol: new TextEncoder().encode(symbol.padEnd(METADATA_MAX_SYMBOL_LENGTH, '\0')),
+      uri: new TextEncoder().encode(uri.padEnd(METADATA_MAX_URI_LENGTH, '\0')),
     });
 
     return new TransactionInstruction({
