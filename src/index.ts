@@ -64,6 +64,19 @@ export interface StakePoolAccounts {
   validatorList: ValidatorListAccount | undefined;
 }
 
+interface UpdateStakePoolTokenMetadataProps {
+  connection: Connection;
+  stakePool: StakePoolAccount | PublicKey;
+  tokenMetadata: PublicKey;
+  name: string;
+  symbol: string;
+  uri: string;
+}
+
+interface CreateStakePoolTokenMetadataProps extends UpdateStakePoolTokenMetadataProps {
+  payer: PublicKey;
+}
+
 /**
  * Retrieves and deserializes a StakePool account using a web3js connection and the stake pool address.
  * @param connection: An active web3js connection.
@@ -892,7 +905,7 @@ export async function stakePoolInfo(connection: Connection, stakePoolAddress: Pu
       reserveAccountStakeAddress: reserveAccountStakeAddress.toBase58(),
       minimumReserveStakeBalance,
       stakeAccounts,
-      totalLamports,
+      totalLamports: totalLamports.toString(),
       totalPoolTokens,
       currentNumberOfValidators,
       maxNumberOfValidators,
@@ -904,20 +917,17 @@ export async function stakePoolInfo(connection: Connection, stakePoolAddress: Pu
 /**
  * Creates instructions required to create pool token metadata.
  */
-export async function createPoolTokenMetadata(
-  connection: Connection,
-  stakePoolAddress: PublicKey,
-  tokenMetadata: PublicKey,
-  name: string,
-  symbol: string,
-  uri: string,
-  payer?: PublicKey,
-) {
-  const stakePool = await getStakePoolAccount(connection, stakePoolAddress);
+export async function createPoolTokenMetadata(props: CreateStakePoolTokenMetadataProps) {
+  const { connection, tokenMetadata, name, symbol, uri, payer } = props;
+
+  const stakePool =
+    props.stakePool instanceof PublicKey
+      ? await getStakePoolAccount(connection, props.stakePool)
+      : props.stakePool;
 
   const withdrawAuthority = await findWithdrawAuthorityProgramAddress(
     STAKE_POOL_PROGRAM_ID,
-    stakePoolAddress,
+    stakePool.pubkey,
   );
 
   const manager = stakePool.account.data.manager;
@@ -925,9 +935,9 @@ export async function createPoolTokenMetadata(
   const instructions: TransactionInstruction[] = [];
   instructions.push(
     StakePoolInstruction.createTokenMetadata({
-      stakePool: stakePoolAddress,
+      stakePool: stakePool.pubkey,
       poolMint: stakePool.account.data.poolMint,
-      payer: payer ?? manager,
+      payer,
       manager,
       tokenMetadata,
       withdrawAuthority,
@@ -945,25 +955,23 @@ export async function createPoolTokenMetadata(
 /**
  * Creates instructions required to update pool token metadata.
  */
-export async function updatePoolTokenMetadata(
-  connection: Connection,
-  stakePoolAddress: PublicKey,
-  tokenMetadata: PublicKey,
-  name: string,
-  symbol: string,
-  uri: string,
-) {
-  const stakePool = await getStakePoolAccount(connection, stakePoolAddress);
+export async function updatePoolTokenMetadata(props: UpdateStakePoolTokenMetadataProps) {
+  const { connection, tokenMetadata, name, symbol, uri } = props;
+
+  const stakePool =
+    props.stakePool instanceof PublicKey
+      ? await getStakePoolAccount(connection, props.stakePool)
+      : props.stakePool;
 
   const withdrawAuthority = await findWithdrawAuthorityProgramAddress(
     STAKE_POOL_PROGRAM_ID,
-    stakePoolAddress,
+    stakePool.pubkey,
   );
 
   const instructions: TransactionInstruction[] = [];
   instructions.push(
     StakePoolInstruction.updateTokenMetadata({
-      stakePool: stakePoolAddress,
+      stakePool: stakePool.pubkey,
       manager: stakePool.account.data.manager,
       tokenMetadata,
       withdrawAuthority,
