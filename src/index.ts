@@ -24,6 +24,7 @@ import {
   prepareWithdrawAccounts,
   lamportsToSol,
   solToLamports,
+  getMetadataPDA,
 } from './utils';
 import { StakePoolInstruction } from './instructions';
 import {
@@ -67,7 +68,7 @@ export interface StakePoolAccounts {
 interface UpdateStakePoolTokenMetadataProps {
   connection: Connection;
   stakePool: StakePoolAccount | PublicKey;
-  tokenMetadata: PublicKey;
+  tokenMetadata?: PublicKey;
   name: string;
   symbol: string;
   uri: string;
@@ -918,12 +919,15 @@ export async function stakePoolInfo(connection: Connection, stakePoolAddress: Pu
  * Creates instructions required to create pool token metadata.
  */
 export async function createPoolTokenMetadata(props: CreateStakePoolTokenMetadataProps) {
-  const { connection, tokenMetadata, name, symbol, uri, payer } = props;
+  const { connection, name, symbol, uri, payer } = props;
 
   const stakePool =
     props.stakePool instanceof PublicKey
       ? await getStakePoolAccount(connection, props.stakePool)
       : props.stakePool;
+
+  const tokenMetadata =
+    props.tokenMetadata ?? (await getMetadataPDA(stakePool.account.data.poolMint));
 
   const withdrawAuthority = await findWithdrawAuthorityProgramAddress(
     STAKE_POOL_PROGRAM_ID,
@@ -956,12 +960,15 @@ export async function createPoolTokenMetadata(props: CreateStakePoolTokenMetadat
  * Creates instructions required to update pool token metadata.
  */
 export async function updatePoolTokenMetadata(props: UpdateStakePoolTokenMetadataProps) {
-  const { connection, tokenMetadata, name, symbol, uri } = props;
+  const { connection, name, symbol, uri } = props;
 
   const stakePool =
     props.stakePool instanceof PublicKey
       ? await getStakePoolAccount(connection, props.stakePool)
       : props.stakePool;
+
+  const tokenMetadata =
+    props.tokenMetadata ?? (await getMetadataPDA(stakePool.account.data.poolMint));
 
   const withdrawAuthority = await findWithdrawAuthorityProgramAddress(
     STAKE_POOL_PROGRAM_ID,
