@@ -605,6 +605,12 @@ export async function increaseValidatorStake(
     transientStakeSeed,
   );
 
+  const validatorStake = await findStakeProgramAddress(
+    STAKE_POOL_PROGRAM_ID,
+    validatorInfo.voteAccountAddress,
+    stakePoolAddress,
+  );
+
   const instructions: TransactionInstruction[] = [];
   instructions.push(
     StakePoolInstruction.increaseValidatorStake({
@@ -615,6 +621,7 @@ export async function increaseValidatorStake(
       transientStakeSeed: transientStakeSeed.toNumber(),
       withdrawAuthority,
       transientStake,
+      validatorStake,
       validatorVote,
       lamports,
     }),
