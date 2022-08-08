@@ -265,43 +265,48 @@ describe('StakePoolProgram', () => {
         return null;
       });
 
-      const tokenMetadata = new PublicKey(0);
+      const payer = new PublicKey(0);
 
-      const res = await createPoolTokenMetadata(
+      const data = {
+        name: 'test',
+        symbol: 'TEST',
+        uri: 'https://example.com',
+      };
+
+      const res = await createPoolTokenMetadata({
         connection,
-        stakePoolAddress,
-        tokenMetadata,
-        'test',
-        'TEST',
-        'https://example.com',
-      );
+        stakePool: stakePoolAddress,
+        payer,
+        ...data,
+      });
 
-      const data = STAKE_POOL_INSTRUCTION_LAYOUTS.CreateTokenMetadata.layout.decode(
+      const decodedData = STAKE_POOL_INSTRUCTION_LAYOUTS.CreateTokenMetadata.layout.decode(
         res.instructions[0].data,
       );
-      expect(Buffer.from(data.name).toString().replace(/\0/g, '')).toBe('test');
-      expect(Buffer.from(data.symbol).toString().replace(/\0/g, '')).toBe('TEST');
-      expect(Buffer.from(data.uri).toString().replace(/\0/g, '')).toBe('https://example.com');
+      expect(Buffer.from(decodedData.name).toString().replace(/\0/g, '')).toBe(data.name);
+      expect(Buffer.from(decodedData.symbol).toString().replace(/\0/g, '')).toBe(data.symbol);
+      expect(Buffer.from(decodedData.uri).toString().replace(/\0/g, '')).toBe(data.uri);
     });
 
     it.only('should update pool token metadata', async () => {
-      const tokenMetadata = new PublicKey(0);
+      const data = {
+        name: 'test',
+        symbol: 'TEST',
+        uri: 'https://example.com',
+      };
 
-      const res = await updatePoolTokenMetadata(
+      const res = await updatePoolTokenMetadata({
         connection,
-        stakePoolAddress,
-        tokenMetadata,
-        'test',
-        'TEST',
-        'https://example.com',
-      );
+        stakePool: stakePoolAddress,
+        ...data,
+      });
 
-      const data = STAKE_POOL_INSTRUCTION_LAYOUTS.UpdateTokenMetadata.layout.decode(
+      const decodedData = STAKE_POOL_INSTRUCTION_LAYOUTS.UpdateTokenMetadata.layout.decode(
         res.instructions[0].data,
       );
-      expect(Buffer.from(data.name).toString().replace(/\0/g, '')).toBe('test');
-      expect(Buffer.from(data.symbol).toString().replace(/\0/g, '')).toBe('TEST');
-      expect(Buffer.from(data.uri).toString().replace(/\0/g, '')).toBe('https://example.com');
+      expect(Buffer.from(decodedData.name).toString().replace(/\0/g, '')).toBe(data.name);
+      expect(Buffer.from(decodedData.symbol).toString().replace(/\0/g, '')).toBe(data.symbol);
+      expect(Buffer.from(decodedData.uri).toString().replace(/\0/g, '')).toBe(data.uri);
     });
   });
 });
