@@ -17,11 +17,13 @@ import {
   withdrawStake,
   createPoolTokenMetadata,
   updatePoolTokenMetadata,
+  redelegate,
 } from '../src';
 
 import { decodeData } from '../src/utils';
 
 import { mockTokenAccount, mockValidatorList, stakePoolMock } from './mocks';
+import BN from 'bn.js';
 
 describe('StakePoolProgram', () => {
   const connection = new Connection('http://127.0.0.1:8899');
@@ -307,6 +309,32 @@ describe('StakePoolProgram', () => {
       expect(Buffer.from(decodedData.name).toString().replace(/\0/g, '')).toBe(data.name);
       expect(Buffer.from(decodedData.symbol).toString().replace(/\0/g, '')).toBe(data.symbol);
       expect(Buffer.from(decodedData.uri).toString().replace(/\0/g, '')).toBe(data.uri);
+    });
+  });
+
+  describe('redelegation', () => {
+    it.only('should call successfully', async () => {
+      const data = {
+        connection,
+        stakePoolAddress,
+        sourceVoteAccount: PublicKey.default,
+        sourceTransientStakeSeed: 10,
+        destinationVoteAccount: PublicKey.default,
+        destinationTransientStakeSeed: 20,
+        ephemeralStakeSeed: new BN(100),
+        lamports: 100,
+      };
+      const res = await redelegate(data);
+
+      const decodedData = STAKE_POOL_INSTRUCTION_LAYOUTS.Redelegate.layout.decode(
+        res.instructions[0].data,
+      );
+
+      expect(decodedData.instruction).toBe(19);
+      expect(decodedData.lamports).toBe(data.lamports);
+      expect(decodedData.sourceTransientStakeSeed).toBe(data.sourceTransientStakeSeed);
+      expect(decodedData.destinationTransientStakeSeed).toBe(data.destinationTransientStakeSeed);
+      expect(decodedData.ephemeralStakeSeed).toBe(data.ephemeralStakeSeed.toNumber());
     });
   });
 });
