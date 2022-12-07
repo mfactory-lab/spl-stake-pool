@@ -7,8 +7,6 @@ import {
   TOKEN_PROGRAM_ID,
 } from '@solana/spl-token';
 import { AccountLayout } from '../layouts';
-import { Buffer } from 'buffer';
-import { METADATA_PROGRAM_ID } from '../constants';
 
 const FAILED_TO_FIND_ACCOUNT = 'Failed to find account';
 const INVALID_ACCOUNT_OWNER = 'Invalid account owner';
@@ -101,12 +99,4 @@ export async function getTokenAccount(
   } catch (error) {
     console.log(error);
   }
-}
-
-export async function getMetadataPDA(mint: PublicKey): Promise<PublicKey> {
-  const [publicKey] = await PublicKey.findProgramAddress(
-    [Buffer.from('metadata'), METADATA_PROGRAM_ID.toBuffer(), mint.toBuffer()],
-    METADATA_PROGRAM_ID,
-  );
-  return publicKey;
 }

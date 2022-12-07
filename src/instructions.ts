@@ -10,15 +10,8 @@ import {
 } from '@solana/web3.js';
 import * as BufferLayout from '@solana/buffer-layout';
 import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
-import {
-  METADATA_MAX_NAME_LENGTH,
-  METADATA_MAX_SYMBOL_LENGTH,
-  METADATA_MAX_URI_LENGTH,
-  METADATA_PROGRAM_ID,
-  STAKE_POOL_PROGRAM_ID,
-} from './constants';
-import { InstructionType, encodeData } from './utils';
-import BN from 'bn.js';
+import { STAKE_POOL_PROGRAM_ID } from './constants';
+import { InstructionType, encodeData, decodeData } from './utils';
 
 /**
  * An enumeration of valid StakePoolInstructionType's
@@ -32,10 +25,7 @@ export type StakePoolInstructionType =
   | 'DepositStake'
   | 'DepositSol'
   | 'WithdrawStake'
-  | 'WithdrawSol'
-  | 'UpdateTokenMetadata'
-  | 'CreateTokenMetadata'
-  | 'Redelegate';
+  | 'WithdrawSol';
 
 const MOVE_STAKE_LAYOUT = BufferLayout.struct<any>([
   BufferLayout.u8('instruction'),
@@ -47,13 +37,6 @@ const UPDATE_VALIDATOR_LIST_BALANCE_LAYOUT = BufferLayout.struct<any>([
   BufferLayout.u8('instruction'),
   BufferLayout.u32('startIndex'),
   BufferLayout.u8('noMerge'),
-]);
-
-const TOKEN_METADATA_LAYOUT = BufferLayout.struct<any>([
-  BufferLayout.u8('instruction'),
-  BufferLayout.blob(METADATA_MAX_NAME_LENGTH, 'name'),
-  BufferLayout.blob(METADATA_MAX_SYMBOL_LENGTH, 'symbol'),
-  BufferLayout.blob(METADATA_MAX_URI_LENGTH, 'uri'),
 ]);
 
 /**
@@ -111,52 +94,6 @@ export const STAKE_POOL_INSTRUCTION_LAYOUTS: {
     layout: BufferLayout.struct<any>([
       BufferLayout.u8('instruction'),
       BufferLayout.ns64('poolTokens'),
-    ]),
-  },
-  /// Create token metadata for the stake-pool token in the
-  /// metaplex-token program
-  CreateTokenMetadata: {
-    index: 17,
-    layout: TOKEN_METADATA_LAYOUT,
-  },
-  /// Update token metadata for the stake-pool token in the
-  /// metaplex-token program
-  UpdateTokenMetadata: {
-    index: 18,
-    layout: TOKEN_METADATA_LAYOUT,
-  },
-  /// (Staker only) Redelegate active stake on a validator, eventually moving it to another
-  ///
-  /// Internally, this instruction splits a validator stake account into its
-  /// corresponding transient stake account, redelegates it to an ephemeral stake
-  /// account, then merges that stake into the destination transient stake account.
-  ///
-  /// In order to rebalance the pool without taking custody, the staker needs
-  /// a way of reducing the stake on a stake account. This instruction splits
-  /// some amount of stake, up to the total activated stake, from the canonical
-  /// validator stake account, into its "transient" stake account.
-  ///
-  /// The instruction only succeeds if the source transient stake account and
-  /// ephemeral stake account do not exist.
-  ///
-  /// The amount of lamports to move must be at least twice rent-exemption
-  /// plus the minimum delegation amount. Rent-exemption is required for the
-  /// source transient stake account, and rent-exemption plus minimum delegation
-  /// is required for the destination ephemeral stake account.
-  Redelegate: {
-    index: 19,
-    layout: BufferLayout.struct<any>([
-      BufferLayout.u8('instruction'),
-      /// Amount of lamports to redelegate
-      BufferLayout.ns64('lamports'),
-      /// Seed used to create source transient stake account
-      BufferLayout.ns64('sourceTransientStakeSeed'),
-      /// Seed used to create destination ephemeral account.
-      BufferLayout.ns64('ephemeralStakeSeed'),
-      /// Seed used to create destination transient stake account. If there is
-      /// already transient stake, this must match the current seed, otherwise
-      /// it can be anything
-      BufferLayout.ns64('destinationTransientStakeSeed'),
     ]),
   },
 });
@@ -293,51 +230,6 @@ export type DepositSolParams = {
   referralPoolAccount: PublicKey;
   poolMint: PublicKey;
   lamports: number;
-};
-
-export type CreateTokenMetadataParams = {
-  stakePool: PublicKey;
-  manager: PublicKey;
-  tokenMetadata: PublicKey;
-  withdrawAuthority: PublicKey;
-  poolMint: PublicKey;
-  payer: PublicKey;
-  name: string;
-  symbol: string;
-  uri: string;
-};
-
-export type UpdateTokenMetadataParams = {
-  stakePool: PublicKey;
-  manager: PublicKey;
-  tokenMetadata: PublicKey;
-  withdrawAuthority: PublicKey;
-  name: string;
-  symbol: string;
-  uri: string;
-};
-
-export type RedelegateParams = {
-  stakePool: PublicKey;
-  staker: PublicKey;
-  stakePoolWithdrawAuthority: PublicKey;
-  validatorList: PublicKey;
-  sourceValidatorStake: PublicKey;
-  sourceTransientStake: PublicKey;
-  ephemeralStake: PublicKey;
-  destinationTransientStake: PublicKey;
-  destinationValidatorStake: PublicKey;
-  validator: PublicKey;
-  // Amount of lamports to redelegate
-  lamports: number | BN;
-  // Seed used to create source transient stake account
-  sourceTransientStakeSeed: number | BN;
-  // Seed used to create destination ephemeral account.
-  ephemeralStakeSeed: number | BN;
-  // Seed used to create destination transient stake account. If there is
-  // already transient stake, this must match the current seed, otherwise
-  // it can be anything
-  destinationTransientStakeSeed: number | BN;
 };
 
 /**
@@ -524,7 +416,7 @@ export class StakePoolInstruction {
   }
 
   /**
-   * Creates a transaction instruction to deposit SOL into a stake pool.
+   * Creates a transaction instruction to deposit a stake account into a stake pool.
    */
   static depositStake(params: DepositStakeParams): TransactionInstruction {
     const {
@@ -570,7 +462,7 @@ export class StakePoolInstruction {
   }
 
   /**
-   * Creates a transaction instruction to withdraw SOL from a stake pool.
+   * Creates a transaction instruction to deposit SOL into a stake pool.
    */
   static depositSol(params: DepositSolParams): TransactionInstruction {
     const {
@@ -618,7 +510,7 @@ export class StakePoolInstruction {
   }
 
   /**
-   * Creates a transaction instruction to withdraw SOL from a stake pool.
+   * Creates a transaction instruction to withdraw active stake from a stake pool.
    */
   static withdrawStake(params: WithdrawStakeParams): TransactionInstruction {
     const {
@@ -712,124 +604,69 @@ export class StakePoolInstruction {
   }
 
   /**
-   * Creates an instruction to create metadata
-   * using the mpl token metadata program for the pool token
+   * Decode a deposit stake pool instruction and retrieve the instruction params.
    */
-  static createTokenMetadata(params: CreateTokenMetadataParams): TransactionInstruction {
-    const {
-      stakePool,
-      withdrawAuthority,
-      tokenMetadata,
-      manager,
-      payer,
-      poolMint,
-      name,
-      symbol,
-      uri,
-    } = params;
+  static decodeDepositStake(instruction: TransactionInstruction): DepositStakeParams {
+    this.checkProgramId(instruction.programId);
+    this.checkKeyLength(instruction.keys, 11);
 
-    const keys = [
-      { pubkey: stakePool, isSigner: false, isWritable: false },
-      { pubkey: manager, isSigner: true, isWritable: false },
-      { pubkey: withdrawAuthority, isSigner: false, isWritable: false },
-      { pubkey: poolMint, isSigner: false, isWritable: false },
-      { pubkey: payer, isSigner: true, isWritable: true },
-      { pubkey: tokenMetadata, isSigner: false, isWritable: true },
-      { pubkey: METADATA_PROGRAM_ID, isSigner: false, isWritable: false },
-      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-      { pubkey: SYSVAR_RENT_PUBKEY, isSigner: false, isWritable: false },
-    ];
+    decodeData(STAKE_POOL_INSTRUCTION_LAYOUTS.DepositStake, instruction.data);
 
-    const data = encodeData(STAKE_POOL_INSTRUCTION_LAYOUTS.CreateTokenMetadata, {
-      name: new TextEncoder().encode(name.padEnd(METADATA_MAX_NAME_LENGTH, '\0')),
-      symbol: new TextEncoder().encode(symbol.padEnd(METADATA_MAX_SYMBOL_LENGTH, '\0')),
-      uri: new TextEncoder().encode(uri.padEnd(METADATA_MAX_URI_LENGTH, '\0')),
-    });
-
-    return new TransactionInstruction({
-      programId: STAKE_POOL_PROGRAM_ID,
-      keys,
-      data,
-    });
+    return {
+      stakePool: instruction.keys[0].pubkey,
+      validatorList: instruction.keys[1].pubkey,
+      depositAuthority: instruction.keys[2].pubkey,
+      withdrawAuthority: instruction.keys[3].pubkey,
+      depositStake: instruction.keys[4].pubkey,
+      validatorStake: instruction.keys[5].pubkey,
+      reserveStake: instruction.keys[6].pubkey,
+      destinationPoolAccount: instruction.keys[7].pubkey,
+      managerFeeAccount: instruction.keys[8].pubkey,
+      referralPoolAccount: instruction.keys[9].pubkey,
+      poolMint: instruction.keys[10].pubkey,
+    };
   }
 
   /**
-   * Creates an instruction to update metadata
-   * in the mpl token metadata program account for the pool token
+   * Decode a deposit sol instruction and retrieve the instruction params.
    */
-  static updateTokenMetadata(params: UpdateTokenMetadataParams): TransactionInstruction {
-    const { stakePool, withdrawAuthority, tokenMetadata, manager, name, symbol, uri } = params;
+  static decodeDepositSol(instruction: TransactionInstruction): DepositSolParams {
+    this.checkProgramId(instruction.programId);
+    this.checkKeyLength(instruction.keys, 9);
 
-    const keys = [
-      { pubkey: stakePool, isSigner: false, isWritable: false },
-      { pubkey: manager, isSigner: true, isWritable: false },
-      { pubkey: withdrawAuthority, isSigner: false, isWritable: false },
-      { pubkey: tokenMetadata, isSigner: false, isWritable: true },
-      { pubkey: METADATA_PROGRAM_ID, isSigner: false, isWritable: false },
-    ];
+    const { amount } = decodeData(STAKE_POOL_INSTRUCTION_LAYOUTS.DepositSol, instruction.data);
 
-    const data = encodeData(STAKE_POOL_INSTRUCTION_LAYOUTS.UpdateTokenMetadata, {
-      name: new TextEncoder().encode(name.padEnd(METADATA_MAX_NAME_LENGTH, '\0')),
-      symbol: new TextEncoder().encode(symbol.padEnd(METADATA_MAX_SYMBOL_LENGTH, '\0')),
-      uri: new TextEncoder().encode(uri.padEnd(METADATA_MAX_URI_LENGTH, '\0')),
-    });
-
-    return new TransactionInstruction({
-      programId: STAKE_POOL_PROGRAM_ID,
-      keys,
-      data,
-    });
+    return {
+      stakePool: instruction.keys[0].pubkey,
+      depositAuthority: instruction.keys[1].pubkey,
+      withdrawAuthority: instruction.keys[2].pubkey,
+      reserveStake: instruction.keys[3].pubkey,
+      fundingAccount: instruction.keys[4].pubkey,
+      destinationPoolAccount: instruction.keys[5].pubkey,
+      managerFeeAccount: instruction.keys[6].pubkey,
+      referralPoolAccount: instruction.keys[7].pubkey,
+      poolMint: instruction.keys[8].pubkey,
+      lamports: amount,
+    };
   }
 
   /**
-   * Creates `Redelegate` instruction (rebalance from one validator account to another)
-   * @param params
+   * @internal
    */
-  static redelegate(params: RedelegateParams): TransactionInstruction {
-    const {
-      stakePool,
-      staker,
-      stakePoolWithdrawAuthority,
-      validatorList,
-      sourceValidatorStake,
-      sourceTransientStake,
-      ephemeralStake,
-      destinationValidatorStake,
-      validator,
-      lamports,
-      sourceTransientStakeSeed,
-      ephemeralStakeSeed,
-      destinationTransientStakeSeed,
-    } = params;
+  private static checkProgramId(programId: PublicKey) {
+    if (!programId.equals(StakeProgram.programId)) {
+      throw new Error('Invalid instruction; programId is not StakeProgram');
+    }
+  }
 
-    const keys = [
-      { pubkey: stakePool, isSigner: false, isWritable: false },
-      { pubkey: staker, isSigner: true, isWritable: false },
-      { pubkey: stakePoolWithdrawAuthority, isSigner: false, isWritable: false },
-      { pubkey: validatorList, isSigner: false, isWritable: true },
-      { pubkey: sourceValidatorStake, isSigner: false, isWritable: true },
-      { pubkey: sourceTransientStake, isSigner: false, isWritable: true },
-      { pubkey: ephemeralStake, isSigner: false, isWritable: true },
-      { pubkey: destinationValidatorStake, isSigner: false, isWritable: true },
-      { pubkey: validator, isSigner: false, isWritable: false },
-      { pubkey: SYSVAR_CLOCK_PUBKEY, isSigner: false, isWritable: false },
-      { pubkey: SYSVAR_STAKE_HISTORY_PUBKEY, isSigner: false, isWritable: false },
-      { pubkey: STAKE_CONFIG_ID, isSigner: false, isWritable: false },
-      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-      { pubkey: StakeProgram.programId, isSigner: false, isWritable: false },
-    ];
-
-    const data = encodeData(STAKE_POOL_INSTRUCTION_LAYOUTS.Redelegate, {
-      lamports,
-      sourceTransientStakeSeed,
-      ephemeralStakeSeed,
-      destinationTransientStakeSeed,
-    });
-
-    return new TransactionInstruction({
-      programId: STAKE_POOL_PROGRAM_ID,
-      keys,
-      data,
-    });
+  /**
+   * @internal
+   */
+  private static checkKeyLength(keys: Array<any>, expectedLength: number) {
+    if (keys.length < expectedLength) {
+      throw new Error(
+        `Invalid instruction; found ${keys.length} keys, expected at least ${expectedLength}`,
+      );
+    }
   }
 }
