@@ -10,14 +10,9 @@ import {
 } from '@solana/web3.js';
 import * as BufferLayout from '@solana/buffer-layout';
 import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
-import {
-  METADATA_MAX_NAME_LENGTH,
-  METADATA_MAX_SYMBOL_LENGTH,
-  METADATA_MAX_URI_LENGTH,
-  METADATA_PROGRAM_ID,
-  STAKE_POOL_PROGRAM_ID,
-} from './constants';
-import { InstructionType, encodeData } from './utils';
+import { STAKE_POOL_PROGRAM_ID } from './constants';
+import { InstructionType, encodeData, decodeData } from './utils';
+import BN from 'bn.js';
 
 /**
  * An enumeration of valid StakePoolInstructionType's
@@ -32,8 +27,9 @@ export type StakePoolInstructionType =
   | 'DepositSol'
   | 'WithdrawStake'
   | 'WithdrawSol'
-  | 'UpdateTokenMetadata'
-  | 'CreateTokenMetadata';
+  | 'IncreaseAdditionalValidatorStake'
+  | 'DecreaseAdditionalValidatorStake'
+  | 'Redelegate';
 
 const MOVE_STAKE_LAYOUT = BufferLayout.struct<any>([
   BufferLayout.u8('instruction'),
@@ -45,13 +41,6 @@ const UPDATE_VALIDATOR_LIST_BALANCE_LAYOUT = BufferLayout.struct<any>([
   BufferLayout.u8('instruction'),
   BufferLayout.u32('startIndex'),
   BufferLayout.u8('noMerge'),
-]);
-
-const TOKEN_METADATA_LAYOUT = BufferLayout.struct<any>([
-  BufferLayout.u8('instruction'),
-  BufferLayout.blob(METADATA_MAX_NAME_LENGTH, 'name'),
-  BufferLayout.blob(METADATA_MAX_SYMBOL_LENGTH, 'symbol'),
-  BufferLayout.blob(METADATA_MAX_URI_LENGTH, 'uri'),
 ]);
 
 /**
@@ -111,17 +100,39 @@ export const STAKE_POOL_INSTRUCTION_LAYOUTS: {
       BufferLayout.ns64('poolTokens'),
     ]),
   },
-  /// Create token metadata for the stake-pool token in the
-  /// metaplex-token program
-  CreateTokenMetadata: {
-    index: 17,
-    layout: TOKEN_METADATA_LAYOUT,
+  IncreaseAdditionalValidatorStake: {
+    index: 19,
+    layout: BufferLayout.struct<any>([
+      BufferLayout.u8('instruction'),
+      BufferLayout.ns64('lamports'),
+      BufferLayout.ns64('transientStakeSeed'),
+      BufferLayout.ns64('ephemeralStakeSeed'),
+    ]),
   },
-  /// Update token metadata for the stake-pool token in the
-  /// metaplex-token program
-  UpdateTokenMetadata: {
-    index: 18,
-    layout: TOKEN_METADATA_LAYOUT,
+  DecreaseAdditionalValidatorStake: {
+    index: 20,
+    layout: BufferLayout.struct<any>([
+      BufferLayout.u8('instruction'),
+      BufferLayout.ns64('lamports'),
+      BufferLayout.ns64('transientStakeSeed'),
+      BufferLayout.ns64('ephemeralStakeSeed'),
+    ]),
+  },
+  Redelegate: {
+    index: 21,
+    layout: BufferLayout.struct<any>([
+      BufferLayout.u8('instruction'),
+      /// Amount of lamports to redelegate
+      BufferLayout.ns64('lamports'),
+      /// Seed used to create source transient stake account
+      BufferLayout.ns64('sourceTransientStakeSeed'),
+      /// Seed used to create destination ephemeral account.
+      BufferLayout.ns64('ephemeralStakeSeed'),
+      /// Seed used to create destination transient stake account. If there is
+      /// already transient stake, this must match the current seed, otherwise
+      /// it can be anything
+      BufferLayout.ns64('destinationTransientStakeSeed'),
+    ]),
   },
 });
 
@@ -168,11 +179,16 @@ export type DecreaseValidatorStakeParams = {
   validatorList: PublicKey;
   validatorStake: PublicKey;
   transientStake: PublicKey;
-  // Amount of lamports to split into the transient stake account.
+  // Amount of lamports to split into the transient stake account
   lamports: number;
-  // Seed to used to create the transient stake account.
+  // Seed to used to create the transient stake account
   transientStakeSeed: number;
 };
+
+export interface DecreaseAdditionalValidatorStakeParams extends DecreaseValidatorStakeParams {
+  ephemeralStake: PublicKey;
+  ephemeralStakeSeed: number;
+}
 
 /**
  * (Staker only) Increase stake on a validator from the reserve account.
@@ -184,12 +200,18 @@ export type IncreaseValidatorStakeParams = {
   validatorList: PublicKey;
   reserveStake: PublicKey;
   transientStake: PublicKey;
+  validatorStake: PublicKey;
   validatorVote: PublicKey;
-  // Amount of lamports to split into the transient stake account.
+  // Amount of lamports to split into the transient stake account
   lamports: number;
-  // Seed to used to create the transient stake account.
+  // Seed to used to create the transient stake account
   transientStakeSeed: number;
 };
+
+export interface IncreaseAdditionalValidatorStakeParams extends IncreaseValidatorStakeParams {
+  ephemeralStake: PublicKey;
+  ephemeralStakeSeed: number;
+}
 
 /**
  * Deposits a stake account into the pool in exchange for pool tokens
@@ -258,26 +280,27 @@ export type DepositSolParams = {
   lamports: number;
 };
 
-export type CreateTokenMetadataParams = {
+export type RedelegateParams = {
   stakePool: PublicKey;
-  manager: PublicKey;
-  tokenMetadata: PublicKey;
-  withdrawAuthority: PublicKey;
-  poolMint: PublicKey;
-  payer: PublicKey;
-  name: string;
-  symbol: string;
-  uri: string;
-};
-
-export type UpdateTokenMetadataParams = {
-  stakePool: PublicKey;
-  manager: PublicKey;
-  tokenMetadata: PublicKey;
-  withdrawAuthority: PublicKey;
-  name: string;
-  symbol: string;
-  uri: string;
+  staker: PublicKey;
+  stakePoolWithdrawAuthority: PublicKey;
+  validatorList: PublicKey;
+  sourceValidatorStake: PublicKey;
+  sourceTransientStake: PublicKey;
+  ephemeralStake: PublicKey;
+  destinationTransientStake: PublicKey;
+  destinationValidatorStake: PublicKey;
+  validator: PublicKey;
+  // Amount of lamports to redelegate
+  lamports: number | BN;
+  // Seed used to create source transient stake account
+  sourceTransientStakeSeed: number | BN;
+  // Seed used to create destination ephemeral account
+  ephemeralStakeSeed: number | BN;
+  // Seed used to create destination transient stake account. If there is
+  // already transient stake, this must match the current seed, otherwise
+  // it can be anything
+  destinationTransientStakeSeed: number | BN;
 };
 
 /**
@@ -382,7 +405,8 @@ export class StakePoolInstruction {
   }
 
   /**
-   * Creates instruction to increase the stake on a validator.
+   * Creates `IncreaseValidatorStake` instruction (rebalance from reserve account to
+   * transient account)
    */
   static increaseValidatorStake(params: IncreaseValidatorStakeParams): TransactionInstruction {
     const {
@@ -392,6 +416,7 @@ export class StakePoolInstruction {
       validatorList,
       reserveStake,
       transientStake,
+      validatorStake,
       validatorVote,
       lamports,
       transientStakeSeed,
@@ -407,6 +432,7 @@ export class StakePoolInstruction {
       { pubkey: validatorList, isSigner: false, isWritable: true },
       { pubkey: reserveStake, isSigner: false, isWritable: true },
       { pubkey: transientStake, isSigner: false, isWritable: true },
+      { pubkey: validatorStake, isSigner: false, isWritable: false },
       { pubkey: validatorVote, isSigner: false, isWritable: false },
       { pubkey: SYSVAR_CLOCK_PUBKEY, isSigner: false, isWritable: false },
       { pubkey: SYSVAR_RENT_PUBKEY, isSigner: false, isWritable: false },
@@ -424,7 +450,58 @@ export class StakePoolInstruction {
   }
 
   /**
-   * Creates instruction to decrease the stake on a validator.
+   * Creates `IncreaseAdditionalValidatorStake` instruction (rebalance from reserve account to
+   * transient account)
+   */
+  static increaseAdditionalValidatorStake(
+    params: IncreaseAdditionalValidatorStakeParams,
+  ): TransactionInstruction {
+    const {
+      stakePool,
+      staker,
+      withdrawAuthority,
+      validatorList,
+      reserveStake,
+      transientStake,
+      validatorStake,
+      validatorVote,
+      lamports,
+      transientStakeSeed,
+      ephemeralStake,
+      ephemeralStakeSeed,
+    } = params;
+
+    const type = STAKE_POOL_INSTRUCTION_LAYOUTS.IncreaseAdditionalValidatorStake;
+    const data = encodeData(type, { lamports, transientStakeSeed, ephemeralStakeSeed });
+
+    const keys = [
+      { pubkey: stakePool, isSigner: false, isWritable: false },
+      { pubkey: staker, isSigner: true, isWritable: false },
+      { pubkey: withdrawAuthority, isSigner: false, isWritable: false },
+      { pubkey: validatorList, isSigner: false, isWritable: true },
+      { pubkey: reserveStake, isSigner: false, isWritable: true },
+      { pubkey: ephemeralStake, isSigner: false, isWritable: true },
+      { pubkey: transientStake, isSigner: false, isWritable: true },
+      { pubkey: validatorStake, isSigner: false, isWritable: false },
+      { pubkey: validatorVote, isSigner: false, isWritable: false },
+      { pubkey: SYSVAR_CLOCK_PUBKEY, isSigner: false, isWritable: false },
+      { pubkey: SYSVAR_RENT_PUBKEY, isSigner: false, isWritable: false },
+      { pubkey: SYSVAR_STAKE_HISTORY_PUBKEY, isSigner: false, isWritable: false },
+      { pubkey: STAKE_CONFIG_ID, isSigner: false, isWritable: false },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      { pubkey: StakeProgram.programId, isSigner: false, isWritable: false },
+    ];
+
+    return new TransactionInstruction({
+      programId: STAKE_POOL_PROGRAM_ID,
+      keys,
+      data,
+    });
+  }
+
+  /**
+   * Creates `DecreaseValidatorStake` instruction (rebalance from validator account to
+   * transient account)
    */
   static decreaseValidatorStake(params: DecreaseValidatorStakeParams): TransactionInstruction {
     const {
@@ -462,7 +539,51 @@ export class StakePoolInstruction {
   }
 
   /**
-   * Creates a transaction instruction to deposit SOL into a stake pool.
+   * Creates `DecreaseAdditionalValidatorStake` instruction (rebalance from
+   * validator account to transient account)
+   */
+  static decreaseAdditionalValidatorStake(
+    params: DecreaseAdditionalValidatorStakeParams,
+  ): TransactionInstruction {
+    const {
+      stakePool,
+      staker,
+      withdrawAuthority,
+      validatorList,
+      validatorStake,
+      transientStake,
+      lamports,
+      transientStakeSeed,
+      ephemeralStakeSeed,
+      ephemeralStake,
+    } = params;
+
+    const type = STAKE_POOL_INSTRUCTION_LAYOUTS.DecreaseAdditionalValidatorStake;
+    const data = encodeData(type, { lamports, transientStakeSeed, ephemeralStakeSeed });
+
+    const keys = [
+      { pubkey: stakePool, isSigner: false, isWritable: false },
+      { pubkey: staker, isSigner: true, isWritable: false },
+      { pubkey: withdrawAuthority, isSigner: false, isWritable: false },
+      { pubkey: validatorList, isSigner: false, isWritable: true },
+      { pubkey: validatorStake, isSigner: false, isWritable: true },
+      { pubkey: ephemeralStake, isSigner: false, isWritable: true },
+      { pubkey: transientStake, isSigner: false, isWritable: true },
+      { pubkey: SYSVAR_CLOCK_PUBKEY, isSigner: false, isWritable: false },
+      { pubkey: SYSVAR_STAKE_HISTORY_PUBKEY, isSigner: false, isWritable: false },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      { pubkey: StakeProgram.programId, isSigner: false, isWritable: false },
+    ];
+
+    return new TransactionInstruction({
+      programId: STAKE_POOL_PROGRAM_ID,
+      keys,
+      data,
+    });
+  }
+
+  /**
+   * Creates a transaction instruction to deposit a stake account into a stake pool.
    */
   static depositStake(params: DepositStakeParams): TransactionInstruction {
     const {
@@ -508,7 +629,7 @@ export class StakePoolInstruction {
   }
 
   /**
-   * Creates a transaction instruction to withdraw SOL from a stake pool.
+   * Creates a transaction instruction to deposit SOL into a stake pool.
    */
   static depositSol(params: DepositSolParams): TransactionInstruction {
     const {
@@ -556,7 +677,7 @@ export class StakePoolInstruction {
   }
 
   /**
-   * Creates a transaction instruction to withdraw SOL from a stake pool.
+   * Creates a transaction instruction to withdraw active stake from a stake pool.
    */
   static withdrawStake(params: WithdrawStakeParams): TransactionInstruction {
     const {
@@ -650,38 +771,50 @@ export class StakePoolInstruction {
   }
 
   /**
-   * Creates an instruction to create metadata
-   * using the mpl token metadata program for the pool token
+   * Creates `Redelegate` instruction (rebalance from one validator account to another)
+   * @param params
    */
-  static createTokenMetadata(params: CreateTokenMetadataParams): TransactionInstruction {
+  static redelegate(params: RedelegateParams): TransactionInstruction {
     const {
       stakePool,
-      withdrawAuthority,
-      tokenMetadata,
-      manager,
-      payer,
-      poolMint,
-      name,
-      symbol,
-      uri,
+      staker,
+      stakePoolWithdrawAuthority,
+      validatorList,
+      sourceValidatorStake,
+      sourceTransientStake,
+      ephemeralStake,
+      destinationTransientStake,
+      destinationValidatorStake,
+      validator,
+      lamports,
+      sourceTransientStakeSeed,
+      ephemeralStakeSeed,
+      destinationTransientStakeSeed,
     } = params;
 
     const keys = [
       { pubkey: stakePool, isSigner: false, isWritable: false },
-      { pubkey: manager, isSigner: true, isWritable: false },
-      { pubkey: withdrawAuthority, isSigner: false, isWritable: false },
-      { pubkey: poolMint, isSigner: false, isWritable: false },
-      { pubkey: payer, isSigner: true, isWritable: true },
-      { pubkey: tokenMetadata, isSigner: false, isWritable: true },
-      { pubkey: METADATA_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: staker, isSigner: true, isWritable: false },
+      { pubkey: stakePoolWithdrawAuthority, isSigner: false, isWritable: false },
+      { pubkey: validatorList, isSigner: false, isWritable: true },
+      { pubkey: sourceValidatorStake, isSigner: false, isWritable: true },
+      { pubkey: sourceTransientStake, isSigner: false, isWritable: true },
+      { pubkey: ephemeralStake, isSigner: false, isWritable: true },
+      { pubkey: destinationTransientStake, isSigner: false, isWritable: true },
+      { pubkey: destinationValidatorStake, isSigner: false, isWritable: false },
+      { pubkey: validator, isSigner: false, isWritable: false },
+      { pubkey: SYSVAR_CLOCK_PUBKEY, isSigner: false, isWritable: false },
+      { pubkey: SYSVAR_STAKE_HISTORY_PUBKEY, isSigner: false, isWritable: false },
+      { pubkey: STAKE_CONFIG_ID, isSigner: false, isWritable: false },
       { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-      { pubkey: SYSVAR_RENT_PUBKEY, isSigner: false, isWritable: false },
+      { pubkey: StakeProgram.programId, isSigner: false, isWritable: false },
     ];
 
-    const data = encodeData(STAKE_POOL_INSTRUCTION_LAYOUTS.CreateTokenMetadata, {
-      name: new TextEncoder().encode(name.padEnd(METADATA_MAX_NAME_LENGTH, '\0')),
-      symbol: new TextEncoder().encode(symbol.padEnd(METADATA_MAX_SYMBOL_LENGTH, '\0')),
-      uri: new TextEncoder().encode(uri.padEnd(METADATA_MAX_URI_LENGTH, '\0')),
+    const data = encodeData(STAKE_POOL_INSTRUCTION_LAYOUTS.Redelegate, {
+      lamports,
+      sourceTransientStakeSeed,
+      ephemeralStakeSeed,
+      destinationTransientStakeSeed,
     });
 
     return new TransactionInstruction({
@@ -692,30 +825,69 @@ export class StakePoolInstruction {
   }
 
   /**
-   * Creates an instruction to update metadata
-   * in the mpl token metadata program account for the pool token
+   * Decode a deposit stake pool instruction and retrieve the instruction params.
    */
-  static updateTokenMetadata(params: UpdateTokenMetadataParams): TransactionInstruction {
-    const { stakePool, withdrawAuthority, tokenMetadata, manager, name, symbol, uri } = params;
+  static decodeDepositStake(instruction: TransactionInstruction): DepositStakeParams {
+    this.checkProgramId(instruction.programId);
+    this.checkKeyLength(instruction.keys, 11);
 
-    const keys = [
-      { pubkey: stakePool, isSigner: false, isWritable: false },
-      { pubkey: manager, isSigner: true, isWritable: false },
-      { pubkey: withdrawAuthority, isSigner: false, isWritable: false },
-      { pubkey: tokenMetadata, isSigner: false, isWritable: true },
-      { pubkey: METADATA_PROGRAM_ID, isSigner: false, isWritable: false },
-    ];
+    decodeData(STAKE_POOL_INSTRUCTION_LAYOUTS.DepositStake, instruction.data);
 
-    const data = encodeData(STAKE_POOL_INSTRUCTION_LAYOUTS.UpdateTokenMetadata, {
-      name: new TextEncoder().encode(name.padEnd(METADATA_MAX_NAME_LENGTH, '\0')),
-      symbol: new TextEncoder().encode(symbol.padEnd(METADATA_MAX_SYMBOL_LENGTH, '\0')),
-      uri: new TextEncoder().encode(uri.padEnd(METADATA_MAX_URI_LENGTH, '\0')),
-    });
+    return {
+      stakePool: instruction.keys[0].pubkey,
+      validatorList: instruction.keys[1].pubkey,
+      depositAuthority: instruction.keys[2].pubkey,
+      withdrawAuthority: instruction.keys[3].pubkey,
+      depositStake: instruction.keys[4].pubkey,
+      validatorStake: instruction.keys[5].pubkey,
+      reserveStake: instruction.keys[6].pubkey,
+      destinationPoolAccount: instruction.keys[7].pubkey,
+      managerFeeAccount: instruction.keys[8].pubkey,
+      referralPoolAccount: instruction.keys[9].pubkey,
+      poolMint: instruction.keys[10].pubkey,
+    };
+  }
 
-    return new TransactionInstruction({
-      programId: STAKE_POOL_PROGRAM_ID,
-      keys,
-      data,
-    });
+  /**
+   * Decode a deposit sol instruction and retrieve the instruction params.
+   */
+  static decodeDepositSol(instruction: TransactionInstruction): DepositSolParams {
+    this.checkProgramId(instruction.programId);
+    this.checkKeyLength(instruction.keys, 9);
+
+    const { amount } = decodeData(STAKE_POOL_INSTRUCTION_LAYOUTS.DepositSol, instruction.data);
+
+    return {
+      stakePool: instruction.keys[0].pubkey,
+      depositAuthority: instruction.keys[1].pubkey,
+      withdrawAuthority: instruction.keys[2].pubkey,
+      reserveStake: instruction.keys[3].pubkey,
+      fundingAccount: instruction.keys[4].pubkey,
+      destinationPoolAccount: instruction.keys[5].pubkey,
+      managerFeeAccount: instruction.keys[6].pubkey,
+      referralPoolAccount: instruction.keys[7].pubkey,
+      poolMint: instruction.keys[8].pubkey,
+      lamports: amount,
+    };
+  }
+
+  /**
+   * @internal
+   */
+  private static checkProgramId(programId: PublicKey) {
+    if (!programId.equals(StakeProgram.programId)) {
+      throw new Error('Invalid instruction; programId is not StakeProgram');
+    }
+  }
+
+  /**
+   * @internal
+   */
+  private static checkKeyLength(keys: Array<any>, expectedLength: number) {
+    if (keys.length < expectedLength) {
+      throw new Error(
+        `Invalid instruction; found ${keys.length} keys, expected at least ${expectedLength}`,
+      );
+    }
   }
 }
