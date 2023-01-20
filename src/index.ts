@@ -1158,7 +1158,7 @@ export async function redelegate(props: RedelegateProps) {
 }
 
 /**
- * Creates instructions required to redelegate stake.
+ * Initializes a new StakePool.
  */
 export async function initialize(props: InitializeProps) {
   const {
