@@ -142,7 +142,7 @@ export const STAKE_POOL_INSTRUCTION_LAYOUTS: {
     index: 10,
     layout: BufferLayout.struct<any>([
       BufferLayout.u8('instruction'),
-      BufferLayout.ns64('poolTokens'),
+      BufferLayout.nu64('poolTokens'),
     ]),
   },
   // /// (Manager only) Update manager
@@ -156,7 +156,7 @@ export const STAKE_POOL_INSTRUCTION_LAYOUTS: {
   //   layout: BufferLayout.struct<any>([
   //     BufferLayout.u8('instruction'),
   //     // Type of fee to update and value to update it to
-  //     BufferLayout.ns64('fee'),
+  //     BufferLayout.nu64('fee'),
   //   ]),
   // },
   // /// (Manager or staker only) Update staker
@@ -170,7 +170,7 @@ export const STAKE_POOL_INSTRUCTION_LAYOUTS: {
     index: 14,
     layout: BufferLayout.struct<any>([
       BufferLayout.u8('instruction'),
-      BufferLayout.ns64('lamports'),
+      BufferLayout.nu64('lamports'),
     ]),
   },
   // /// (Manager only) Update SOL deposit, stake deposit, or SOL withdrawal authority.
@@ -183,7 +183,7 @@ export const STAKE_POOL_INSTRUCTION_LAYOUTS: {
     index: 16,
     layout: BufferLayout.struct<any>([
       BufferLayout.u8('instruction'),
-      BufferLayout.ns64('poolTokens'),
+      BufferLayout.nu64('poolTokens'),
     ]),
   },
   /// Create token metadata for the stake-pool token in the
@@ -202,18 +202,18 @@ export const STAKE_POOL_INSTRUCTION_LAYOUTS: {
     index: 19,
     layout: BufferLayout.struct<any>([
       BufferLayout.u8('instruction'),
-      BufferLayout.ns64('lamports'),
-      BufferLayout.ns64('transientStakeSeed'),
-      BufferLayout.ns64('ephemeralStakeSeed'),
+      BufferLayout.nu64('lamports'),
+      BufferLayout.nu64('transientStakeSeed'),
+      BufferLayout.nu64('ephemeralStakeSeed'),
     ]),
   },
   DecreaseAdditionalValidatorStake: {
     index: 20,
     layout: BufferLayout.struct<any>([
       BufferLayout.u8('instruction'),
-      BufferLayout.ns64('lamports'),
-      BufferLayout.ns64('transientStakeSeed'),
-      BufferLayout.ns64('ephemeralStakeSeed'),
+      BufferLayout.nu64('lamports'),
+      BufferLayout.nu64('transientStakeSeed'),
+      BufferLayout.nu64('ephemeralStakeSeed'),
     ]),
   },
   Redelegate: {
@@ -221,15 +221,15 @@ export const STAKE_POOL_INSTRUCTION_LAYOUTS: {
     layout: BufferLayout.struct<any>([
       BufferLayout.u8('instruction'),
       /// Amount of lamports to redelegate
-      BufferLayout.ns64('lamports'),
+      BufferLayout.nu64('lamports'),
       /// Seed used to create source transient stake account
-      BufferLayout.ns64('sourceTransientStakeSeed'),
+      BufferLayout.nu64('sourceTransientStakeSeed'),
       /// Seed used to create destination ephemeral account.
-      BufferLayout.ns64('ephemeralStakeSeed'),
+      BufferLayout.nu64('ephemeralStakeSeed'),
       /// Seed used to create destination transient stake account. If there is
       /// already transient stake, this must match the current seed, otherwise
       /// it can be anything
-      BufferLayout.ns64('destinationTransientStakeSeed'),
+      BufferLayout.nu64('destinationTransientStakeSeed'),
     ]),
   },
 });
