@@ -39,6 +39,7 @@ import {
 import { MAX_VALIDATORS_TO_UPDATE, MINIMUM_ACTIVE_STAKE, STAKE_POOL_PROGRAM_ID } from './constants';
 import { create } from 'superstruct';
 import BN from 'bn.js';
+import { getMetadataPDA } from './utils/token';
 
 export type { StakePool, AccountType, ValidatorList, ValidatorStakeInfo } from './layouts';
 export { STAKE_POOL_PROGRAM_ID } from './constants';
@@ -1225,5 +1226,83 @@ export async function initialize(props: InitializeProps) {
   return {
     instructions,
     signers,
+  };
+}
+
+/**
+ * Creates instructions required to create pool token metadata.
+ */
+export async function createPoolTokenMetadata(props: CreateStakePoolTokenMetadataProps) {
+  const { connection, name, symbol, uri, payer } = props;
+
+  const stakePool =
+    props.stakePool instanceof PublicKey
+      ? await getStakePoolAccount(connection, props.stakePool)
+      : props.stakePool;
+
+  const tokenMetadata =
+    props.tokenMetadata ?? (await getMetadataPDA(stakePool.account.data.poolMint));
+
+  const withdrawAuthority = await findWithdrawAuthorityProgramAddress(
+    STAKE_POOL_PROGRAM_ID,
+    stakePool.pubkey,
+  );
+
+  const manager = stakePool.account.data.manager;
+
+  const instructions: TransactionInstruction[] = [];
+  instructions.push(
+    StakePoolInstruction.createTokenMetadata({
+      stakePool: stakePool.pubkey,
+      poolMint: stakePool.account.data.poolMint,
+      payer,
+      manager,
+      tokenMetadata,
+      withdrawAuthority,
+      name,
+      symbol,
+      uri,
+    }),
+  );
+
+  return {
+    instructions,
+  };
+}
+
+/**
+ * Creates instructions required to update pool token metadata.
+ */
+export async function updatePoolTokenMetadata(props: UpdateStakePoolTokenMetadataProps) {
+  const { connection, name, symbol, uri } = props;
+
+  const stakePool =
+    props.stakePool instanceof PublicKey
+      ? await getStakePoolAccount(connection, props.stakePool)
+      : props.stakePool;
+
+  const tokenMetadata =
+    props.tokenMetadata ?? (await getMetadataPDA(stakePool.account.data.poolMint));
+
+  const withdrawAuthority = await findWithdrawAuthorityProgramAddress(
+    STAKE_POOL_PROGRAM_ID,
+    stakePool.pubkey,
+  );
+
+  const instructions: TransactionInstruction[] = [];
+  instructions.push(
+    StakePoolInstruction.updateTokenMetadata({
+      stakePool: stakePool.pubkey,
+      manager: stakePool.account.data.manager,
+      tokenMetadata,
+      withdrawAuthority,
+      name,
+      symbol,
+      uri,
+    }),
+  );
+
+  return {
+    instructions,
   };
 }
