@@ -10,6 +10,7 @@ import {
 } from '@solana/web3.js';
 import * as BufferLayout from '@solana/buffer-layout';
 import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
+import BN from 'bn.js';
 import {
   METADATA_MAX_NAME_LENGTH,
   METADATA_MAX_SYMBOL_LENGTH,
@@ -17,8 +18,7 @@ import {
   METADATA_PROGRAM_ID,
   STAKE_POOL_PROGRAM_ID,
 } from './constants';
-import { InstructionType, encodeData, decodeData } from './utils';
-import BN from 'bn.js';
+import { InstructionType, encodeData } from './utils';
 import { Fee } from './index';
 
 /**
