@@ -6,8 +6,10 @@ import {
   Signer,
   StakeAuthorizationLayout,
   StakeProgram,
+  SystemInstruction,
   SystemProgram,
   TransactionInstruction,
+  ValidatorInfo,
 } from '@solana/web3.js';
 import { ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_PROGRAM_ID, Token } from '@solana/spl-token';
 import {
@@ -34,6 +36,7 @@ import {
   ValidatorList,
   ValidatorListLayout,
   ValidatorStakeInfo,
+  ValidatorStakeInfoLayout,
 } from './layouts';
 import { MAX_VALIDATORS_TO_UPDATE, MINIMUM_ACTIVE_STAKE, STAKE_POOL_PROGRAM_ID } from './constants';
 import { create } from 'superstruct';
@@ -59,6 +62,11 @@ export interface WithdrawAccount {
   poolAmount: number;
 }
 
+export interface Fee {
+  denominator: BN;
+  numerator: BN;
+}
+
 /**
  * Wrapper class for a stake pool.
  * Each stake pool has a stake pool account and a validator list account.
@@ -77,6 +85,21 @@ interface RedelegateProps {
   destinationTransientStakeSeed: number | BN;
   ephemeralStakeSeed: number | BN;
   lamports: number | BN;
+}
+
+interface InitializeProps {
+  connection: Connection;
+  manager: Keypair;
+  stakePool: Keypair;
+  validatorList: Keypair;
+  poolMint: PublicKey;
+  reserveStake: PublicKey;
+  managerPoolAccount: PublicKey;
+  fee: Fee;
+  withdrawalFee: Fee;
+  depositFee: Fee;
+  referralFee: Fee;
+  maxValidators: number;
 }
 
 /**
@@ -1131,5 +1154,82 @@ export async function redelegate(props: RedelegateProps) {
 
   return {
     instructions,
+  };
+}
+
+/**
+ * Creates instructions required to redelegate stake.
+ */
+export async function initialize(props: InitializeProps) {
+  const {
+    connection,
+    stakePool,
+    poolMint,
+    validatorList,
+    manager,
+    reserveStake,
+    referralFee,
+    managerPoolAccount,
+    fee,
+  } = props;
+
+  const poolBalance = await connection.getMinimumBalanceForRentExemption(StakePoolLayout.span);
+
+  const instructions: TransactionInstruction[] = [];
+  const signers: Signer[] = [manager, stakePool, validatorList];
+
+  instructions.push(
+    SystemProgram.createAccount({
+      fromPubkey: manager.publicKey,
+      newAccountPubkey: stakePool.publicKey,
+      lamports: poolBalance,
+      space: StakePoolLayout.span,
+      programId: STAKE_POOL_PROGRAM_ID,
+    }),
+  );
+
+  // current supported max by the program, go big!
+  const maxValidators = 2950;
+
+  const validatorListBalance = await connection.getMinimumBalanceForRentExemption(
+    ValidatorListLayout.span + ValidatorStakeInfoLayout.span * maxValidators,
+  );
+
+  instructions.push(
+    SystemProgram.createAccount({
+      fromPubkey: manager.publicKey,
+      newAccountPubkey: validatorList.publicKey,
+      lamports: validatorListBalance,
+      space: ValidatorListLayout.span,
+      programId: STAKE_POOL_PROGRAM_ID,
+    }),
+  );
+
+  const withdrawAuthority = await findWithdrawAuthorityProgramAddress(
+    STAKE_POOL_PROGRAM_ID,
+    stakePool.publicKey,
+  );
+
+  instructions.push(
+    StakePoolInstruction.initialize({
+      stakePool: stakePool.publicKey,
+      manager: manager.publicKey,
+      staker: manager.publicKey,
+      stakePoolWithdrawAuthority: withdrawAuthority,
+      validatorList: validatorList.publicKey,
+      poolMint,
+      managerPoolAccount,
+      reserveStake,
+      fee,
+      withdrawalFee: fee,
+      depositFee: fee,
+      referralFee,
+      maxValidators,
+    }),
+  );
+
+  return {
+    instructions,
+    signers,
   };
 }
