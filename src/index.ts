@@ -6,27 +6,25 @@ import {
   Signer,
   StakeAuthorizationLayout,
   StakeProgram,
-  SystemInstruction,
   SystemProgram,
   TransactionInstruction,
-  ValidatorInfo,
 } from '@solana/web3.js';
-import { ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_PROGRAM_ID, Token } from '@solana/spl-token';
+import { ASSOCIATED_TOKEN_PROGRAM_ID, Token, TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import {
-  ValidatorAccount,
   addAssociatedTokenAccount,
   arrayChunk,
   calcLamportsWithdrawAmount,
+  findEphemeralStakeProgramAddress,
   findStakeProgramAddress,
   findTransientStakeProgramAddress,
   findWithdrawAuthorityProgramAddress,
   getTokenAccount,
   getValidatorListAccount,
+  lamportsToSol,
   newStakeAccount,
   prepareWithdrawAccounts,
-  lamportsToSol,
   solToLamports,
-  findEphemeralStakeProgramAddress,
+  ValidatorAccount,
 } from './utils';
 import { StakePoolInstruction } from './instructions';
 import {
@@ -96,8 +94,6 @@ interface InitializeProps {
   reserveStake: PublicKey;
   managerPoolAccount: PublicKey;
   fee: Fee;
-  withdrawalFee: Fee;
-  depositFee: Fee;
   referralFee: Fee;
   maxValidators: number;
 }
@@ -145,9 +141,7 @@ export async function getStakeAccount(
   if (program != 'stake') {
     throw new Error('Not a stake account');
   }
-  const parsed = create(result.data.parsed, StakeAccount);
-
-  return parsed;
+  return create(result.data.parsed, StakeAccount);
 }
 
 /**
@@ -1168,9 +1162,9 @@ export async function initialize(props: InitializeProps) {
     validatorList,
     manager,
     reserveStake,
-    referralFee,
     managerPoolAccount,
     fee,
+    referralFee,
   } = props;
 
   const poolBalance = await connection.getMinimumBalanceForRentExemption(StakePoolLayout.span);
