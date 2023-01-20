@@ -10,6 +10,8 @@ import {
   TransactionInstruction,
 } from '@solana/web3.js';
 import { ASSOCIATED_TOKEN_PROGRAM_ID, Token, TOKEN_PROGRAM_ID } from '@solana/spl-token';
+import { create } from 'superstruct';
+import BN from 'bn.js';
 import {
   addAssociatedTokenAccount,
   arrayChunk,
@@ -24,6 +26,7 @@ import {
   newStakeAccount,
   prepareWithdrawAccounts,
   solToLamports,
+  getMetadataPDA,
   ValidatorAccount,
 } from './utils';
 import { StakePoolInstruction } from './instructions';
@@ -37,9 +40,6 @@ import {
   ValidatorStakeInfoLayout,
 } from './layouts';
 import { MAX_VALIDATORS_TO_UPDATE, MINIMUM_ACTIVE_STAKE, STAKE_POOL_PROGRAM_ID } from './constants';
-import { create } from 'superstruct';
-import BN from 'bn.js';
-import { getMetadataPDA } from './utils/token';
 
 export type { StakePool, AccountType, ValidatorList, ValidatorStakeInfo } from './layouts';
 export { STAKE_POOL_PROGRAM_ID } from './constants';
