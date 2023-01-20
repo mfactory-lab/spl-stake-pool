@@ -75,17 +75,6 @@ export interface StakePoolAccounts {
   validatorList: ValidatorListAccount | undefined;
 }
 
-interface RedelegateProps {
-  connection: Connection;
-  stakePoolAddress: PublicKey;
-  sourceVoteAccount: PublicKey;
-  destinationVoteAccount: PublicKey;
-  sourceTransientStakeSeed: number | BN;
-  destinationTransientStakeSeed: number | BN;
-  ephemeralStakeSeed: number | BN;
-  lamports: number | BN;
-}
-
 interface InitializeProps {
   connection: Connection;
   manager: Keypair;
@@ -97,6 +86,30 @@ interface InitializeProps {
   fee: Fee;
   referralFee: Fee;
   maxValidators: number;
+}
+
+interface UpdateStakePoolTokenMetadataProps {
+  connection: Connection;
+  stakePool: StakePoolAccount | PublicKey;
+  tokenMetadata?: PublicKey;
+  name: string;
+  symbol: string;
+  uri: string;
+}
+
+interface CreateStakePoolTokenMetadataProps extends UpdateStakePoolTokenMetadataProps {
+  payer: PublicKey;
+}
+
+interface RedelegateProps {
+  connection: Connection;
+  stakePoolAddress: PublicKey;
+  sourceVoteAccount: PublicKey;
+  destinationVoteAccount: PublicKey;
+  sourceTransientStakeSeed: number | BN;
+  destinationTransientStakeSeed: number | BN;
+  ephemeralStakeSeed: number | BN;
+  lamports: number | BN;
 }
 
 /**
