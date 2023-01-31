@@ -17,6 +17,8 @@ import {
   withdrawStake,
   redelegate,
   getStakeAccount,
+  createPoolTokenMetadata,
+  updatePoolTokenMetadata,
 } from '../src';
 
 import { decodeData } from '../src/utils';
@@ -316,6 +318,60 @@ describe('StakePoolProgram', () => {
       const parsedStakeAccount = await getStakeAccount(connection, stakeAccount);
       expect((connection.getParsedAccountInfo as jest.Mock).mock.calls.length).toBe(1);
       expect(parsedStakeAccount).toEqual(uninitializedStakeAccount.parsed);
+    });
+  });
+
+  describe('createPoolTokenMetadata', () => {
+    it.only('should create pool token metadata', async () => {
+      connection.getAccountInfo = jest.fn(async (pubKey: PublicKey) => {
+        if (pubKey == stakePoolAddress) {
+          return stakePoolAccount;
+        }
+        return null;
+      });
+
+      const payer = new PublicKey(0);
+
+      const data = {
+        name: 'test',
+        symbol: 'TEST',
+        uri: 'https://example.com',
+      };
+
+      const res = await createPoolTokenMetadata({
+        connection,
+        stakePool: stakePoolAddress,
+        payer,
+        ...data,
+      });
+
+      const decodedData = STAKE_POOL_INSTRUCTION_LAYOUTS.CreateTokenMetadata.layout.decode(
+        res.instructions[0].data,
+      );
+      expect(Buffer.from(decodedData.name).toString().replace(/\0/g, '')).toBe(data.name);
+      expect(Buffer.from(decodedData.symbol).toString().replace(/\0/g, '')).toBe(data.symbol);
+      expect(Buffer.from(decodedData.uri).toString().replace(/\0/g, '')).toBe(data.uri);
+    });
+
+    it.only('should update pool token metadata', async () => {
+      const data = {
+        name: 'test',
+        symbol: 'TEST',
+        uri: 'https://example.com',
+      };
+
+      const res = await updatePoolTokenMetadata({
+        connection,
+        stakePool: stakePoolAddress,
+        ...data,
+      });
+
+      const decodedData = STAKE_POOL_INSTRUCTION_LAYOUTS.UpdateTokenMetadata.layout.decode(
+        res.instructions[0].data,
+      );
+      expect(Buffer.from(decodedData.name).toString().replace(/\0/g, '')).toBe(data.name);
+      expect(Buffer.from(decodedData.symbol).toString().replace(/\0/g, '')).toBe(data.symbol);
+      expect(Buffer.from(decodedData.uri).toString().replace(/\0/g, '')).toBe(data.uri);
     });
   });
 

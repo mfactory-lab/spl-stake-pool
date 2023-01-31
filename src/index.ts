@@ -9,22 +9,25 @@ import {
   SystemProgram,
   TransactionInstruction,
 } from '@solana/web3.js';
-import { ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_PROGRAM_ID, Token } from '@solana/spl-token';
+import { ASSOCIATED_TOKEN_PROGRAM_ID, Token, TOKEN_PROGRAM_ID } from '@solana/spl-token';
+import { create } from 'superstruct';
+import BN from 'bn.js';
 import {
-  ValidatorAccount,
   addAssociatedTokenAccount,
   arrayChunk,
   calcLamportsWithdrawAmount,
+  findEphemeralStakeProgramAddress,
   findStakeProgramAddress,
   findTransientStakeProgramAddress,
   findWithdrawAuthorityProgramAddress,
   getTokenAccount,
   getValidatorListAccount,
+  lamportsToSol,
   newStakeAccount,
   prepareWithdrawAccounts,
-  lamportsToSol,
   solToLamports,
-  findEphemeralStakeProgramAddress,
+  getMetadataPDA,
+  ValidatorAccount,
 } from './utils';
 import { StakePoolInstruction } from './instructions';
 import {
@@ -34,10 +37,9 @@ import {
   ValidatorList,
   ValidatorListLayout,
   ValidatorStakeInfo,
+  ValidatorStakeInfoLayout,
 } from './layouts';
 import { MAX_VALIDATORS_TO_UPDATE, MINIMUM_ACTIVE_STAKE, STAKE_POOL_PROGRAM_ID } from './constants';
-import { create } from 'superstruct';
-import BN from 'bn.js';
 
 export type { StakePool, AccountType, ValidatorList, ValidatorStakeInfo } from './layouts';
 export { STAKE_POOL_PROGRAM_ID } from './constants';
@@ -59,6 +61,11 @@ export interface WithdrawAccount {
   poolAmount: number;
 }
 
+export interface Fee {
+  denominator: BN;
+  numerator: BN;
+}
+
 /**
  * Wrapper class for a stake pool.
  * Each stake pool has a stake pool account and a validator list account.
@@ -66,6 +73,32 @@ export interface WithdrawAccount {
 export interface StakePoolAccounts {
   stakePool: StakePoolAccount | undefined;
   validatorList: ValidatorListAccount | undefined;
+}
+
+interface InitializeProps {
+  connection: Connection;
+  manager: Keypair;
+  stakePool: Keypair;
+  validatorList: Keypair;
+  poolMint: PublicKey;
+  reserveStake: PublicKey;
+  managerPoolAccount: PublicKey;
+  fee: Fee;
+  referralFee: Fee;
+  maxValidators: number;
+}
+
+interface UpdateStakePoolTokenMetadataProps {
+  connection: Connection;
+  stakePool: StakePoolAccount | PublicKey;
+  tokenMetadata?: PublicKey;
+  name: string;
+  symbol: string;
+  uri: string;
+}
+
+interface CreateStakePoolTokenMetadataProps extends UpdateStakePoolTokenMetadataProps {
+  payer: PublicKey;
 }
 
 interface RedelegateProps {
@@ -122,9 +155,7 @@ export async function getStakeAccount(
   if (program != 'stake') {
     throw new Error('Not a stake account');
   }
-  const parsed = create(result.data.parsed, StakeAccount);
-
-  return parsed;
+  return create(result.data.parsed, StakeAccount);
 }
 
 /**
@@ -1126,6 +1157,161 @@ export async function redelegate(props: RedelegateProps) {
       destinationTransientStakeSeed,
       validator: destinationVoteAccount,
       lamports,
+    }),
+  );
+
+  return {
+    instructions,
+  };
+}
+
+/**
+ * Initializes a new StakePool.
+ */
+export async function initialize(props: InitializeProps) {
+  const {
+    connection,
+    stakePool,
+    poolMint,
+    validatorList,
+    manager,
+    reserveStake,
+    managerPoolAccount,
+    fee,
+    referralFee,
+  } = props;
+
+  const poolBalance = await connection.getMinimumBalanceForRentExemption(StakePoolLayout.span);
+
+  const instructions: TransactionInstruction[] = [];
+  const signers: Signer[] = [manager, stakePool, validatorList];
+
+  instructions.push(
+    SystemProgram.createAccount({
+      fromPubkey: manager.publicKey,
+      newAccountPubkey: stakePool.publicKey,
+      lamports: poolBalance,
+      space: StakePoolLayout.span,
+      programId: STAKE_POOL_PROGRAM_ID,
+    }),
+  );
+
+  // current supported max by the program, go big!
+  const maxValidators = 2950;
+
+  const validatorListBalance = await connection.getMinimumBalanceForRentExemption(
+    ValidatorListLayout.span + ValidatorStakeInfoLayout.span * maxValidators,
+  );
+
+  instructions.push(
+    SystemProgram.createAccount({
+      fromPubkey: manager.publicKey,
+      newAccountPubkey: validatorList.publicKey,
+      lamports: validatorListBalance,
+      space: ValidatorListLayout.span,
+      programId: STAKE_POOL_PROGRAM_ID,
+    }),
+  );
+
+  const withdrawAuthority = await findWithdrawAuthorityProgramAddress(
+    STAKE_POOL_PROGRAM_ID,
+    stakePool.publicKey,
+  );
+
+  instructions.push(
+    StakePoolInstruction.initialize({
+      stakePool: stakePool.publicKey,
+      manager: manager.publicKey,
+      staker: manager.publicKey,
+      stakePoolWithdrawAuthority: withdrawAuthority,
+      validatorList: validatorList.publicKey,
+      poolMint,
+      managerPoolAccount,
+      reserveStake,
+      fee,
+      withdrawalFee: fee,
+      depositFee: fee,
+      referralFee,
+      maxValidators,
+    }),
+  );
+
+  return {
+    instructions,
+    signers,
+  };
+}
+
+/**
+ * Creates instructions required to create pool token metadata.
+ */
+export async function createPoolTokenMetadata(props: CreateStakePoolTokenMetadataProps) {
+  const { connection, name, symbol, uri, payer } = props;
+
+  const stakePool =
+    props.stakePool instanceof PublicKey
+      ? await getStakePoolAccount(connection, props.stakePool)
+      : props.stakePool;
+
+  const tokenMetadata =
+    props.tokenMetadata ?? (await getMetadataPDA(stakePool.account.data.poolMint));
+
+  const withdrawAuthority = await findWithdrawAuthorityProgramAddress(
+    STAKE_POOL_PROGRAM_ID,
+    stakePool.pubkey,
+  );
+
+  const manager = stakePool.account.data.manager;
+
+  const instructions: TransactionInstruction[] = [];
+  instructions.push(
+    StakePoolInstruction.createTokenMetadata({
+      stakePool: stakePool.pubkey,
+      poolMint: stakePool.account.data.poolMint,
+      payer,
+      manager,
+      tokenMetadata,
+      withdrawAuthority,
+      name,
+      symbol,
+      uri,
+    }),
+  );
+
+  return {
+    instructions,
+  };
+}
+
+/**
+ * Creates instructions required to update pool token metadata.
+ */
+export async function updatePoolTokenMetadata(props: UpdateStakePoolTokenMetadataProps) {
+  const { connection, name, symbol, uri } = props;
+
+  const stakePool =
+    props.stakePool instanceof PublicKey
+      ? await getStakePoolAccount(connection, props.stakePool)
+      : props.stakePool;
+
+  const tokenMetadata =
+    props.tokenMetadata ?? (await getMetadataPDA(stakePool.account.data.poolMint));
+
+  const withdrawAuthority = await findWithdrawAuthorityProgramAddress(
+    STAKE_POOL_PROGRAM_ID,
+    stakePool.pubkey,
+  );
+
+  const instructions: TransactionInstruction[] = [];
+  instructions.push(
+    StakePoolInstruction.updateTokenMetadata({
+      stakePool: stakePool.pubkey,
+      manager: stakePool.account.data.manager,
+      tokenMetadata,
+      withdrawAuthority,
+      name,
+      symbol,
+      uri,
     }),
   );
 
