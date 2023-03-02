@@ -1319,3 +1319,104 @@ export async function updatePoolTokenMetadata(props: UpdateStakePoolTokenMetadat
     instructions,
   };
 }
+
+/**
+ * Creates instructions required to add a validator to the pool.
+ */
+export async function addValidatorToPool(
+  connection: Connection,
+  stakePoolAddress: PublicKey,
+  validatorVote: PublicKey,
+  seed?: number,
+) {
+  const stakePool = await getStakePoolAccount(connection, stakePoolAddress);
+
+  const withdrawAuthority = await findWithdrawAuthorityProgramAddress(
+    STAKE_POOL_PROGRAM_ID,
+    stakePoolAddress,
+  );
+
+  const validatorStake = await findStakeProgramAddress(
+    STAKE_POOL_PROGRAM_ID,
+    validatorVote,
+    stakePoolAddress,
+  );
+
+  const instructions: TransactionInstruction[] = [];
+
+  instructions.push(
+    StakePoolInstruction.addValidatorToPool({
+      stakePool: stakePoolAddress,
+      staker: stakePool.account.data.staker,
+      validatorList: stakePool.account.data.validatorList,
+      validatorStake,
+      reserveStake: stakePool.account.data.reserveStake,
+      withdrawAuthority,
+      validatorVote,
+      seed,
+    }),
+  );
+
+  return {
+    instructions,
+  };
+}
+
+/**
+ * Creates instructions required to add a validator to the pool.
+ */
+export async function removeValidatorFromPool(
+  connection: Connection,
+  stakePoolAddress: PublicKey,
+  validatorVote: PublicKey,
+) {
+  const stakePool = await getStakePoolAccount(connection, stakePoolAddress);
+
+  const validatorList = await getValidatorListAccount(
+    connection,
+    stakePool.account.data.validatorList,
+  );
+
+  const validatorInfo = validatorList.account.data.validators.find(
+    (v) => v.voteAccountAddress.toBase58() == validatorVote.toBase58(),
+  );
+
+  if (!validatorInfo) {
+    throw new Error('Vote account not found in validator list');
+  }
+
+  const withdrawAuthority = await findWithdrawAuthorityProgramAddress(
+    STAKE_POOL_PROGRAM_ID,
+    stakePoolAddress,
+  );
+
+  const transientStake = await findTransientStakeProgramAddress(
+    STAKE_POOL_PROGRAM_ID,
+    validatorInfo.voteAccountAddress,
+    stakePoolAddress,
+    validatorInfo.transientSeedSuffixStart,
+  );
+
+  const validatorStake = await findStakeProgramAddress(
+    STAKE_POOL_PROGRAM_ID,
+    validatorInfo.voteAccountAddress,
+    stakePoolAddress,
+  );
+
+  const instructions: TransactionInstruction[] = [];
+
+  instructions.push(
+    StakePoolInstruction.removeValidatorFromPool({
+      stakePool: stakePoolAddress,
+      staker: stakePool.account.data.staker,
+      withdrawAuthority,
+      validatorList: stakePool.account.data.validatorList,
+      validatorStake,
+      transientStake,
+    }),
+  );
+
+  return {
+    instructions,
+  };
+}
