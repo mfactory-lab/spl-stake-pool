@@ -1130,7 +1130,7 @@ class StakePoolInstruction {
         const type = STAKE_POOL_INSTRUCTION_LAYOUTS.AddValidatorToPool;
         const data = encodeData(type, { seed: (_a = params.seed) !== null && _a !== void 0 ? _a : 0 });
         const keys = [
-            { pubkey: params.stakePool, isSigner: false, isWritable: false },
+            { pubkey: params.stakePool, isSigner: false, isWritable: true },
             { pubkey: params.staker, isSigner: true, isWritable: false },
             { pubkey: params.reserveStake, isSigner: false, isWritable: true },
             { pubkey: params.withdrawAuthority, isSigner: false, isWritable: false },
@@ -1157,7 +1157,7 @@ class StakePoolInstruction {
         const type = STAKE_POOL_INSTRUCTION_LAYOUTS.RemoveValidatorFromPool;
         const data = encodeData(type);
         const keys = [
-            { pubkey: params.stakePool, isSigner: false, isWritable: false },
+            { pubkey: params.stakePool, isSigner: false, isWritable: true },
             { pubkey: params.staker, isSigner: true, isWritable: false },
             { pubkey: params.withdrawAuthority, isSigner: false, isWritable: false },
             { pubkey: params.validatorList, isSigner: false, isWritable: true },
