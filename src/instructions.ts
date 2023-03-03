@@ -510,7 +510,7 @@ export class StakePoolInstruction {
     const data = encodeData(type, { seed: params.seed ?? 0 });
 
     const keys = [
-      { pubkey: params.stakePool, isSigner: false, isWritable: false },
+      { pubkey: params.stakePool, isSigner: false, isWritable: true },
       { pubkey: params.staker, isSigner: true, isWritable: false },
       { pubkey: params.reserveStake, isSigner: false, isWritable: true },
       { pubkey: params.withdrawAuthority, isSigner: false, isWritable: false },
@@ -540,7 +540,7 @@ export class StakePoolInstruction {
     const data = encodeData(type);
 
     const keys = [
-      { pubkey: params.stakePool, isSigner: false, isWritable: false },
+      { pubkey: params.stakePool, isSigner: false, isWritable: true },
       { pubkey: params.staker, isSigner: true, isWritable: false },
       { pubkey: params.withdrawAuthority, isSigner: false, isWritable: false },
       { pubkey: params.validatorList, isSigner: false, isWritable: true },
