@@ -19,6 +19,8 @@ import {
   getStakeAccount,
   createPoolTokenMetadata,
   updatePoolTokenMetadata,
+  addValidatorToPool,
+  removeValidatorFromPool,
 } from '../src';
 
 import { decodeData } from '../src/utils';
@@ -32,6 +34,7 @@ import {
   CONSTANTS,
   stakeAccountData,
   uninitializedStakeAccount,
+  validatorListMock,
 } from './mocks';
 
 describe('StakePoolProgram', () => {
@@ -306,6 +309,7 @@ describe('StakePoolProgram', () => {
       expect(res.totalRentFreeBalances).toEqual(10000);
     });
   });
+
   describe('getStakeAccount', () => {
     it.only('returns an uninitialized parsed stake account', async () => {
       const stakeAccount = new PublicKey(20);
@@ -398,6 +402,45 @@ describe('StakePoolProgram', () => {
       expect(decodedData.sourceTransientStakeSeed).toBe(data.sourceTransientStakeSeed);
       expect(decodedData.destinationTransientStakeSeed).toBe(data.destinationTransientStakeSeed);
       expect(decodedData.ephemeralStakeSeed).toBe(data.ephemeralStakeSeed);
+    });
+  });
+
+  describe('add validator', () => {
+    it.only('should call successfully', async () => {
+      const validatorVote = PublicKey.default;
+      const { instructions } = await addValidatorToPool(
+        connection,
+        stakePoolAddress,
+        validatorVote,
+      );
+      const decodedData = STAKE_POOL_INSTRUCTION_LAYOUTS.AddValidatorToPool.layout.decode(
+        instructions[0].data,
+      );
+      expect(decodedData.instruction).toBe(1);
+    });
+  });
+
+  describe('remove validator', () => {
+    connection.getAccountInfo = jest.fn(async (pubKey: PublicKey) => {
+      if (pubKey == stakePoolAddress) {
+        return stakePoolAccount;
+      }
+      if (pubKey.equals(stakePoolMock.validatorList)) {
+        return mockValidatorList();
+      }
+      return null;
+    });
+    it.only('should call successfully', async () => {
+      const validatorVote = validatorListMock.validators[0].voteAccountAddress;
+      const { instructions } = await removeValidatorFromPool(
+        connection,
+        stakePoolAddress,
+        validatorVote,
+      );
+      const decodedData = STAKE_POOL_INSTRUCTION_LAYOUTS.RemoveValidatorFromPool.layout.decode(
+        instructions[0].data,
+      );
+      expect(decodedData.instruction).toBe(2);
     });
   });
 });
