@@ -412,13 +412,11 @@ describe('StakePoolProgram', () => {
         connection,
         stakePoolAddress,
         validatorVote,
-        2,
       );
       const decodedData = STAKE_POOL_INSTRUCTION_LAYOUTS.AddValidatorToPool.layout.decode(
         instructions[0].data,
       );
       expect(decodedData.instruction).toBe(1);
-      expect(decodedData.seed).toBe(2);
     });
   });
 

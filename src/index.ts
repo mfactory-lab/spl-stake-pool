@@ -1331,6 +1331,19 @@ export async function addValidatorToPool(
 ) {
   const stakePool = await getStakePoolAccount(connection, stakePoolAddress);
 
+  const validatorList = await getValidatorListAccount(
+    connection,
+    stakePool.account.data.validatorList,
+  );
+
+  const validatorInfo = validatorList.account.data.validators.find(
+    (v) => v.voteAccountAddress.toBase58() == validatorVote.toBase58(),
+  );
+
+  if (validatorInfo) {
+    throw new Error(`Stake pool already contains validator ${validatorInfo}, ignoring`);
+  }
+
   const withdrawAuthority = await findWithdrawAuthorityProgramAddress(
     STAKE_POOL_PROGRAM_ID,
     stakePoolAddress,
