@@ -18,7 +18,7 @@ import {
   METADATA_PROGRAM_ID,
   STAKE_POOL_PROGRAM_ID,
 } from './constants';
-import { InstructionType, encodeData } from './utils';
+import { InstructionType, OptionLayout, encodeData } from './utils';
 import { Fee } from './index';
 
 /**
@@ -92,7 +92,7 @@ export const STAKE_POOL_INSTRUCTION_LAYOUTS: {
     layout: BufferLayout.struct<any>([
       BufferLayout.u8('instruction'),
       // Optional non-zero u32 seed used for generating the validator stake address
-      BufferLayout.u32('seed'),
+      OptionLayout.of(BufferLayout.u32('seed')),
     ]),
   },
   /// (Staker only) Removes validator from the pool, deactivating its stake
@@ -507,7 +507,7 @@ export class StakePoolInstruction {
    */
   static addValidatorToPool(params: AddValidatorToPoolParams) {
     const type = STAKE_POOL_INSTRUCTION_LAYOUTS.AddValidatorToPool;
-    const data = encodeData(type, { seed: params.seed ?? 0 });
+    const data = encodeData(type, { seed: params.seed });
 
     const keys = [
       { pubkey: params.stakePool, isSigner: false, isWritable: true },
