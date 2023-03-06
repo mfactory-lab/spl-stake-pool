@@ -2,7 +2,7 @@ import { STAKE_CONFIG_ID, SYSVAR_CLOCK_PUBKEY, SYSVAR_RENT_PUBKEY, SYSVAR_STAKE_
 import * as BufferLayout from '@solana/buffer-layout';
 import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { METADATA_MAX_NAME_LENGTH, METADATA_MAX_SYMBOL_LENGTH, METADATA_MAX_URI_LENGTH, METADATA_PROGRAM_ID, STAKE_POOL_PROGRAM_ID, } from './constants';
-import { encodeData } from './utils';
+import { OptionLayout, encodeData } from './utils';
 const MOVE_STAKE_LAYOUT = BufferLayout.struct([
     BufferLayout.u8('instruction'),
     BufferLayout.nu64('lamports'),
@@ -38,7 +38,7 @@ export const STAKE_POOL_INSTRUCTION_LAYOUTS = Object.freeze({
         layout: BufferLayout.struct([
             BufferLayout.u8('instruction'),
             // Optional non-zero u32 seed used for generating the validator stake address
-            BufferLayout.u32('seed'),
+            OptionLayout.of(BufferLayout.u32('seed')),
         ]),
     },
     /// (Staker only) Removes validator from the pool, deactivating its stake
@@ -220,9 +220,8 @@ export class StakePoolInstruction {
      * Creates instruction to add a validator to the pool.
      */
     static addValidatorToPool(params) {
-        var _a;
         const type = STAKE_POOL_INSTRUCTION_LAYOUTS.AddValidatorToPool;
-        const data = encodeData(type, { seed: (_a = params.seed) !== null && _a !== void 0 ? _a : 0 });
+        const data = encodeData(type, { seed: params.seed });
         const keys = [
             { pubkey: params.stakePool, isSigner: false, isWritable: true },
             { pubkey: params.staker, isSigner: true, isWritable: false },
