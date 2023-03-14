@@ -77,16 +77,19 @@ export interface StakePoolAccounts {
 
 interface InitializeProps {
   connection: Connection;
-  manager: Keypair;
-  stakePool: Keypair;
-  validatorList: Keypair;
+  // Default: Keypair.generate
+  manager?: Keypair | undefined;
+  // Default: Keypair.generate
+  stakePool?: Keypair | undefined;
+  // Default: Keypair.generate
+  validatorList?: Keypair | undefined;
   poolMint: PublicKey;
   reserveStake: PublicKey;
   managerPoolAccount: PublicKey;
   fee: Fee;
   referralFee: Fee;
   // Default: 2950
-  maxValidators?: number;
+  maxValidators?: number | undefined;
 }
 
 interface UpdateStakePoolTokenMetadataProps {
@@ -1164,19 +1167,13 @@ export async function redelegate(props: RedelegateProps) {
  * Initializes a new StakePool.
  */
 export async function initialize(props: InitializeProps) {
-  const {
-    connection,
-    stakePool,
-    poolMint,
-    validatorList,
-    manager,
-    reserveStake,
-    managerPoolAccount,
-    fee,
-    referralFee,
-  } = props;
+  const { connection, poolMint, reserveStake, managerPoolAccount, fee, referralFee } = props;
 
   const poolBalance = await connection.getMinimumBalanceForRentExemption(StakePoolLayout.span);
+
+  const stakePool = props.stakePool ?? Keypair.generate();
+  const validatorList = props.validatorList ?? Keypair.generate();
+  const manager = props.manager ?? Keypair.generate();
 
   const instructions: TransactionInstruction[] = [];
   const signers: Signer[] = [manager, stakePool, validatorList];
@@ -1194,8 +1191,10 @@ export async function initialize(props: InitializeProps) {
   // current supported max by the program, go big!
   const maxValidators = props.maxValidators ?? 2950;
 
+  // TODO: ValidatorListLayout.span returns -1
+  const validatorListSpace = 1 + 4 + 4 + ValidatorStakeInfoLayout.span * maxValidators;
   const validatorListBalance = await connection.getMinimumBalanceForRentExemption(
-    ValidatorListLayout.span + ValidatorStakeInfoLayout.span * maxValidators,
+    validatorListSpace,
   );
 
   instructions.push(
@@ -1203,7 +1202,7 @@ export async function initialize(props: InitializeProps) {
       fromPubkey: manager.publicKey,
       newAccountPubkey: validatorList.publicKey,
       lamports: validatorListBalance,
-      space: ValidatorListLayout.span,
+      space: validatorListSpace,
       programId: STAKE_POOL_PROGRAM_ID,
     }),
   );
