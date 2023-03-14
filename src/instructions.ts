@@ -82,7 +82,7 @@ export const STAKE_POOL_INSTRUCTION_LAYOUTS: {
       feeLayout('fee'),
       feeLayout('withdrawalFee'),
       feeLayout('depositFee'),
-      feeLayout('referralFee'),
+      BufferLayout.u8('referralFee'),
       BufferLayout.u32('maxValidators'),
     ]),
   },
@@ -248,7 +248,7 @@ export type InitializeParams = {
   fee: Fee;
   withdrawalFee: Fee;
   depositFee: Fee;
-  referralFee: Fee;
+  referralFee: number;
   maxValidators: number;
 };
 

@@ -87,7 +87,7 @@ interface InitializeProps {
   reserveStake: PublicKey;
   managerPoolAccount: PublicKey;
   fee: Fee;
-  referralFee: Fee;
+  referralFee: number;
   // Default: 2950
   maxValidators?: number | undefined;
 }
