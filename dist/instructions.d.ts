@@ -26,7 +26,7 @@ export declare type InitializeParams = {
     fee: Fee;
     withdrawalFee: Fee;
     depositFee: Fee;
-    referralFee: Fee;
+    referralFee: number;
     maxValidators: number;
 };
 export declare type AddValidatorToPoolParams = {

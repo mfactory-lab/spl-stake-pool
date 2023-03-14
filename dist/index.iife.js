@@ -26280,10 +26280,15 @@ var solanaStakePool = (function (exports) {
 	        index: 0,
 	        layout: struct([
 	            u8('instruction'),
+	            /// Fee assessed as percentage of perceived rewards
 	            feeLayout('fee'),
+	            /// Fee charged per withdrawal as percentage of withdrawal
 	            feeLayout('withdrawalFee'),
+	            /// Fee charged per deposit as percentage of deposit
 	            feeLayout('depositFee'),
-	            feeLayout('referralFee'),
+	            /// Percentage [0-100] of deposit_fee that goes to referrer
+	            u8('referralFee'),
+	            /// Maximum expected number of validators
 	            u32('maxValidators'),
 	        ]),
 	    },
