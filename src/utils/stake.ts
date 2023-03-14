@@ -10,9 +10,8 @@ import { findStakeProgramAddress, findTransientStakeProgramAddress } from './pro
 import BN from 'bn.js';
 
 import { lamportsToSol } from './math';
-import { WithdrawAccount } from '../index';
+import { Fee, WithdrawAccount } from '../index';
 import {
-  Fee,
   StakePool,
   ValidatorList,
   ValidatorListLayout,
@@ -52,7 +51,9 @@ export async function prepareWithdrawAccounts(
   skipFee?: boolean,
 ): Promise<WithdrawAccount[]> {
   const validatorListAcc = await connection.getAccountInfo(stakePool.validatorList);
-  const validatorList = ValidatorListLayout.decode(validatorListAcc?.data) as ValidatorList;
+  const validatorList = ValidatorListLayout.decode(
+    Uint8Array.from(validatorListAcc?.data ?? []),
+  ) as ValidatorList;
 
   if (!validatorList?.validators || validatorList?.validators.length == 0) {
     throw new Error('No accounts found');

@@ -85,7 +85,8 @@ interface InitializeProps {
   managerPoolAccount: PublicKey;
   fee: Fee;
   referralFee: Fee;
-  maxValidators: number;
+  // Default: 2950
+  maxValidators?: number;
 }
 
 interface UpdateStakePoolTokenMetadataProps {
@@ -166,41 +167,33 @@ export async function getStakeAccount(
 export async function getStakePoolAccounts(
   connection: Connection,
   stakePoolProgramAddress: PublicKey,
-): Promise<(StakePoolAccount | ValidatorListAccount)[] | undefined> {
+) {
   const response = await connection.getProgramAccounts(stakePoolProgramAddress);
 
   return response.map((a) => {
-    let decodedData;
+    let data: StakePool | ValidatorList | undefined;
 
     if (a.account.data.readUInt8() === 1) {
       try {
-        decodedData = StakePoolLayout.decode(a.account.data);
+        data = StakePoolLayout.decode(a.account.data);
       } catch (error) {
         console.log('Could not decode StakeAccount. Error:', error);
-        decodedData = undefined;
       }
     } else if (a.account.data.readUInt8() === 2) {
       try {
-        decodedData = ValidatorListLayout.decode(a.account.data);
+        data = ValidatorListLayout.decode(a.account.data);
       } catch (error) {
         console.log('Could not decode ValidatorList. Error:', error);
-        decodedData = undefined;
       }
     } else {
       console.error(
         `Could not decode. StakePoolAccount Enum is ${a.account.data.readUInt8()}, expected 1 or 2!`,
       );
-      decodedData = undefined;
     }
 
     return {
       pubkey: a.pubkey,
-      account: {
-        data: decodedData,
-        executable: a.account.executable,
-        lamports: a.account.lamports,
-        owner: a.account.owner,
-      },
+      account: { ...a.account, data },
     };
   });
 }
@@ -440,7 +433,9 @@ export async function withdrawStake(
     const validatorListAccount = await connection.getAccountInfo(
       stakePool.account.data.validatorList,
     );
-    const validatorList = ValidatorListLayout.decode(validatorListAccount?.data) as ValidatorList;
+    const validatorList = ValidatorListLayout.decode(
+      Uint8Array.from(validatorListAccount?.data ?? []),
+    ) as ValidatorList;
     const isValidVoter = validatorList.validators.find((val) =>
       val.voteAccountAddress.equals(voteAccount),
     );
@@ -1197,7 +1192,7 @@ export async function initialize(props: InitializeProps) {
   );
 
   // current supported max by the program, go big!
-  const maxValidators = 2950;
+  const maxValidators = props.maxValidators ?? 2950;
 
   const validatorListBalance = await connection.getMinimumBalanceForRentExemption(
     ValidatorListLayout.span + ValidatorStakeInfoLayout.span * maxValidators,
@@ -1330,18 +1325,23 @@ export async function addValidatorToPool(
   seed?: number,
 ) {
   const stakePool = await getStakePoolAccount(connection, stakePoolAddress);
+  console.log(stakePoolAddress.toBase58());
+  console.log(stakePool.account.data.validatorList.toBase58());
 
   const validatorList = await getValidatorListAccount(
     connection,
     stakePool.account.data.validatorList,
   );
+  console.log(validatorList.account.data);
 
   const validatorInfo = validatorList.account.data.validators.find(
     (v) => v.voteAccountAddress.toBase58() == validatorVote.toBase58(),
   );
 
   if (validatorInfo) {
-    throw new Error(`Stake pool already contains validator ${validatorInfo}, ignoring`);
+    throw new Error(
+      `Stake pool already contains validator ${validatorInfo.voteAccountAddress.toBase58()}, ignoring`,
+    );
   }
 
   const withdrawAuthority = await findWithdrawAuthorityProgramAddress(

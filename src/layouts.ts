@@ -1,6 +1,5 @@
-import { publicKey, struct, u32, u64, u8, option, vec } from '@project-serum/borsh';
-import { Lockup, PublicKey } from '@solana/web3.js';
-import { AccountInfo } from '@solana/spl-token';
+import { PublicKey } from '@solana/web3.js';
+import { struct, u32, u8, nu64 } from '@solana/buffer-layout';
 import BN from 'bn.js';
 import {
   Infer,
@@ -13,18 +12,22 @@ import {
   string,
   optional,
 } from 'superstruct';
+import { publicKey, option, u64, vec } from './utils';
+import { Fee } from './index';
 
-export interface Fee {
-  denominator: BN;
-  numerator: BN;
-}
+const lockup = (property?: string) =>
+  struct<{
+    unixTimestamp: BN;
+    epoch: BN;
+    custodian: PublicKey;
+  }>([u64('unixTimestamp'), u64('epoch'), publicKey('custodian')], property);
 
-const feeFields = [u64('denominator'), u64('numerator')];
+const fee = (property?: string) => struct<Fee>([u64('denominator'), u64('numerator')], property);
 
 /**
  * AccountLayout.encode from "@solana/spl-token" doesn't work
  */
-export const AccountLayout = struct<AccountInfo>([
+export const AccountLayout = struct<any>([
   publicKey('mint'),
   publicKey('owner'),
   u64('amount'),
@@ -109,7 +112,7 @@ export interface StakePool {
   totalLamports: BN;
   poolTokenSupply: BN;
   lastUpdateEpoch: BN;
-  lockup: Lockup;
+  lockup: { unixTimestamp: BN; epoch: BN; custodian: PublicKey };
   epochFee: Fee;
   nextEpochFee?: Fee | undefined;
   preferredDepositValidatorVoteAddress?: PublicKey | undefined;
@@ -142,21 +145,21 @@ export const StakePoolLayout = struct<StakePool>([
   u64('totalLamports'),
   u64('poolTokenSupply'),
   u64('lastUpdateEpoch'),
-  struct([u64('unixTimestamp'), u64('epoch'), publicKey('custodian')], 'lockup'),
-  struct(feeFields, 'epochFee'),
-  option(struct(feeFields), 'nextEpochFee'),
-  option(publicKey(), 'preferredDepositValidatorVoteAddress'),
-  option(publicKey(), 'preferredWithdrawValidatorVoteAddress'),
-  struct(feeFields, 'stakeDepositFee'),
-  struct(feeFields, 'stakeWithdrawalFee'),
-  option(struct(feeFields), 'nextStakeWithdrawalFee'),
+  lockup('lockup'),
+  fee('epochFee'),
+  option(fee('nextEpochFee')),
+  option(publicKey('preferredDepositValidatorVoteAddress')),
+  option(publicKey('preferredWithdrawValidatorVoteAddress')),
+  fee('stakeDepositFee'),
+  fee('stakeWithdrawalFee'),
+  option(fee('nextStakeWithdrawalFee')),
   u8('stakeReferralFee'),
-  option(publicKey(), 'solDepositAuthority'),
-  struct(feeFields, 'solDepositFee'),
+  option(publicKey('solDepositAuthority')),
+  fee('solDepositFee'),
   u8('solReferralFee'),
-  option(publicKey(), 'solWithdrawAuthority'),
-  struct(feeFields, 'solWithdrawalFee'),
-  option(struct(feeFields), 'nextSolWithdrawalFee'),
+  option(publicKey('solWithdrawAuthority')),
+  fee('solWithdrawalFee'),
+  option(fee('nextSolWithdrawalFee')),
   u64('lastEpochPoolTokenSupply'),
   u64('lastEpochTotalLamports'),
 ]);
