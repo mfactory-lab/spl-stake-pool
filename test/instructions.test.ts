@@ -21,6 +21,7 @@ import {
   updatePoolTokenMetadata,
   addValidatorToPool,
   removeValidatorFromPool,
+  initialize,
 } from '../src';
 
 import { decodeData } from '../src/utils';
@@ -36,13 +37,14 @@ import {
   uninitializedStakeAccount,
   validatorListMock,
 } from './mocks';
+import BN from 'bn.js';
 
 describe('StakePoolProgram', () => {
   const connection = new Connection('http://127.0.0.1:8899');
 
   connection.getMinimumBalanceForRentExemption = jest.fn(async () => 10000);
 
-  const stakePoolAddress = new PublicKey('SPoo1Ku8WFXoNDMHPsrGSTSG1Y47rzgn41SLUNakuHy');
+  const stakePoolAddress = new PublicKey(999);
 
   const data = Buffer.alloc(1024);
   StakePoolLayout.encode(stakePoolMock, data);
@@ -406,6 +408,17 @@ describe('StakePoolProgram', () => {
   });
 
   describe('add validator', () => {
+    connection.getAccountInfo = jest.fn(async (pubKey: PublicKey) => {
+      console.log(pubKey.toBase58());
+
+      if (pubKey == stakePoolAddress) {
+        return stakePoolAccount;
+      }
+      if (pubKey.equals(stakePoolMock.validatorList)) {
+        return mockValidatorList();
+      }
+      return null;
+    });
     it.only('should call successfully', async () => {
       const validatorVote = PublicKey.default;
       const { instructions } = await addValidatorToPool(
@@ -441,6 +454,50 @@ describe('StakePoolProgram', () => {
         instructions[0].data,
       );
       expect(decodedData.instruction).toBe(2);
+    });
+  });
+
+  describe('initialization', () => {
+    it.only('should call successfully', async () => {
+      const stakePool = Keypair.generate();
+      const validatorList = Keypair.generate();
+      const manager = Keypair.generate();
+      const poolMint = Keypair.generate();
+      const reserveStake = Keypair.generate();
+
+      const { instructions } = await initialize({
+        connection,
+        stakePool,
+        poolMint: poolMint.publicKey,
+        validatorList,
+        manager,
+        reserveStake: reserveStake.publicKey,
+        managerPoolAccount: manager.publicKey,
+        fee: {
+          denominator: new BN(1),
+          numerator: new BN(1),
+        },
+        referralFee: {
+          denominator: new BN(0),
+          numerator: new BN(0),
+        },
+        maxValidators: 100,
+      });
+
+      const decodedData = STAKE_POOL_INSTRUCTION_LAYOUTS.Initialize.layout.decode(
+        instructions[2].data,
+      );
+
+      expect(decodedData.instruction).toBe(0);
+      expect(decodedData.fee?.denominator).toBe(1);
+      expect(decodedData.fee?.numerator).toBe(1);
+      expect(decodedData.withdrawalFee?.denominator).toBe(1);
+      expect(decodedData.withdrawalFee?.numerator).toBe(1);
+      expect(decodedData.depositFee?.denominator).toBe(1);
+      expect(decodedData.depositFee?.numerator).toBe(1);
+      expect(decodedData.referralFee?.numerator).toBe(0);
+      expect(decodedData.referralFee?.numerator).toBe(0);
+      expect(decodedData.maxValidators).toBe(100);
     });
   });
 });
