@@ -32,15 +32,15 @@ export interface StakePoolAccounts {
 }
 interface InitializeProps {
     connection: Connection;
-    manager: Keypair;
-    stakePool: Keypair;
-    validatorList: Keypair;
+    manager?: Keypair | undefined;
+    stakePool?: Keypair | undefined;
+    validatorList?: Keypair | undefined;
     poolMint: PublicKey;
     reserveStake: PublicKey;
     managerPoolAccount: PublicKey;
     fee: Fee;
     referralFee: Fee;
-    maxValidators?: number;
+    maxValidators?: number | undefined;
 }
 interface UpdateStakePoolTokenMetadataProps {
     connection: Connection;

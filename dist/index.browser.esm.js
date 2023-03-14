@@ -2271,9 +2271,12 @@ async function redelegate(props) {
  * Initializes a new StakePool.
  */
 async function initialize(props) {
-    var _c;
-    const { connection, stakePool, poolMint, validatorList, manager, reserveStake, managerPoolAccount, fee, referralFee, } = props;
+    var _c, _d, _e, _f;
+    const { connection, poolMint, reserveStake, managerPoolAccount, fee, referralFee } = props;
     const poolBalance = await connection.getMinimumBalanceForRentExemption(StakePoolLayout.span);
+    const stakePool = (_c = props.stakePool) !== null && _c !== void 0 ? _c : Keypair.generate();
+    const validatorList = (_d = props.validatorList) !== null && _d !== void 0 ? _d : Keypair.generate();
+    const manager = (_e = props.manager) !== null && _e !== void 0 ? _e : Keypair.generate();
     const instructions = [];
     const signers = [manager, stakePool, validatorList];
     instructions.push(SystemProgram.createAccount({
@@ -2284,13 +2287,15 @@ async function initialize(props) {
         programId: STAKE_POOL_PROGRAM_ID,
     }));
     // current supported max by the program, go big!
-    const maxValidators = (_c = props.maxValidators) !== null && _c !== void 0 ? _c : 2950;
-    const validatorListBalance = await connection.getMinimumBalanceForRentExemption(ValidatorListLayout.span + ValidatorStakeInfoLayout.span * maxValidators);
+    const maxValidators = (_f = props.maxValidators) !== null && _f !== void 0 ? _f : 2950;
+    // TODO: ValidatorListLayout.span returns -1
+    const validatorListSpace = 1 + 4 + 4 + ValidatorStakeInfoLayout.span * maxValidators;
+    const validatorListBalance = await connection.getMinimumBalanceForRentExemption(validatorListSpace);
     instructions.push(SystemProgram.createAccount({
         fromPubkey: manager.publicKey,
         newAccountPubkey: validatorList.publicKey,
         lamports: validatorListBalance,
-        space: ValidatorListLayout.span,
+        space: validatorListSpace,
         programId: STAKE_POOL_PROGRAM_ID,
     }));
     const withdrawAuthority = await findWithdrawAuthorityProgramAddress(STAKE_POOL_PROGRAM_ID, stakePool.publicKey);
