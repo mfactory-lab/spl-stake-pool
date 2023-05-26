@@ -33,8 +33,8 @@ export interface StakePoolAccounts {
 interface InitializeProps {
     connection: Connection;
     manager: Keypair;
-    stakePool: Keypair;
-    validatorList: Keypair;
+    stakePool?: Keypair;
+    validatorList?: Keypair;
     poolMint: PublicKey;
     reserveStake: PublicKey;
     managerPoolAccount: PublicKey;

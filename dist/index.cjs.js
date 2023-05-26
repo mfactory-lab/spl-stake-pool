@@ -2160,8 +2160,11 @@ async function redelegate(props) {
  * Initializes a new StakePool.
  */
 async function initialize(props) {
-    const { connection, stakePool, poolMint, validatorList, manager, reserveStake, managerPoolAccount, fee, referralFee, } = props;
+    var _c, _d, _e;
+    const { connection, poolMint, reserveStake, manager, managerPoolAccount, fee, referralFee } = props;
     const poolBalance = await connection.getMinimumBalanceForRentExemption(StakePoolLayout.span);
+    const stakePool = (_c = props.stakePool) !== null && _c !== void 0 ? _c : web3_js.Keypair.generate();
+    const validatorList = (_d = props.validatorList) !== null && _d !== void 0 ? _d : web3_js.Keypair.generate();
     const instructions = [];
     const signers = [manager, stakePool, validatorList];
     instructions.push(web3_js.SystemProgram.createAccount({
@@ -2172,8 +2175,11 @@ async function initialize(props) {
         programId: STAKE_POOL_PROGRAM_ID,
     }));
     // current supported max by the program, go big!
-    const maxValidators = 2950;
-    const validatorListBalance = await connection.getMinimumBalanceForRentExemption(ValidatorListLayout.span + ValidatorStakeInfoLayout.span * maxValidators);
+    const maxValidators = (_e = props.maxValidators) !== null && _e !== void 0 ? _e : 2950;
+    const validatorListBalance = await connection.getMinimumBalanceForRentExemption(
+    // TODO: ValidatorListLayout.span returns -1
+    // ValidatorListLayout.span + ValidatorStakeInfoLayout.span * maxValidators,
+    1 + 4 + 4 + ValidatorStakeInfoLayout.span * maxValidators);
     instructions.push(web3_js.SystemProgram.createAccount({
         fromPubkey: manager.publicKey,
         newAccountPubkey: validatorList.publicKey,
