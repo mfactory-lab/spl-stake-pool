@@ -66,7 +66,6 @@ function generateConfig(configType, format) {
 
       // Prevent dependencies from being bundled
       config.external = [
-        '@coral-xyz/borsh',
         '@solana/buffer-layout',
         '@solana/spl-token',
         '@solana/web3.js',
@@ -94,7 +93,6 @@ function generateConfig(configType, format) {
 
     // Prevent dependencies from being bundled
     config.external = [
-      '@coral-xyz/borsh',
       '@solana/buffer-layout',
       '@solana/spl-token',
       '@solana/web3.js',
