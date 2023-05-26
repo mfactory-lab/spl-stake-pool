@@ -1,5 +1,5 @@
+import type { PublicKey } from '@solana/web3.js';
 import {
-  PublicKey,
   STAKE_CONFIG_ID,
   SYSVAR_CLOCK_PUBKEY,
   SYSVAR_RENT_PUBKEY,
@@ -10,7 +10,7 @@ import {
 } from '@solana/web3.js';
 import * as BufferLayout from '@solana/buffer-layout';
 import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
-import BN from 'bn.js';
+import type BN from 'bn.js';
 import {
   METADATA_MAX_NAME_LENGTH,
   METADATA_MAX_SYMBOL_LENGTH,
@@ -18,8 +18,9 @@ import {
   METADATA_PROGRAM_ID,
   STAKE_POOL_PROGRAM_ID,
 } from './constants';
-import { InstructionType, encodeData } from './utils';
-import { Fee } from './index';
+import type { InstructionType } from './utils';
+import { encodeData } from './utils';
+import type { Fee } from './index';
 
 /**
  * An enumeration of valid StakePoolInstructionType's
@@ -61,11 +62,12 @@ const TOKEN_METADATA_LAYOUT = BufferLayout.struct<any>([
   BufferLayout.blob(METADATA_MAX_URI_LENGTH, 'uri'),
 ]);
 
-const feeLayout = (property?: string) =>
-  BufferLayout.struct<any>(
+function feeLayout(property?: string) {
+  return BufferLayout.struct<any>(
     [BufferLayout.nu64('denominator'), BufferLayout.nu64('numerator')],
     property,
   );
+}
 
 /**
  * An enumeration of valid stake InstructionType's
@@ -235,7 +237,7 @@ export const STAKE_POOL_INSTRUCTION_LAYOUTS: {
   },
 });
 
-export type InitializeParams = {
+export interface InitializeParams {
   stakePool: PublicKey;
   manager: PublicKey;
   staker: PublicKey;
@@ -250,9 +252,9 @@ export type InitializeParams = {
   depositFee: Fee;
   referralFee: number;
   maxValidators: number;
-};
+}
 
-export type AddValidatorToPoolParams = {
+export interface AddValidatorToPoolParams {
   stakePool: PublicKey;
   staker: PublicKey;
   // reserveStake: PublicKey;
@@ -263,9 +265,9 @@ export type AddValidatorToPoolParams = {
   validatorVote: PublicKey;
   /// (Optional) Seed to used to create the validator stake account.
   seed?: number;
-};
+}
 
-export type RemoveValidatorFromPoolParams = {
+export interface RemoveValidatorFromPoolParams {
   stakePool: PublicKey;
   staker: PublicKey;
   withdrawAuthority: PublicKey;
@@ -274,20 +276,20 @@ export type RemoveValidatorFromPoolParams = {
   validatorStake: PublicKey;
   transientStake: PublicKey;
   destinationStake: PublicKey;
-};
+}
 
 /**
  * Cleans up validator stake account entries marked as `ReadyForRemoval`
  */
-export type CleanupRemovedValidatorEntriesParams = {
+export interface CleanupRemovedValidatorEntriesParams {
   stakePool: PublicKey;
   validatorList: PublicKey;
-};
+}
 
 /**
  * Updates balances of validator and transient stake accounts in the pool.
  */
-export type UpdateValidatorListBalanceParams = {
+export interface UpdateValidatorListBalanceParams {
   stakePool: PublicKey;
   withdrawAuthority: PublicKey;
   validatorList: PublicKey;
@@ -295,24 +297,24 @@ export type UpdateValidatorListBalanceParams = {
   validatorAndTransientStakePairs: PublicKey[];
   startIndex: number;
   noMerge: boolean;
-};
+}
 
 /**
  * Updates total pool balance based on balances in the reserve and validator list.
  */
-export type UpdateStakePoolBalanceParams = {
+export interface UpdateStakePoolBalanceParams {
   stakePool: PublicKey;
   withdrawAuthority: PublicKey;
   validatorList: PublicKey;
   reserveStake: PublicKey;
   managerFeeAccount: PublicKey;
   poolMint: PublicKey;
-};
+}
 
 /**
  * (Staker only) Decrease active stake on a validator, eventually moving it to the reserve
  */
-export type DecreaseValidatorStakeParams = {
+export interface DecreaseValidatorStakeParams {
   stakePool: PublicKey;
   staker: PublicKey;
   withdrawAuthority: PublicKey;
@@ -323,7 +325,7 @@ export type DecreaseValidatorStakeParams = {
   lamports: number;
   // Seed to used to create the transient stake account
   transientStakeSeed: number;
-};
+}
 
 export interface DecreaseAdditionalValidatorStakeParams extends DecreaseValidatorStakeParams {
   ephemeralStake: PublicKey;
@@ -333,7 +335,7 @@ export interface DecreaseAdditionalValidatorStakeParams extends DecreaseValidato
 /**
  * (Staker only) Increase stake on a validator from the reserve account.
  */
-export type IncreaseValidatorStakeParams = {
+export interface IncreaseValidatorStakeParams {
   stakePool: PublicKey;
   staker: PublicKey;
   withdrawAuthority: PublicKey;
@@ -346,7 +348,7 @@ export type IncreaseValidatorStakeParams = {
   lamports: number;
   // Seed to used to create the transient stake account
   transientStakeSeed: number;
-};
+}
 
 export interface IncreaseAdditionalValidatorStakeParams extends IncreaseValidatorStakeParams {
   ephemeralStake: PublicKey;
@@ -356,7 +358,7 @@ export interface IncreaseAdditionalValidatorStakeParams extends IncreaseValidato
 /**
  * Deposits a stake account into the pool in exchange for pool tokens
  */
-export type DepositStakeParams = {
+export interface DepositStakeParams {
   stakePool: PublicKey;
   validatorList: PublicKey;
   depositAuthority: PublicKey;
@@ -368,12 +370,12 @@ export type DepositStakeParams = {
   managerFeeAccount: PublicKey;
   referralPoolAccount: PublicKey;
   poolMint: PublicKey;
-};
+}
 
 /**
  * Withdraws a stake account from the pool in exchange for pool tokens
  */
-export type WithdrawStakeParams = {
+export interface WithdrawStakeParams {
   stakePool: PublicKey;
   validatorList: PublicKey;
   withdrawAuthority: PublicKey;
@@ -385,12 +387,12 @@ export type WithdrawStakeParams = {
   managerFeeAccount: PublicKey;
   poolMint: PublicKey;
   poolTokens: number;
-};
+}
 
 /**
  * Withdraw sol instruction params
  */
-export type WithdrawSolParams = {
+export interface WithdrawSolParams {
   stakePool: PublicKey;
   sourcePoolAccount: PublicKey;
   withdrawAuthority: PublicKey;
@@ -401,13 +403,13 @@ export type WithdrawSolParams = {
   managerFeeAccount: PublicKey;
   poolMint: PublicKey;
   poolTokens: number;
-};
+}
 
 /**
  * Deposit SOL directly into the pool's reserve account. The output is a "pool" token
  * representing ownership into the pool. Inputs are converted to the current ratio.
  */
-export type DepositSolParams = {
+export interface DepositSolParams {
   stakePool: PublicKey;
   depositAuthority?: PublicKey | undefined;
   withdrawAuthority: PublicKey;
@@ -418,9 +420,9 @@ export type DepositSolParams = {
   referralPoolAccount: PublicKey;
   poolMint: PublicKey;
   lamports: number;
-};
+}
 
-export type RedelegateParams = {
+export interface RedelegateParams {
   stakePool: PublicKey;
   staker: PublicKey;
   stakePoolWithdrawAuthority: PublicKey;
@@ -441,9 +443,9 @@ export type RedelegateParams = {
   // already transient stake, this must match the current seed, otherwise
   // it can be anything
   destinationTransientStakeSeed: number | BN;
-};
+}
 
-export type CreateTokenMetadataParams = {
+export interface CreateTokenMetadataParams {
   stakePool: PublicKey;
   manager: PublicKey;
   tokenMetadata: PublicKey;
@@ -453,9 +455,9 @@ export type CreateTokenMetadataParams = {
   name: string;
   symbol: string;
   uri: string;
-};
+}
 
-export type UpdateTokenMetadataParams = {
+export interface UpdateTokenMetadataParams {
   stakePool: PublicKey;
   manager: PublicKey;
   tokenMetadata: PublicKey;
@@ -463,7 +465,7 @@ export type UpdateTokenMetadataParams = {
   name: string;
   symbol: string;
   uri: string;
-};
+}
 
 /**
  * Stake Pool Instruction class

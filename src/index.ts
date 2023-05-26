@@ -1,13 +1,10 @@
+import type { AccountInfo, Connection, Signer, TransactionInstruction } from '@solana/web3.js';
 import {
-  AccountInfo,
-  Connection,
   Keypair,
   PublicKey,
-  Signer,
   StakeAuthorizationLayout,
   StakeProgram,
   SystemProgram,
-  TransactionInstruction,
 } from '@solana/web3.js';
 import {
   createApproveInstruction,
@@ -15,34 +12,32 @@ import {
   getAccount,
   getAssociatedTokenAddressSync,
 } from '@solana/spl-token';
+import { create } from 'superstruct';
+import BN from 'bn.js';
+import type { ValidatorAccount } from './utils';
 import {
-  ValidatorAccount,
   arrayChunk,
   calcLamportsWithdrawAmount,
+  findEphemeralStakeProgramAddress,
   findStakeProgramAddress,
+  findTokenMetadataAddress,
   findTransientStakeProgramAddress,
   findWithdrawAuthorityProgramAddress,
   getValidatorListAccount,
+  lamportsToSol,
   newStakeAccount,
   prepareWithdrawAccounts,
-  lamportsToSol,
   solToLamports,
-  findEphemeralStakeProgramAddress,
-  findTokenMetadataAddress,
 } from './utils';
 import { StakePoolInstruction } from './instructions';
+import type { StakePool, ValidatorList } from './layouts';
 import {
   StakeAccount,
-  StakePool,
   StakePoolLayout,
-  ValidatorList,
   ValidatorListLayout,
-  ValidatorStakeInfo,
   ValidatorStakeInfoLayout,
 } from './layouts';
 import { MAX_VALIDATORS_TO_UPDATE, MINIMUM_ACTIVE_STAKE, STAKE_POOL_PROGRAM_ID } from './constants';
-import { create } from 'superstruct';
-import BN from 'bn.js';
 
 export type { StakePool, AccountType, ValidatorList, ValidatorStakeInfo } from './layouts';
 export { STAKE_POOL_PROGRAM_ID } from './constants';
@@ -158,7 +153,7 @@ export async function getStakeAccount(
     throw new Error('Invalid stake account');
   }
   const program = result.data.program;
-  if (program != 'stake') {
+  if (program !== 'stake') {
     throw new Error('Not a stake account');
   }
   return create(result.data.parsed, StakeAccount);
@@ -172,7 +167,7 @@ export async function getStakeAccount(
 export async function getStakePoolAccounts(
   connection: Connection,
   stakePoolProgramAddress: PublicKey,
-): Promise<(StakePoolAccount | ValidatorListAccount)[] | undefined> {
+) {
   const response = await connection.getProgramAccounts(stakePoolProgramAddress);
 
   return response.value.map((a) => {
@@ -412,7 +407,7 @@ export async function withdrawStake(
     stakePoolAddress,
   );
 
-  let stakeReceiverAccount = null;
+  let stakeReceiverAccount: any = null;
   if (stakeReceiver) {
     stakeReceiverAccount = await getStakeAccount(connection, stakeReceiver);
   }
@@ -425,13 +420,17 @@ export async function withdrawStake(
       voteAddress: undefined,
       poolAmount,
     });
-  } else if (stakeReceiverAccount && stakeReceiverAccount?.type == 'delegated') {
-    const voteAccount = stakeReceiverAccount.info?.stake?.delegation.voter;
-    if (!voteAccount) throw new Error(`Invalid stake reciever ${stakeReceiver} delegation`);
+  } else if (stakeReceiverAccount?.type === 'delegated') {
+    const voteAccount = stakeReceiverAccount?.info?.stake?.delegation.voter;
+    if (!voteAccount) {
+      throw new Error(`Invalid stake receiver ${stakeReceiver} delegation`);
+    }
     const validatorListAccount = await connection.getAccountInfo(
       stakePool.account.data.validatorList,
     );
-    const validatorList = ValidatorListLayout.decode(validatorListAccount?.data) as ValidatorList;
+    const validatorList = ValidatorListLayout.decode(
+      Uint8Array.from(validatorListAccount?.data ?? []),
+    ) as ValidatorList;
     const isValidVoter = validatorList.validators.find((val) =>
       val.voteAccountAddress.equals(voteAccount),
     );
@@ -448,7 +447,7 @@ export async function withdrawStake(
 
       const stakeAccount = await connection.getAccountInfo(stakeAccountAddress);
       if (!stakeAccount) {
-        throw new Error(`Preferred withdraw valdator's stake account is invalid`);
+        throw new Error("Preferred withdraw validator's stake account is invalid");
       }
 
       const availableForWithdrawal = calcLamportsWithdrawAmount(
@@ -581,7 +580,7 @@ export async function withdrawStake(
     );
     i++;
   }
-  if (stakeReceiver && stakeReceiverAccount && stakeReceiverAccount.type === 'delegated') {
+  if (stakeReceiver && stakeReceiverAccount?.type === 'delegated') {
     signers.forEach((newStakeKeypair) => {
       instructions.concat(
         StakeProgram.merge({
@@ -654,7 +653,7 @@ export async function withdrawSol(
     if (!expectedSolWithdrawAuthority) {
       throw new Error('SOL withdraw authority specified in arguments but stake pool has none');
     }
-    if (solWithdrawAuthority.toBase58() != expectedSolWithdrawAuthority.toBase58()) {
+    if (solWithdrawAuthority.toBase58() !== expectedSolWithdrawAuthority.toBase58()) {
       throw new Error(
         `Invalid deposit withdraw specified, expected ${expectedSolWithdrawAuthority.toBase58()}, received ${solWithdrawAuthority.toBase58()}`,
       );
@@ -700,7 +699,7 @@ export async function increaseValidatorStake(
   );
 
   const validatorInfo = validatorList.account.data.validators.find(
-    (v) => v.voteAccountAddress.toBase58() == validatorVote.toBase58(),
+    (v) => v.voteAccountAddress.toBase58() === validatorVote.toBase58(),
   );
 
   if (!validatorInfo) {
@@ -729,7 +728,7 @@ export async function increaseValidatorStake(
 
   const instructions: TransactionInstruction[] = [];
 
-  if (ephemeralStakeSeed != undefined) {
+  if (ephemeralStakeSeed !== undefined) {
     const ephemeralStake = findEphemeralStakeProgramAddress(
       STAKE_POOL_PROGRAM_ID,
       stakePoolAddress,
@@ -788,7 +787,7 @@ export async function decreaseValidatorStake(
   );
 
   const validatorInfo = validatorList.account.data.validators.find(
-    (v) => v.voteAccountAddress.toBase58() == validatorVote.toBase58(),
+    (v) => v.voteAccountAddress.toBase58() === validatorVote.toBase58(),
   );
 
   if (!validatorInfo) {
@@ -817,7 +816,7 @@ export async function decreaseValidatorStake(
 
   const instructions: TransactionInstruction[] = [];
 
-  if (ephemeralStakeSeed != undefined) {
+  if (ephemeralStakeSeed !== undefined) {
     const ephemeralStake = findEphemeralStakeProgramAddress(
       STAKE_POOL_PROGRAM_ID,
       stakePoolAddress,
@@ -881,7 +880,7 @@ export async function updateStakePool(
   const instructions: TransactionInstruction[] = [];
 
   let startIndex = 0;
-  const validatorChunks: Array<ValidatorStakeInfo[]> = arrayChunk(
+  const validatorChunks = arrayChunk(
     validatorList.account.data.validators,
     MAX_VALIDATORS_TO_UPDATE,
   );

@@ -1,24 +1,13 @@
-import {
-  Connection,
-  Keypair,
-  PublicKey,
-  StakeProgram,
-  SystemProgram,
-  TransactionInstruction,
-} from '@solana/web3.js';
-import { findStakeProgramAddress, findTransientStakeProgramAddress } from './program-address';
+import type { Connection, PublicKey, TransactionInstruction } from '@solana/web3.js';
+import { Keypair, StakeProgram, SystemProgram } from '@solana/web3.js';
 import BN from 'bn.js';
 
-import { lamportsToSol } from './math';
-import { WithdrawAccount } from '../index';
-import {
-  Fee,
-  StakePool,
-  ValidatorList,
-  ValidatorListLayout,
-  ValidatorStakeInfoStatus,
-} from '../layouts';
+import type { Fee, WithdrawAccount } from '../index';
+import type { StakePool, ValidatorList } from '../layouts';
+import { ValidatorListLayout, ValidatorStakeInfoStatus } from '../layouts';
 import { MINIMUM_ACTIVE_STAKE, STAKE_POOL_PROGRAM_ID } from '../constants';
+import { lamportsToSol } from './math';
+import { findStakeProgramAddress, findTransientStakeProgramAddress } from './program-address';
 
 export async function getValidatorListAccount(connection: Connection, pubkey: PublicKey) {
   const account = await connection.getAccountInfo(pubkey);
@@ -52,9 +41,11 @@ export async function prepareWithdrawAccounts(
   skipFee?: boolean,
 ): Promise<WithdrawAccount[]> {
   const validatorListAcc = await connection.getAccountInfo(stakePool.validatorList);
-  const validatorList = ValidatorListLayout.decode(validatorListAcc?.data) as ValidatorList;
+  const validatorList = ValidatorListLayout.decode(
+    Uint8Array.from(validatorListAcc?.data ?? []),
+  ) as ValidatorList;
 
-  if (!validatorList?.validators || validatorList?.validators.length == 0) {
+  if (!validatorList?.validators || validatorList?.validators.length === 0) {
     throw new Error('No accounts found');
   }
 
@@ -112,7 +103,7 @@ export async function prepareWithdrawAccounts(
   }
 
   // Sort from highest to lowest balance
-  accounts = accounts.sort(compareFn ? compareFn : (a, b) => b.lamports - a.lamports);
+  accounts = accounts.sort(compareFn || ((a, b) => b.lamports - a.lamports));
 
   const reserveStake = await connection.getAccountInfo(stakePool.reserveStake);
   const reserveStakeBalance = (reserveStake?.lamports ?? 0) - minBalanceForRentExemption - 1;
@@ -135,10 +126,10 @@ export async function prepareWithdrawAccounts(
   };
 
   for (const type of ['preferred', 'active', 'transient', 'reserve']) {
-    const filteredAccounts = accounts.filter((a) => a.type == type);
+    const filteredAccounts = accounts.filter((a) => a.type === type);
 
     for (const { stakeAddress, voteAddress, lamports } of filteredAccounts) {
-      if (lamports <= minBalance && type == 'transient') {
+      if (lamports <= minBalance && type === 'transient') {
         continue;
       }
 
@@ -160,12 +151,12 @@ export async function prepareWithdrawAccounts(
       withdrawFrom.push({ stakeAddress, voteAddress, poolAmount });
       remainingAmount -= poolAmount;
 
-      if (remainingAmount == 0) {
+      if (remainingAmount === 0) {
         break;
       }
     }
 
-    if (remainingAmount == 0) {
+    if (remainingAmount === 0) {
       break;
     }
   }

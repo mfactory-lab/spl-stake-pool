@@ -1,24 +1,19 @@
-import { publicKey, struct, u32, u64, u8, option, vec } from '@coral-xyz/borsh';
-import { Lockup, PublicKey } from '@solana/web3.js';
+import type { Layout } from '@solana/buffer-layout';
+import { struct, u32, u8 } from '@solana/buffer-layout';
+import type { Lockup } from '@solana/web3.js';
+import { PublicKey } from '@solana/web3.js';
 import BN from 'bn.js';
-import {
-  Infer,
-  number,
-  nullable,
-  enums,
-  type,
-  coerce,
-  instance,
-  string,
-  optional,
-} from 'superstruct';
+import type { Infer } from 'superstruct';
+import { coerce, enums, instance, nullable, number, optional, string, type } from 'superstruct';
+import { option, publicKey, u64, vec } from './utils';
+import type { Fee } from './index';
 
-export interface Fee {
-  denominator: BN;
-  numerator: BN;
-}
-
-const feeFields = [u64('denominator'), u64('numerator')];
+const lockup = (property?: string) =>
+  struct<any>(
+    [u64('unixTimestamp'), u64('epoch'), publicKey('custodian')],
+    property,
+  ) as Layout<Lockup>;
+const fee = (property?: string) => struct<Fee>([u64('denominator'), u64('numerator')], property);
 
 export enum AccountType {
   Uninitialized,
@@ -27,8 +22,7 @@ export enum AccountType {
 }
 
 export const BigNumFromString = coerce(instance(BN), string(), (value) => {
-  if (typeof value === 'string') return new BN(value, 10);
-  throw new Error('invalid big num');
+  return new BN(value, 10);
 });
 
 export const PublicKeyFromString = coerce(
@@ -37,10 +31,10 @@ export const PublicKeyFromString = coerce(
   (value) => new PublicKey(value),
 );
 
-export type StakeAccountType = Infer<typeof StakeAccountType>;
 export const StakeAccountType = enums(['uninitialized', 'initialized', 'delegated', 'rewardsPool']);
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export type StakeAccountType = Infer<typeof StakeAccountType>;
 
-export type StakeMeta = Infer<typeof StakeMeta>;
 export const StakeMeta = type({
   rentExemptReserve: BigNumFromString,
   authorized: type({
@@ -53,8 +47,9 @@ export const StakeMeta = type({
     custodian: PublicKeyFromString,
   }),
 });
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export type StakeMeta = Infer<typeof StakeMeta>;
 
-export type StakeAccountInfo = Infer<typeof StakeAccountInfo>;
 export const StakeAccountInfo = type({
   meta: StakeMeta,
   stake: nullable(
@@ -70,12 +65,15 @@ export const StakeAccountInfo = type({
     }),
   ),
 });
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export type StakeAccountInfo = Infer<typeof StakeAccountInfo>;
 
-export type StakeAccount = Infer<typeof StakeAccount>;
 export const StakeAccount = type({
   type: StakeAccountType,
   info: optional(StakeAccountInfo),
 });
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export type StakeAccount = Infer<typeof StakeAccount>;
 
 export interface StakePool {
   accountType: AccountType;
@@ -124,21 +122,21 @@ export const StakePoolLayout = struct<StakePool>([
   u64('totalLamports'),
   u64('poolTokenSupply'),
   u64('lastUpdateEpoch'),
-  struct([u64('unixTimestamp'), u64('epoch'), publicKey('custodian')], 'lockup'),
-  struct(feeFields, 'epochFee'),
-  option(struct(feeFields), 'nextEpochFee'),
-  option(publicKey(), 'preferredDepositValidatorVoteAddress'),
-  option(publicKey(), 'preferredWithdrawValidatorVoteAddress'),
-  struct(feeFields, 'stakeDepositFee'),
-  struct(feeFields, 'stakeWithdrawalFee'),
-  option(struct(feeFields), 'nextStakeWithdrawalFee'),
+  lockup('lockup'),
+  fee('epochFee'),
+  option(fee('nextEpochFee')),
+  option(publicKey('preferredDepositValidatorVoteAddress')),
+  option(publicKey('preferredWithdrawValidatorVoteAddress')),
+  fee('stakeDepositFee'),
+  fee('stakeWithdrawalFee'),
+  option(fee('nextStakeWithdrawalFee')),
   u8('stakeReferralFee'),
-  option(publicKey(), 'solDepositAuthority'),
-  struct(feeFields, 'solDepositFee'),
+  option(publicKey('solDepositAuthority')),
+  fee('solDepositFee'),
   u8('solReferralFee'),
-  option(publicKey(), 'solWithdrawAuthority'),
-  struct(feeFields, 'solWithdrawalFee'),
-  option(struct(feeFields), 'nextSolWithdrawalFee'),
+  option(publicKey('solWithdrawAuthority')),
+  fee('solWithdrawalFee'),
+  option(fee('nextSolWithdrawalFee')),
   u64('lastEpochPoolTokenSupply'),
   u64('lastEpochTotalLamports'),
 ]);
