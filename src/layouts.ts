@@ -6,7 +6,7 @@ import { coerce, enums, instance, nullable, number, optional, string, type } fro
 import { option, publicKey, u64, vec } from './utils';
 import type { Fee } from './index';
 
-interface Lockup {
+export interface Lockup {
   unixTimestamp: BN;
   epoch: BN;
   custodian: PublicKey;
@@ -14,6 +14,7 @@ interface Lockup {
 
 const lockup = (property?: string) =>
   struct<Lockup>([u64('unixTimestamp'), u64('epoch'), publicKey('custodian')], property);
+
 const fee = (property?: string) => struct<Fee>([u64('denominator'), u64('numerator')], property);
 
 export enum AccountType {
