@@ -81,8 +81,10 @@ export interface StakePoolAccounts {
 interface InitializeProps {
   connection: Connection;
   manager: Keypair;
-  stakePool: Keypair;
-  validatorList: Keypair;
+  // Default: Keypair.generate
+  stakePool?: Keypair;
+  // Default: Keypair.generate
+  validatorList?: Keypair;
   poolMint: PublicKey;
   reserveStake: PublicKey;
   managerPoolAccount: PublicKey;
@@ -1144,19 +1146,13 @@ export async function redelegate(props: RedelegateProps) {
  * Initializes a new StakePool.
  */
 export async function initialize(props: InitializeProps) {
-  const {
-    connection,
-    stakePool,
-    poolMint,
-    validatorList,
-    manager,
-    reserveStake,
-    managerPoolAccount,
-    fee,
-    referralFee,
-  } = props;
+  const { connection, poolMint, reserveStake, manager, managerPoolAccount, fee, referralFee } =
+    props;
 
   const poolBalance = await connection.getMinimumBalanceForRentExemption(StakePoolLayout.span);
+
+  const stakePool = props.stakePool ?? Keypair.generate();
+  const validatorList = props.validatorList ?? Keypair.generate();
 
   const instructions: TransactionInstruction[] = [];
   const signers: Signer[] = [manager, stakePool, validatorList];
@@ -1172,10 +1168,12 @@ export async function initialize(props: InitializeProps) {
   );
 
   // current supported max by the program, go big!
-  const maxValidators = 2950;
+  const maxValidators = props.maxValidators ?? 2950;
 
   const validatorListBalance = await connection.getMinimumBalanceForRentExemption(
-    ValidatorListLayout.span + ValidatorStakeInfoLayout.span * maxValidators,
+    // TODO: ValidatorListLayout.span returns -1
+    // ValidatorListLayout.span + ValidatorStakeInfoLayout.span * maxValidators,
+    1 + 4 + 4 + ValidatorStakeInfoLayout.span * maxValidators,
   );
 
   instructions.push(
