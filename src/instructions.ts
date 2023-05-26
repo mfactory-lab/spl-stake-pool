@@ -92,7 +92,7 @@ export const STAKE_POOL_INSTRUCTION_LAYOUTS: {
     layout: BufferLayout.struct<any>([
       BufferLayout.u8('instruction'),
       // Optional non-zero u32 seed used for generating the validator stake address
-      BufferLayout.u32('seed'),
+      // OptionLayout.of(BufferLayout.u32('seed')),
     ]),
   },
   /// (Staker only) Removes validator from the pool, deactivating its stake
@@ -255,7 +255,8 @@ export type InitializeParams = {
 export type AddValidatorToPoolParams = {
   stakePool: PublicKey;
   staker: PublicKey;
-  reserveStake: PublicKey;
+  // reserveStake: PublicKey;
+  funder: PublicKey;
   withdrawAuthority: PublicKey;
   validatorList: PublicKey;
   validatorStake: PublicKey;
@@ -268,9 +269,11 @@ export type RemoveValidatorFromPoolParams = {
   stakePool: PublicKey;
   staker: PublicKey;
   withdrawAuthority: PublicKey;
+  newStakeAuthority: PublicKey;
   validatorList: PublicKey;
   validatorStake: PublicKey;
   transientStake: PublicKey;
+  destinationStake: PublicKey;
 };
 
 /**
@@ -507,12 +510,13 @@ export class StakePoolInstruction {
    */
   static addValidatorToPool(params: AddValidatorToPoolParams) {
     const type = STAKE_POOL_INSTRUCTION_LAYOUTS.AddValidatorToPool;
-    const data = encodeData(type, { seed: params.seed ?? 0 });
+    const data = encodeData(type, { seed: params.seed });
 
     const keys = [
       { pubkey: params.stakePool, isSigner: false, isWritable: true },
       { pubkey: params.staker, isSigner: true, isWritable: false },
-      { pubkey: params.reserveStake, isSigner: false, isWritable: true },
+      { pubkey: params.funder, isSigner: true, isWritable: true },
+      // { pubkey: params.reserveStake, isSigner: false, isWritable: true },
       { pubkey: params.withdrawAuthority, isSigner: false, isWritable: false },
       { pubkey: params.validatorList, isSigner: false, isWritable: true },
       { pubkey: params.validatorStake, isSigner: false, isWritable: true },
@@ -543,9 +547,11 @@ export class StakePoolInstruction {
       { pubkey: params.stakePool, isSigner: false, isWritable: true },
       { pubkey: params.staker, isSigner: true, isWritable: false },
       { pubkey: params.withdrawAuthority, isSigner: false, isWritable: false },
+      { pubkey: params.newStakeAuthority, isSigner: false, isWritable: true },
       { pubkey: params.validatorList, isSigner: false, isWritable: true },
       { pubkey: params.validatorStake, isSigner: false, isWritable: true },
       { pubkey: params.transientStake, isSigner: false, isWritable: false },
+      { pubkey: params.destinationStake, isSigner: false, isWritable: true },
       { pubkey: SYSVAR_CLOCK_PUBKEY, isSigner: false, isWritable: false },
       { pubkey: StakeProgram.programId, isSigner: false, isWritable: false },
     ];
@@ -682,7 +688,8 @@ export class StakePoolInstruction {
       { pubkey: validatorList, isSigner: false, isWritable: true },
       { pubkey: reserveStake, isSigner: false, isWritable: true },
       { pubkey: transientStake, isSigner: false, isWritable: true },
-      { pubkey: validatorStake, isSigner: false, isWritable: false },
+      // TODO: will be available in the new stake pool
+      // { pubkey: validatorStake, isSigner: false, isWritable: false },
       { pubkey: validatorVote, isSigner: false, isWritable: false },
       { pubkey: SYSVAR_CLOCK_PUBKEY, isSigner: false, isWritable: false },
       { pubkey: SYSVAR_RENT_PUBKEY, isSigner: false, isWritable: false },
