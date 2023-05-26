@@ -2176,15 +2176,15 @@ async function initialize(props) {
     }));
     // current supported max by the program, go big!
     const maxValidators = (_e = props.maxValidators) !== null && _e !== void 0 ? _e : 2950;
-    const validatorListBalance = await connection.getMinimumBalanceForRentExemption(
     // TODO: ValidatorListLayout.span returns -1
-    // ValidatorListLayout.span + ValidatorStakeInfoLayout.span * maxValidators,
-    1 + 4 + 4 + ValidatorStakeInfoLayout.span * maxValidators);
+    // const validatorListSpace = ValidatorListLayout.span + ValidatorStakeInfoLayout.span * maxValidators;
+    const validatorListSpace = 1 + 4 + 4 + ValidatorStakeInfoLayout.span * maxValidators;
+    const validatorListBalance = await connection.getMinimumBalanceForRentExemption(validatorListSpace);
     instructions.push(web3_js.SystemProgram.createAccount({
         fromPubkey: manager.publicKey,
         newAccountPubkey: validatorList.publicKey,
         lamports: validatorListBalance,
-        space: ValidatorListLayout.span,
+        space: validatorListSpace,
         programId: STAKE_POOL_PROGRAM_ID,
     }));
     const withdrawAuthority = findWithdrawAuthorityProgramAddress(STAKE_POOL_PROGRAM_ID, stakePool.publicKey);
