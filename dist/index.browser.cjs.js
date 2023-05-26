@@ -893,7 +893,7 @@ const STAKE_POOL_INSTRUCTION_LAYOUTS = Object.freeze({
             feeLayout('fee'),
             feeLayout('withdrawalFee'),
             feeLayout('depositFee'),
-            feeLayout('referralFee'),
+            BufferLayout__namespace.u8('referralFee'),
             BufferLayout__namespace.u32('maxValidators'),
         ]),
     },

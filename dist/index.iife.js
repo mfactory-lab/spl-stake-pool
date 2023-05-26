@@ -29945,7 +29945,7 @@ var solanaStakePool = (function (exports) {
 	            feeLayout('fee'),
 	            feeLayout('withdrawalFee'),
 	            feeLayout('depositFee'),
-	            feeLayout('referralFee'),
+	            u8('referralFee'),
 	            u32('maxValidators'),
 	        ]),
 	    },

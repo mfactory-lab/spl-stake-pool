@@ -89,7 +89,7 @@ interface InitializeProps {
   reserveStake: PublicKey;
   managerPoolAccount: PublicKey;
   fee: Fee;
-  referralFee: Fee;
+  referralFee: number;
   maxValidators: number;
 }
 
