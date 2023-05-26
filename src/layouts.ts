@@ -1,6 +1,4 @@
-import type { Layout } from '@solana/buffer-layout';
 import { struct, u32, u8 } from '@solana/buffer-layout';
-import type { Lockup } from '@solana/web3.js';
 import { PublicKey } from '@solana/web3.js';
 import BN from 'bn.js';
 import type { Infer } from 'superstruct';
@@ -8,11 +6,14 @@ import { coerce, enums, instance, nullable, number, optional, string, type } fro
 import { option, publicKey, u64, vec } from './utils';
 import type { Fee } from './index';
 
+interface Lockup {
+  unixTimestamp: BN;
+  epoch: BN;
+  custodian: PublicKey;
+}
+
 const lockup = (property?: string) =>
-  struct<any>(
-    [u64('unixTimestamp'), u64('epoch'), publicKey('custodian')],
-    property,
-  ) as Layout<Lockup>;
+  struct<Lockup>([u64('unixTimestamp'), u64('epoch'), publicKey('custodian')], property);
 const fee = (property?: string) => struct<Fee>([u64('denominator'), u64('numerator')], property);
 
 export enum AccountType {
