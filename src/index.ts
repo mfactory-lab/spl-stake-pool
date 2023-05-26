@@ -1170,10 +1170,12 @@ export async function initialize(props: InitializeProps) {
   // current supported max by the program, go big!
   const maxValidators = props.maxValidators ?? 2950;
 
+  // TODO: ValidatorListLayout.span returns -1
+  // const validatorListSpace = ValidatorListLayout.span + ValidatorStakeInfoLayout.span * maxValidators;
+  const validatorListSpace = 1 + 4 + 4 + ValidatorStakeInfoLayout.span * maxValidators;
+
   const validatorListBalance = await connection.getMinimumBalanceForRentExemption(
-    // TODO: ValidatorListLayout.span returns -1
-    // ValidatorListLayout.span + ValidatorStakeInfoLayout.span * maxValidators,
-    1 + 4 + 4 + ValidatorStakeInfoLayout.span * maxValidators,
+    validatorListSpace,
   );
 
   instructions.push(
@@ -1181,7 +1183,7 @@ export async function initialize(props: InitializeProps) {
       fromPubkey: manager.publicKey,
       newAccountPubkey: validatorList.publicKey,
       lamports: validatorListBalance,
-      space: ValidatorListLayout.span,
+      space: validatorListSpace,
       programId: STAKE_POOL_PROGRAM_ID,
     }),
   );
