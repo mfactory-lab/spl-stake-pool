@@ -1,7 +1,8 @@
-import { Connection, Keypair, PublicKey, TransactionInstruction } from '@solana/web3.js';
+import type { Connection, PublicKey, TransactionInstruction } from '@solana/web3.js';
+import { Keypair } from '@solana/web3.js';
 import BN from 'bn.js';
-import { WithdrawAccount } from '../index';
-import { StakePool, ValidatorList } from '../layouts';
+import type { WithdrawAccount } from '../index';
+import type { StakePool, ValidatorList } from '../layouts';
 export declare function getValidatorListAccount(connection: Connection, pubkey: PublicKey): Promise<{
     pubkey: PublicKey;
     account: {

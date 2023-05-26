@@ -1,90 +1,9 @@
-import { LAMPORTS_PER_SOL, PublicKey, StakeProgram, Keypair, SystemProgram, TransactionInstruction, SYSVAR_RENT_PUBKEY, SYSVAR_CLOCK_PUBKEY, SYSVAR_STAKE_HISTORY_PUBKEY, STAKE_CONFIG_ID, StakeAuthorizationLayout } from '@solana/web3.js';
+import { PublicKey, LAMPORTS_PER_SOL, StakeProgram, Keypair, SystemProgram, TransactionInstruction, SYSVAR_RENT_PUBKEY, SYSVAR_CLOCK_PUBKEY, SYSVAR_STAKE_HISTORY_PUBKEY, STAKE_CONFIG_ID, StakeAuthorizationLayout } from '@solana/web3.js';
 import { TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync, createAssociatedTokenAccountIdempotentInstruction, getAccount, createApproveInstruction } from '@solana/spl-token';
-import * as BufferLayout from '@solana/buffer-layout';
-import { Buffer } from 'buffer';
-import { u64, struct, u8, publicKey, option, u32, vec } from '@coral-xyz/borsh';
 import BN from 'bn.js';
-
-function solToLamports(amount) {
-    if (isNaN(amount))
-        return Number(0);
-    return Number(amount * LAMPORTS_PER_SOL);
-}
-function lamportsToSol(lamports) {
-    if (typeof lamports === 'number') {
-        return Math.abs(lamports) / LAMPORTS_PER_SOL;
-    }
-    if (typeof lamports === 'bigint') {
-        return Math.abs(Number(lamports)) / LAMPORTS_PER_SOL;
-    }
-    let signMultiplier = 1;
-    if (lamports.isNeg()) {
-        signMultiplier = -1;
-    }
-    const absLamports = lamports.abs();
-    const lamportsString = absLamports.toString(10).padStart(10, '0');
-    const splitIndex = lamportsString.length - 9;
-    const solString = lamportsString.slice(0, splitIndex) + '.' + lamportsString.slice(splitIndex);
-    return signMultiplier * parseFloat(solString);
-}
-
-// Public key that identifies the metadata program.
-const METADATA_PROGRAM_ID = new PublicKey('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s');
-const METADATA_MAX_NAME_LENGTH = 32;
-const METADATA_MAX_SYMBOL_LENGTH = 10;
-const METADATA_MAX_URI_LENGTH = 200;
-// Public key that identifies the SPL Stake Pool program.
-const STAKE_POOL_PROGRAM_ID = new PublicKey('SPoo1Ku8WFXoNDMHPsrGSTSG1Y47rzgn41SLUNakuHy');
-// Maximum number of validators to update during UpdateValidatorListBalance.
-const MAX_VALIDATORS_TO_UPDATE = 5;
-// Seed for ephemeral stake account
-const EPHEMERAL_STAKE_SEED_PREFIX = Buffer.from('ephemeral');
-// Seed used to derive transient stake accounts.
-const TRANSIENT_STAKE_SEED_PREFIX = Buffer.from('transient');
-// Minimum amount of staked SOL required in a validator stake account to allow
-// for merges without a mismatch on credits observed
-const MINIMUM_ACTIVE_STAKE = LAMPORTS_PER_SOL;
-
-/**
- * Generates the withdraw authority program address for the stake pool
- */
-function findWithdrawAuthorityProgramAddress(programId, stakePoolAddress) {
-    const [publicKey] = PublicKey.findProgramAddressSync([stakePoolAddress.toBuffer(), Buffer.from('withdraw')], programId);
-    return publicKey;
-}
-/**
- * Generates the stake program address for a validator's vote account
- */
-function findStakeProgramAddress(programId, voteAccountAddress, stakePoolAddress) {
-    const [publicKey] = PublicKey.findProgramAddressSync([voteAccountAddress.toBuffer(), stakePoolAddress.toBuffer()], programId);
-    return publicKey;
-}
-/**
- * Generates the stake program address for a validator's vote account
- */
-function findTransientStakeProgramAddress(programId, voteAccountAddress, stakePoolAddress, seed) {
-    const [publicKey] = PublicKey.findProgramAddressSync([
-        TRANSIENT_STAKE_SEED_PREFIX,
-        voteAccountAddress.toBuffer(),
-        stakePoolAddress.toBuffer(),
-        seed.toBuffer('le', 8),
-    ], programId);
-    return publicKey;
-}
-/**
- * Generates the ephemeral program address for stake pool re-delegation
- */
-function findEphemeralStakeProgramAddress(programId, stakePoolAddress, seed) {
-    const [publicKey] = PublicKey.findProgramAddressSync([EPHEMERAL_STAKE_SEED_PREFIX, stakePoolAddress.toBuffer(), seed.toBuffer('le', 8)], programId);
-    return publicKey;
-}
-/**
- * Generates the token metadata address by {@link mint}
- */
-function findTokenMetadataAddress(mint) {
-    const [publicKey] = PublicKey.findProgramAddressSync([Buffer.from('metadata'), METADATA_PROGRAM_ID.toBuffer(), mint.toBuffer()], METADATA_PROGRAM_ID);
-    return publicKey;
-}
+import * as BufferLayout from '@solana/buffer-layout';
+import { struct, u8, u32 } from '@solana/buffer-layout';
+import { Buffer } from 'buffer';
 
 /**
  * A `StructFailure` represents a single specific failure in validation.
@@ -568,7 +487,160 @@ function coerce(struct, condition, coercer) {
   });
 }
 
-const feeFields = [u64('denominator'), u64('numerator')];
+class SignedNumberLayout extends BufferLayout.Layout {
+    constructor(span, property) {
+        super(span, property);
+    }
+    decode(b, offset) {
+        const start = offset !== null && offset !== void 0 ? offset : 0;
+        const data = b.slice(start, start + this.span);
+        return new BN(data, undefined, 'le').fromTwos(this.span * 8);
+    }
+    encode(src, b, offset) {
+        const start = offset !== null && offset !== void 0 ? offset : 0;
+        b.set(src.toTwos(this.span * 8).toArray('le'), start);
+        return this.span;
+    }
+}
+function u64(property) {
+    return new SignedNumberLayout(8, property);
+}
+class WrappedLayout extends BufferLayout.Layout {
+    constructor(layout, decoder, encoder, property) {
+        super(layout.span, property);
+        this.layout = layout;
+        this.decoder = decoder;
+        this.encoder = encoder;
+    }
+    decode(b, offset) {
+        return this.decoder(this.layout.decode(b, offset));
+    }
+    encode(src, b, offset) {
+        return this.layout.encode(this.encoder(src), b, offset);
+    }
+    getSpan(b, offset) {
+        return this.layout.getSpan(b, offset);
+    }
+}
+function publicKey(property) {
+    return new WrappedLayout(BufferLayout.blob(32), (b) => new PublicKey(b), (key) => key.toBuffer(), property);
+}
+function vec(elementLayout, property) {
+    const length = BufferLayout.u32('length');
+    const layout = BufferLayout.struct([
+        length,
+        BufferLayout.seq(elementLayout, BufferLayout.offset(length, -length.span), 'values'),
+    ]);
+    return new WrappedLayout(layout, ({ values }) => values, (values) => ({ values }), property);
+}
+class OptionLayout extends BufferLayout.Layout {
+    constructor(layout) {
+        super(layout.span + 1, layout.property);
+        this.layout = layout;
+        this.discriminator = BufferLayout.u8();
+    }
+    encode(src, b, offset) {
+        if (src === null || src === undefined) {
+            return this.layout.encode(0, b, offset);
+        }
+        this.discriminator.encode(1, b, offset);
+        return this.layout.encode(src, b, (offset !== null && offset !== void 0 ? offset : 0) + 1) + 1;
+    }
+    decode(b, offset) {
+        const discriminator = this.discriminator.decode(b, offset);
+        if (!discriminator) {
+            return undefined;
+        }
+        return this.layout.decode(b, (offset !== null && offset !== void 0 ? offset : 0) + 1);
+    }
+}
+function option(layout) {
+    return new OptionLayout(layout);
+}
+
+function solToLamports(amount) {
+    if (isNaN(amount))
+        return Number(0);
+    return Number(amount * LAMPORTS_PER_SOL);
+}
+function lamportsToSol(lamports) {
+    if (typeof lamports === 'number') {
+        return Math.abs(lamports) / LAMPORTS_PER_SOL;
+    }
+    if (typeof lamports === 'bigint') {
+        return Math.abs(Number(lamports)) / LAMPORTS_PER_SOL;
+    }
+    let signMultiplier = 1;
+    if (lamports.isNeg()) {
+        signMultiplier = -1;
+    }
+    const absLamports = lamports.abs();
+    const lamportsString = absLamports.toString(10).padStart(10, '0');
+    const splitIndex = lamportsString.length - 9;
+    const solString = lamportsString.slice(0, splitIndex) + '.' + lamportsString.slice(splitIndex);
+    return signMultiplier * parseFloat(solString);
+}
+
+// Public key that identifies the metadata program.
+const METADATA_PROGRAM_ID = new PublicKey('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s');
+const METADATA_MAX_NAME_LENGTH = 32;
+const METADATA_MAX_SYMBOL_LENGTH = 10;
+const METADATA_MAX_URI_LENGTH = 200;
+// Public key that identifies the SPL Stake Pool program.
+const STAKE_POOL_PROGRAM_ID = new PublicKey('SPoo1Ku8WFXoNDMHPsrGSTSG1Y47rzgn41SLUNakuHy');
+// Maximum number of validators to update during UpdateValidatorListBalance.
+const MAX_VALIDATORS_TO_UPDATE = 5;
+// Seed for ephemeral stake account
+const EPHEMERAL_STAKE_SEED_PREFIX = Buffer.from('ephemeral');
+// Seed used to derive transient stake accounts.
+const TRANSIENT_STAKE_SEED_PREFIX = Buffer.from('transient');
+// Minimum amount of staked SOL required in a validator stake account to allow
+// for merges without a mismatch on credits observed
+const MINIMUM_ACTIVE_STAKE = LAMPORTS_PER_SOL;
+
+/**
+ * Generates the withdraw authority program address for the stake pool
+ */
+function findWithdrawAuthorityProgramAddress(programId, stakePoolAddress) {
+    const [publicKey] = PublicKey.findProgramAddressSync([stakePoolAddress.toBuffer(), Buffer.from('withdraw')], programId);
+    return publicKey;
+}
+/**
+ * Generates the stake program address for a validator's vote account
+ */
+function findStakeProgramAddress(programId, voteAccountAddress, stakePoolAddress) {
+    const [publicKey] = PublicKey.findProgramAddressSync([voteAccountAddress.toBuffer(), stakePoolAddress.toBuffer()], programId);
+    return publicKey;
+}
+/**
+ * Generates the stake program address for a validator's vote account
+ */
+function findTransientStakeProgramAddress(programId, voteAccountAddress, stakePoolAddress, seed) {
+    const [publicKey] = PublicKey.findProgramAddressSync([
+        TRANSIENT_STAKE_SEED_PREFIX,
+        voteAccountAddress.toBuffer(),
+        stakePoolAddress.toBuffer(),
+        seed.toBuffer('le', 8),
+    ], programId);
+    return publicKey;
+}
+/**
+ * Generates the ephemeral program address for stake pool re-delegation
+ */
+function findEphemeralStakeProgramAddress(programId, stakePoolAddress, seed) {
+    const [publicKey] = PublicKey.findProgramAddressSync([EPHEMERAL_STAKE_SEED_PREFIX, stakePoolAddress.toBuffer(), seed.toBuffer('le', 8)], programId);
+    return publicKey;
+}
+/**
+ * Generates the token metadata address by {@link mint}
+ */
+function findTokenMetadataAddress(mint) {
+    const [publicKey] = PublicKey.findProgramAddressSync([Buffer.from('metadata'), METADATA_PROGRAM_ID.toBuffer(), mint.toBuffer()], METADATA_PROGRAM_ID);
+    return publicKey;
+}
+
+const lockup = (property) => struct([u64('unixTimestamp'), u64('epoch'), publicKey('custodian')], property);
+const fee = (property) => struct([u64('denominator'), u64('numerator')], property);
 var AccountType;
 (function (AccountType) {
     AccountType[AccountType["Uninitialized"] = 0] = "Uninitialized";
@@ -576,9 +648,7 @@ var AccountType;
     AccountType[AccountType["ValidatorList"] = 2] = "ValidatorList";
 })(AccountType || (AccountType = {}));
 const BigNumFromString = coerce(instance(BN), string(), (value) => {
-    if (typeof value === 'string')
-        return new BN(value, 10);
-    throw new Error('invalid big num');
+    return new BN(value, 10);
 });
 const PublicKeyFromString = coerce(instance(PublicKey), string(), (value) => new PublicKey(value));
 const StakeAccountType = enums(['uninitialized', 'initialized', 'delegated', 'rewardsPool']);
@@ -625,21 +695,21 @@ const StakePoolLayout = struct([
     u64('totalLamports'),
     u64('poolTokenSupply'),
     u64('lastUpdateEpoch'),
-    struct([u64('unixTimestamp'), u64('epoch'), publicKey('custodian')], 'lockup'),
-    struct(feeFields, 'epochFee'),
-    option(struct(feeFields), 'nextEpochFee'),
-    option(publicKey(), 'preferredDepositValidatorVoteAddress'),
-    option(publicKey(), 'preferredWithdrawValidatorVoteAddress'),
-    struct(feeFields, 'stakeDepositFee'),
-    struct(feeFields, 'stakeWithdrawalFee'),
-    option(struct(feeFields), 'nextStakeWithdrawalFee'),
+    lockup('lockup'),
+    fee('epochFee'),
+    option(fee('nextEpochFee')),
+    option(publicKey('preferredDepositValidatorVoteAddress')),
+    option(publicKey('preferredWithdrawValidatorVoteAddress')),
+    fee('stakeDepositFee'),
+    fee('stakeWithdrawalFee'),
+    option(fee('nextStakeWithdrawalFee')),
     u8('stakeReferralFee'),
-    option(publicKey(), 'solDepositAuthority'),
-    struct(feeFields, 'solDepositFee'),
+    option(publicKey('solDepositAuthority')),
+    fee('solDepositFee'),
     u8('solReferralFee'),
-    option(publicKey(), 'solWithdrawAuthority'),
-    struct(feeFields, 'solWithdrawalFee'),
-    option(struct(feeFields), 'nextSolWithdrawalFee'),
+    option(publicKey('solWithdrawAuthority')),
+    fee('solWithdrawalFee'),
+    option(fee('nextSolWithdrawalFee')),
     u64('lastEpochPoolTokenSupply'),
     u64('lastEpochTotalLamports'),
 ]);
@@ -691,10 +761,10 @@ async function getValidatorListAccount(connection, pubkey) {
     };
 }
 async function prepareWithdrawAccounts(connection, stakePool, stakePoolAddress, amount, compareFn, skipFee) {
-    var _a, _b;
+    var _a, _b, _c;
     const validatorListAcc = await connection.getAccountInfo(stakePool.validatorList);
-    const validatorList = ValidatorListLayout.decode(validatorListAcc === null || validatorListAcc === void 0 ? void 0 : validatorListAcc.data);
-    if (!(validatorList === null || validatorList === void 0 ? void 0 : validatorList.validators) || (validatorList === null || validatorList === void 0 ? void 0 : validatorList.validators.length) == 0) {
+    const validatorList = ValidatorListLayout.decode(Uint8Array.from((_a = validatorListAcc === null || validatorListAcc === void 0 ? void 0 : validatorListAcc.data) !== null && _a !== void 0 ? _a : []));
+    if (!(validatorList === null || validatorList === void 0 ? void 0 : validatorList.validators) || (validatorList === null || validatorList === void 0 ? void 0 : validatorList.validators.length) === 0) {
         throw new Error('No accounts found');
     }
     const minBalanceForRentExemption = await connection.getMinimumBalanceForRentExemption(StakeProgram.space);
@@ -707,7 +777,7 @@ async function prepareWithdrawAccounts(connection, stakePool, stakePoolAddress, 
         }
         const stakeAccountAddress = await findStakeProgramAddress(STAKE_POOL_PROGRAM_ID, validator.voteAccountAddress, stakePoolAddress);
         if (!validator.activeStakeLamports.isZero()) {
-            const isPreferred = (_a = stakePool === null || stakePool === void 0 ? void 0 : stakePool.preferredWithdrawValidatorVoteAddress) === null || _a === void 0 ? void 0 : _a.equals(validator.voteAccountAddress);
+            const isPreferred = (_b = stakePool === null || stakePool === void 0 ? void 0 : stakePool.preferredWithdrawValidatorVoteAddress) === null || _b === void 0 ? void 0 : _b.equals(validator.voteAccountAddress);
             accounts.push({
                 type: isPreferred ? 'preferred' : 'active',
                 voteAddress: validator.voteAccountAddress,
@@ -727,9 +797,9 @@ async function prepareWithdrawAccounts(connection, stakePool, stakePoolAddress, 
         }
     }
     // Sort from highest to lowest balance
-    accounts = accounts.sort(compareFn ? compareFn : (a, b) => b.lamports - a.lamports);
+    accounts = accounts.sort(compareFn || ((a, b) => b.lamports - a.lamports));
     const reserveStake = await connection.getAccountInfo(stakePool.reserveStake);
-    const reserveStakeBalance = ((_b = reserveStake === null || reserveStake === void 0 ? void 0 : reserveStake.lamports) !== null && _b !== void 0 ? _b : 0) - minBalanceForRentExemption - 1;
+    const reserveStakeBalance = ((_c = reserveStake === null || reserveStake === void 0 ? void 0 : reserveStake.lamports) !== null && _c !== void 0 ? _c : 0) - minBalanceForRentExemption - 1;
     if (reserveStakeBalance > 0) {
         accounts.push({
             type: 'reserve',
@@ -746,9 +816,9 @@ async function prepareWithdrawAccounts(connection, stakePool, stakePoolAddress, 
         denominator: fee.denominator,
     };
     for (const type of ['preferred', 'active', 'transient', 'reserve']) {
-        const filteredAccounts = accounts.filter((a) => a.type == type);
+        const filteredAccounts = accounts.filter((a) => a.type === type);
         for (const { stakeAddress, voteAddress, lamports } of filteredAccounts) {
-            if (lamports <= minBalance && type == 'transient') {
+            if (lamports <= minBalance && type === 'transient') {
                 continue;
             }
             let availableForWithdrawal = calcPoolTokensForDeposit(stakePool, lamports);
@@ -762,11 +832,11 @@ async function prepareWithdrawAccounts(connection, stakePool, stakePoolAddress, 
             // Those accounts will be withdrawn completely with `claim` instruction
             withdrawFrom.push({ stakeAddress, voteAddress, poolAmount });
             remainingAmount -= poolAmount;
-            if (remainingAmount == 0) {
+            if (remainingAmount === 0) {
                 break;
             }
         }
-        if (remainingAmount == 0) {
+        if (remainingAmount === 0) {
             break;
         }
     }
@@ -852,7 +922,9 @@ const TOKEN_METADATA_LAYOUT = BufferLayout.struct([
     BufferLayout.blob(METADATA_MAX_SYMBOL_LENGTH, 'symbol'),
     BufferLayout.blob(METADATA_MAX_URI_LENGTH, 'uri'),
 ]);
-const feeLayout = (property) => BufferLayout.struct([BufferLayout.nu64('denominator'), BufferLayout.nu64('numerator')], property);
+function feeLayout(property) {
+    return BufferLayout.struct([BufferLayout.nu64('denominator'), BufferLayout.nu64('numerator')], property);
+}
 /**
  * An enumeration of valid stake InstructionType's
  * @internal
@@ -1530,7 +1602,7 @@ async function getStakeAccount(connection, stakeAccount) {
         throw new Error('Invalid stake account');
     }
     const program = result.data.program;
-    if (program != 'stake') {
+    if (program !== 'stake') {
         throw new Error('Not a stake account');
     }
     return create(result.data.parsed, StakeAccount);
@@ -1671,7 +1743,7 @@ async function depositSol(connection, stakePoolAddress, from, lamports, destinat
  * Creates instructions required to withdraw stake from a stake pool.
  */
 async function withdrawStake(connection, stakePoolAddress, tokenOwner, amount, useReserve = false, voteAccountAddress, stakeReceiver, poolTokenAccount, validatorComparator) {
-    var _c, _d, _e, _f;
+    var _c, _d, _e, _f, _g;
     const stakePool = await getStakePoolAccount(connection, stakePoolAddress);
     const poolAmount = solToLamports(amount);
     if (!poolTokenAccount) {
@@ -1697,12 +1769,13 @@ async function withdrawStake(connection, stakePoolAddress, tokenOwner, amount, u
             poolAmount,
         });
     }
-    else if (stakeReceiverAccount && (stakeReceiverAccount === null || stakeReceiverAccount === void 0 ? void 0 : stakeReceiverAccount.type) == 'delegated') {
-        const voteAccount = (_d = (_c = stakeReceiverAccount.info) === null || _c === void 0 ? void 0 : _c.stake) === null || _d === void 0 ? void 0 : _d.delegation.voter;
-        if (!voteAccount)
-            throw new Error(`Invalid stake reciever ${stakeReceiver} delegation`);
+    else if ((stakeReceiverAccount === null || stakeReceiverAccount === void 0 ? void 0 : stakeReceiverAccount.type) === 'delegated') {
+        const voteAccount = (_d = (_c = stakeReceiverAccount === null || stakeReceiverAccount === void 0 ? void 0 : stakeReceiverAccount.info) === null || _c === void 0 ? void 0 : _c.stake) === null || _d === void 0 ? void 0 : _d.delegation.voter;
+        if (!voteAccount) {
+            throw new Error(`Invalid stake receiver ${stakeReceiver} delegation`);
+        }
         const validatorListAccount = await connection.getAccountInfo(stakePool.account.data.validatorList);
-        const validatorList = ValidatorListLayout.decode(validatorListAccount === null || validatorListAccount === void 0 ? void 0 : validatorListAccount.data);
+        const validatorList = ValidatorListLayout.decode(Uint8Array.from((_e = validatorListAccount === null || validatorListAccount === void 0 ? void 0 : validatorListAccount.data) !== null && _e !== void 0 ? _e : []));
         const isValidVoter = validatorList.validators.find((val) => val.voteAccountAddress.equals(voteAccount));
         if (voteAccountAddress && voteAccountAddress !== voteAccount) {
             throw new Error(`Provided withdrawal vote account ${voteAccountAddress} does not match delegation on stake receiver account ${voteAccount},
@@ -1712,7 +1785,7 @@ async function withdrawStake(connection, stakePoolAddress, tokenOwner, amount, u
             const stakeAccountAddress = findStakeProgramAddress(STAKE_POOL_PROGRAM_ID, voteAccount, stakePoolAddress);
             const stakeAccount = await connection.getAccountInfo(stakeAccountAddress);
             if (!stakeAccount) {
-                throw new Error(`Preferred withdraw valdator's stake account is invalid`);
+                throw new Error("Preferred withdraw validator's stake account is invalid");
             }
             const availableForWithdrawal = calcLamportsWithdrawAmount(stakePool.account.data, stakeAccount.lamports - MINIMUM_ACTIVE_STAKE - stakeAccountRentExemption);
             if (availableForWithdrawal < poolAmount) {
@@ -1768,9 +1841,9 @@ async function withdrawStake(connection, stakePoolAddress, tokenOwner, amount, u
         // Convert pool tokens amount to lamports
         const solWithdrawAmount = Math.ceil(calcLamportsWithdrawAmount(stakePool.account.data, withdrawAccount.poolAmount));
         let infoMsg = `Withdrawing ◎${solWithdrawAmount},
-      from stake account ${(_e = withdrawAccount.stakeAddress) === null || _e === void 0 ? void 0 : _e.toBase58()}`;
+      from stake account ${(_f = withdrawAccount.stakeAddress) === null || _f === void 0 ? void 0 : _f.toBase58()}`;
         if (withdrawAccount.voteAddress) {
-            infoMsg = `${infoMsg}, delegated to ${(_f = withdrawAccount.voteAddress) === null || _f === void 0 ? void 0 : _f.toBase58()}`;
+            infoMsg = `${infoMsg}, delegated to ${(_g = withdrawAccount.voteAddress) === null || _g === void 0 ? void 0 : _g.toBase58()}`;
         }
         console.info(infoMsg);
         let stakeToReceive;
@@ -1798,7 +1871,7 @@ async function withdrawStake(connection, stakePoolAddress, tokenOwner, amount, u
         }));
         i++;
     }
-    if (stakeReceiver && stakeReceiverAccount && stakeReceiverAccount.type === 'delegated') {
+    if (stakeReceiver && (stakeReceiverAccount === null || stakeReceiverAccount === void 0 ? void 0 : stakeReceiverAccount.type) === 'delegated') {
         signers.forEach((newStakeKeypair) => {
             instructions.concat(StakeProgram.merge({
                 stakePubkey: stakeReceiver,
@@ -1838,7 +1911,7 @@ async function withdrawSol(connection, stakePoolAddress, tokenOwner, solReceiver
         if (!expectedSolWithdrawAuthority) {
             throw new Error('SOL withdraw authority specified in arguments but stake pool has none');
         }
-        if (solWithdrawAuthority.toBase58() != expectedSolWithdrawAuthority.toBase58()) {
+        if (solWithdrawAuthority.toBase58() !== expectedSolWithdrawAuthority.toBase58()) {
             throw new Error(`Invalid deposit withdraw specified, expected ${expectedSolWithdrawAuthority.toBase58()}, received ${solWithdrawAuthority.toBase58()}`);
         }
     }
@@ -1866,7 +1939,7 @@ async function withdrawSol(connection, stakePoolAddress, tokenOwner, solReceiver
 async function increaseValidatorStake(connection, stakePoolAddress, validatorVote, lamports, ephemeralStakeSeed) {
     const stakePool = await getStakePoolAccount(connection, stakePoolAddress);
     const validatorList = await getValidatorListAccount(connection, stakePool.account.data.validatorList);
-    const validatorInfo = validatorList.account.data.validators.find((v) => v.voteAccountAddress.toBase58() == validatorVote.toBase58());
+    const validatorInfo = validatorList.account.data.validators.find((v) => v.voteAccountAddress.toBase58() === validatorVote.toBase58());
     if (!validatorInfo) {
         throw new Error('Vote account not found in validator list');
     }
@@ -1875,7 +1948,7 @@ async function increaseValidatorStake(connection, stakePoolAddress, validatorVot
     const transientStake = findTransientStakeProgramAddress(STAKE_POOL_PROGRAM_ID, validatorInfo.voteAccountAddress, stakePoolAddress, transientStakeSeed);
     const validatorStake = findStakeProgramAddress(STAKE_POOL_PROGRAM_ID, validatorInfo.voteAccountAddress, stakePoolAddress);
     const instructions = [];
-    if (ephemeralStakeSeed != undefined) {
+    if (ephemeralStakeSeed !== undefined) {
         const ephemeralStake = findEphemeralStakeProgramAddress(STAKE_POOL_PROGRAM_ID, stakePoolAddress, new BN(ephemeralStakeSeed));
         StakePoolInstruction.increaseAdditionalValidatorStake({
             stakePool: stakePoolAddress,
@@ -1916,7 +1989,7 @@ async function increaseValidatorStake(connection, stakePoolAddress, validatorVot
 async function decreaseValidatorStake(connection, stakePoolAddress, validatorVote, lamports, ephemeralStakeSeed) {
     const stakePool = await getStakePoolAccount(connection, stakePoolAddress);
     const validatorList = await getValidatorListAccount(connection, stakePool.account.data.validatorList);
-    const validatorInfo = validatorList.account.data.validators.find((v) => v.voteAccountAddress.toBase58() == validatorVote.toBase58());
+    const validatorInfo = validatorList.account.data.validators.find((v) => v.voteAccountAddress.toBase58() === validatorVote.toBase58());
     if (!validatorInfo) {
         throw new Error('Vote account not found in validator list');
     }
@@ -1925,7 +1998,7 @@ async function decreaseValidatorStake(connection, stakePoolAddress, validatorVot
     const transientStakeSeed = validatorInfo.transientSeedSuffixStart.addn(1); // bump up by one to avoid reuse
     const transientStake = findTransientStakeProgramAddress(STAKE_POOL_PROGRAM_ID, validatorInfo.voteAccountAddress, stakePoolAddress, transientStakeSeed);
     const instructions = [];
-    if (ephemeralStakeSeed != undefined) {
+    if (ephemeralStakeSeed !== undefined) {
         const ephemeralStake = findEphemeralStakeProgramAddress(STAKE_POOL_PROGRAM_ID, stakePoolAddress, new BN(ephemeralStakeSeed));
         instructions.push(StakePoolInstruction.decreaseAdditionalValidatorStake({
             stakePool: stakePoolAddress,

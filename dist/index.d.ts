@@ -1,7 +1,9 @@
-import { AccountInfo, Connection, Keypair, PublicKey, Signer, TransactionInstruction } from '@solana/web3.js';
-import { ValidatorAccount } from './utils';
-import { StakeAccount, StakePool, ValidatorList } from './layouts';
+import type { AccountInfo, Connection, Signer, TransactionInstruction } from '@solana/web3.js';
+import { Keypair, PublicKey } from '@solana/web3.js';
 import BN from 'bn.js';
+import type { ValidatorAccount } from './utils';
+import type { StakePool, ValidatorList } from './layouts';
+import { StakeAccount } from './layouts';
 export type { StakePool, AccountType, ValidatorList, ValidatorStakeInfo } from './layouts';
 export { STAKE_POOL_PROGRAM_ID } from './constants';
 export * from './instructions';
@@ -80,7 +82,15 @@ export declare function getStakeAccount(connection: Connection, stakeAccount: Pu
  * @param connection: An active web3js connection.
  * @param stakePoolProgramAddress: The public key (address) of the StakePool program.
  */
-export declare function getStakePoolAccounts(connection: Connection, stakePoolProgramAddress: PublicKey): Promise<(StakePoolAccount | ValidatorListAccount)[] | undefined>;
+export declare function getStakePoolAccounts(connection: Connection, stakePoolProgramAddress: PublicKey): Promise<{
+    pubkey: PublicKey;
+    account: {
+        data: StakePool | ValidatorList | undefined;
+        executable: boolean;
+        lamports: number;
+        owner: PublicKey;
+    };
+}[]>;
 /**
  * Creates instructions required to deposit stake to stake pool.
  */
@@ -158,21 +168,21 @@ export declare function stakePoolInfo(connection: Connection, stakePoolAddress: 
     totalLamports: string;
     poolTokenSupply: string;
     lastUpdateEpoch: string;
-    lockup: import("@solana/web3.js").Lockup;
-    epochFee: import("./layouts").Fee;
-    nextEpochFee: import("./layouts").Fee | undefined;
+    lockup: import("./layouts").Lockup;
+    epochFee: Fee;
+    nextEpochFee: Fee | undefined;
     preferredDepositValidatorVoteAddress: PublicKey | undefined;
     preferredWithdrawValidatorVoteAddress: PublicKey | undefined;
-    stakeDepositFee: import("./layouts").Fee;
-    stakeWithdrawalFee: import("./layouts").Fee;
-    nextStakeWithdrawalFee: import("./layouts").Fee | undefined;
+    stakeDepositFee: Fee;
+    stakeWithdrawalFee: Fee;
+    nextStakeWithdrawalFee: Fee | undefined;
     stakeReferralFee: number;
     solDepositAuthority: string | undefined;
-    solDepositFee: import("./layouts").Fee;
+    solDepositFee: Fee;
     solReferralFee: number;
     solWithdrawAuthority: string | undefined;
-    solWithdrawalFee: import("./layouts").Fee;
-    nextSolWithdrawalFee: import("./layouts").Fee | undefined;
+    solWithdrawalFee: Fee;
+    nextSolWithdrawalFee: Fee | undefined;
     lastEpochPoolTokenSupply: string;
     lastEpochTotalLamports: string;
     details: {

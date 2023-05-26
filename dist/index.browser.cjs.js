@@ -4,114 +4,32 @@ Object.defineProperty(exports, '__esModule', { value: true });
 
 var web3_js = require('@solana/web3.js');
 var splToken = require('@solana/spl-token');
+var BN = require('bn.js');
 var BufferLayout = require('@solana/buffer-layout');
 var buffer = require('buffer');
-var borsh = require('@coral-xyz/borsh');
-var BN = require('bn.js');
 
 function _interopDefaultLegacy (e) { return e && typeof e === 'object' && 'default' in e ? e : { 'default': e }; }
 
 function _interopNamespace(e) {
-    if (e && e.__esModule) return e;
-    var n = Object.create(null);
-    if (e) {
-        Object.keys(e).forEach(function (k) {
-            if (k !== 'default') {
-                var d = Object.getOwnPropertyDescriptor(e, k);
-                Object.defineProperty(n, k, d.get ? d : {
-                    enumerable: true,
-                    get: function () { return e[k]; }
-                });
-            }
+  if (e && e.__esModule) return e;
+  var n = Object.create(null);
+  if (e) {
+    Object.keys(e).forEach(function (k) {
+      if (k !== 'default') {
+        var d = Object.getOwnPropertyDescriptor(e, k);
+        Object.defineProperty(n, k, d.get ? d : {
+          enumerable: true,
+          get: function () { return e[k]; }
         });
-    }
-    n["default"] = e;
-    return Object.freeze(n);
+      }
+    });
+  }
+  n["default"] = e;
+  return Object.freeze(n);
 }
 
-var BufferLayout__namespace = /*#__PURE__*/_interopNamespace(BufferLayout);
 var BN__default = /*#__PURE__*/_interopDefaultLegacy(BN);
-
-function solToLamports(amount) {
-    if (isNaN(amount))
-        return Number(0);
-    return Number(amount * web3_js.LAMPORTS_PER_SOL);
-}
-function lamportsToSol(lamports) {
-    if (typeof lamports === 'number') {
-        return Math.abs(lamports) / web3_js.LAMPORTS_PER_SOL;
-    }
-    if (typeof lamports === 'bigint') {
-        return Math.abs(Number(lamports)) / web3_js.LAMPORTS_PER_SOL;
-    }
-    let signMultiplier = 1;
-    if (lamports.isNeg()) {
-        signMultiplier = -1;
-    }
-    const absLamports = lamports.abs();
-    const lamportsString = absLamports.toString(10).padStart(10, '0');
-    const splitIndex = lamportsString.length - 9;
-    const solString = lamportsString.slice(0, splitIndex) + '.' + lamportsString.slice(splitIndex);
-    return signMultiplier * parseFloat(solString);
-}
-
-// Public key that identifies the metadata program.
-const METADATA_PROGRAM_ID = new web3_js.PublicKey('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s');
-const METADATA_MAX_NAME_LENGTH = 32;
-const METADATA_MAX_SYMBOL_LENGTH = 10;
-const METADATA_MAX_URI_LENGTH = 200;
-// Public key that identifies the SPL Stake Pool program.
-const STAKE_POOL_PROGRAM_ID = new web3_js.PublicKey('SPoo1Ku8WFXoNDMHPsrGSTSG1Y47rzgn41SLUNakuHy');
-// Maximum number of validators to update during UpdateValidatorListBalance.
-const MAX_VALIDATORS_TO_UPDATE = 5;
-// Seed for ephemeral stake account
-const EPHEMERAL_STAKE_SEED_PREFIX = buffer.Buffer.from('ephemeral');
-// Seed used to derive transient stake accounts.
-const TRANSIENT_STAKE_SEED_PREFIX = buffer.Buffer.from('transient');
-// Minimum amount of staked SOL required in a validator stake account to allow
-// for merges without a mismatch on credits observed
-const MINIMUM_ACTIVE_STAKE = web3_js.LAMPORTS_PER_SOL;
-
-/**
- * Generates the withdraw authority program address for the stake pool
- */
-function findWithdrawAuthorityProgramAddress(programId, stakePoolAddress) {
-    const [publicKey] = web3_js.PublicKey.findProgramAddressSync([stakePoolAddress.toBuffer(), buffer.Buffer.from('withdraw')], programId);
-    return publicKey;
-}
-/**
- * Generates the stake program address for a validator's vote account
- */
-function findStakeProgramAddress(programId, voteAccountAddress, stakePoolAddress) {
-    const [publicKey] = web3_js.PublicKey.findProgramAddressSync([voteAccountAddress.toBuffer(), stakePoolAddress.toBuffer()], programId);
-    return publicKey;
-}
-/**
- * Generates the stake program address for a validator's vote account
- */
-function findTransientStakeProgramAddress(programId, voteAccountAddress, stakePoolAddress, seed) {
-    const [publicKey] = web3_js.PublicKey.findProgramAddressSync([
-        TRANSIENT_STAKE_SEED_PREFIX,
-        voteAccountAddress.toBuffer(),
-        stakePoolAddress.toBuffer(),
-        seed.toBuffer('le', 8),
-    ], programId);
-    return publicKey;
-}
-/**
- * Generates the ephemeral program address for stake pool re-delegation
- */
-function findEphemeralStakeProgramAddress(programId, stakePoolAddress, seed) {
-    const [publicKey] = web3_js.PublicKey.findProgramAddressSync([EPHEMERAL_STAKE_SEED_PREFIX, stakePoolAddress.toBuffer(), seed.toBuffer('le', 8)], programId);
-    return publicKey;
-}
-/**
- * Generates the token metadata address by {@link mint}
- */
-function findTokenMetadataAddress(mint) {
-    const [publicKey] = web3_js.PublicKey.findProgramAddressSync([buffer.Buffer.from('metadata'), METADATA_PROGRAM_ID.toBuffer(), mint.toBuffer()], METADATA_PROGRAM_ID);
-    return publicKey;
-}
+var BufferLayout__namespace = /*#__PURE__*/_interopNamespace(BufferLayout);
 
 /**
  * A `StructFailure` represents a single specific failure in validation.
@@ -595,7 +513,160 @@ function coerce(struct, condition, coercer) {
   });
 }
 
-const feeFields = [borsh.u64('denominator'), borsh.u64('numerator')];
+class SignedNumberLayout extends BufferLayout__namespace.Layout {
+    constructor(span, property) {
+        super(span, property);
+    }
+    decode(b, offset) {
+        const start = offset !== null && offset !== void 0 ? offset : 0;
+        const data = b.slice(start, start + this.span);
+        return new BN__default["default"](data, undefined, 'le').fromTwos(this.span * 8);
+    }
+    encode(src, b, offset) {
+        const start = offset !== null && offset !== void 0 ? offset : 0;
+        b.set(src.toTwos(this.span * 8).toArray('le'), start);
+        return this.span;
+    }
+}
+function u64(property) {
+    return new SignedNumberLayout(8, property);
+}
+class WrappedLayout extends BufferLayout__namespace.Layout {
+    constructor(layout, decoder, encoder, property) {
+        super(layout.span, property);
+        this.layout = layout;
+        this.decoder = decoder;
+        this.encoder = encoder;
+    }
+    decode(b, offset) {
+        return this.decoder(this.layout.decode(b, offset));
+    }
+    encode(src, b, offset) {
+        return this.layout.encode(this.encoder(src), b, offset);
+    }
+    getSpan(b, offset) {
+        return this.layout.getSpan(b, offset);
+    }
+}
+function publicKey(property) {
+    return new WrappedLayout(BufferLayout__namespace.blob(32), (b) => new web3_js.PublicKey(b), (key) => key.toBuffer(), property);
+}
+function vec(elementLayout, property) {
+    const length = BufferLayout__namespace.u32('length');
+    const layout = BufferLayout__namespace.struct([
+        length,
+        BufferLayout__namespace.seq(elementLayout, BufferLayout__namespace.offset(length, -length.span), 'values'),
+    ]);
+    return new WrappedLayout(layout, ({ values }) => values, (values) => ({ values }), property);
+}
+class OptionLayout extends BufferLayout__namespace.Layout {
+    constructor(layout) {
+        super(layout.span + 1, layout.property);
+        this.layout = layout;
+        this.discriminator = BufferLayout__namespace.u8();
+    }
+    encode(src, b, offset) {
+        if (src === null || src === undefined) {
+            return this.layout.encode(0, b, offset);
+        }
+        this.discriminator.encode(1, b, offset);
+        return this.layout.encode(src, b, (offset !== null && offset !== void 0 ? offset : 0) + 1) + 1;
+    }
+    decode(b, offset) {
+        const discriminator = this.discriminator.decode(b, offset);
+        if (!discriminator) {
+            return undefined;
+        }
+        return this.layout.decode(b, (offset !== null && offset !== void 0 ? offset : 0) + 1);
+    }
+}
+function option(layout) {
+    return new OptionLayout(layout);
+}
+
+function solToLamports(amount) {
+    if (isNaN(amount))
+        return Number(0);
+    return Number(amount * web3_js.LAMPORTS_PER_SOL);
+}
+function lamportsToSol(lamports) {
+    if (typeof lamports === 'number') {
+        return Math.abs(lamports) / web3_js.LAMPORTS_PER_SOL;
+    }
+    if (typeof lamports === 'bigint') {
+        return Math.abs(Number(lamports)) / web3_js.LAMPORTS_PER_SOL;
+    }
+    let signMultiplier = 1;
+    if (lamports.isNeg()) {
+        signMultiplier = -1;
+    }
+    const absLamports = lamports.abs();
+    const lamportsString = absLamports.toString(10).padStart(10, '0');
+    const splitIndex = lamportsString.length - 9;
+    const solString = lamportsString.slice(0, splitIndex) + '.' + lamportsString.slice(splitIndex);
+    return signMultiplier * parseFloat(solString);
+}
+
+// Public key that identifies the metadata program.
+const METADATA_PROGRAM_ID = new web3_js.PublicKey('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s');
+const METADATA_MAX_NAME_LENGTH = 32;
+const METADATA_MAX_SYMBOL_LENGTH = 10;
+const METADATA_MAX_URI_LENGTH = 200;
+// Public key that identifies the SPL Stake Pool program.
+const STAKE_POOL_PROGRAM_ID = new web3_js.PublicKey('SPoo1Ku8WFXoNDMHPsrGSTSG1Y47rzgn41SLUNakuHy');
+// Maximum number of validators to update during UpdateValidatorListBalance.
+const MAX_VALIDATORS_TO_UPDATE = 5;
+// Seed for ephemeral stake account
+const EPHEMERAL_STAKE_SEED_PREFIX = buffer.Buffer.from('ephemeral');
+// Seed used to derive transient stake accounts.
+const TRANSIENT_STAKE_SEED_PREFIX = buffer.Buffer.from('transient');
+// Minimum amount of staked SOL required in a validator stake account to allow
+// for merges without a mismatch on credits observed
+const MINIMUM_ACTIVE_STAKE = web3_js.LAMPORTS_PER_SOL;
+
+/**
+ * Generates the withdraw authority program address for the stake pool
+ */
+function findWithdrawAuthorityProgramAddress(programId, stakePoolAddress) {
+    const [publicKey] = web3_js.PublicKey.findProgramAddressSync([stakePoolAddress.toBuffer(), buffer.Buffer.from('withdraw')], programId);
+    return publicKey;
+}
+/**
+ * Generates the stake program address for a validator's vote account
+ */
+function findStakeProgramAddress(programId, voteAccountAddress, stakePoolAddress) {
+    const [publicKey] = web3_js.PublicKey.findProgramAddressSync([voteAccountAddress.toBuffer(), stakePoolAddress.toBuffer()], programId);
+    return publicKey;
+}
+/**
+ * Generates the stake program address for a validator's vote account
+ */
+function findTransientStakeProgramAddress(programId, voteAccountAddress, stakePoolAddress, seed) {
+    const [publicKey] = web3_js.PublicKey.findProgramAddressSync([
+        TRANSIENT_STAKE_SEED_PREFIX,
+        voteAccountAddress.toBuffer(),
+        stakePoolAddress.toBuffer(),
+        seed.toBuffer('le', 8),
+    ], programId);
+    return publicKey;
+}
+/**
+ * Generates the ephemeral program address for stake pool re-delegation
+ */
+function findEphemeralStakeProgramAddress(programId, stakePoolAddress, seed) {
+    const [publicKey] = web3_js.PublicKey.findProgramAddressSync([EPHEMERAL_STAKE_SEED_PREFIX, stakePoolAddress.toBuffer(), seed.toBuffer('le', 8)], programId);
+    return publicKey;
+}
+/**
+ * Generates the token metadata address by {@link mint}
+ */
+function findTokenMetadataAddress(mint) {
+    const [publicKey] = web3_js.PublicKey.findProgramAddressSync([buffer.Buffer.from('metadata'), METADATA_PROGRAM_ID.toBuffer(), mint.toBuffer()], METADATA_PROGRAM_ID);
+    return publicKey;
+}
+
+const lockup = (property) => BufferLayout.struct([u64('unixTimestamp'), u64('epoch'), publicKey('custodian')], property);
+const fee = (property) => BufferLayout.struct([u64('denominator'), u64('numerator')], property);
 var AccountType;
 (function (AccountType) {
     AccountType[AccountType["Uninitialized"] = 0] = "Uninitialized";
@@ -603,9 +674,7 @@ var AccountType;
     AccountType[AccountType["ValidatorList"] = 2] = "ValidatorList";
 })(AccountType || (AccountType = {}));
 const BigNumFromString = coerce(instance(BN__default["default"]), string(), (value) => {
-    if (typeof value === 'string')
-        return new BN__default["default"](value, 10);
-    throw new Error('invalid big num');
+    return new BN__default["default"](value, 10);
 });
 const PublicKeyFromString = coerce(instance(web3_js.PublicKey), string(), (value) => new web3_js.PublicKey(value));
 const StakeAccountType = enums(['uninitialized', 'initialized', 'delegated', 'rewardsPool']);
@@ -638,37 +707,37 @@ const StakeAccount = type({
     type: StakeAccountType,
     info: optional(StakeAccountInfo),
 });
-const StakePoolLayout = borsh.struct([
-    borsh.u8('accountType'),
-    borsh.publicKey('manager'),
-    borsh.publicKey('staker'),
-    borsh.publicKey('stakeDepositAuthority'),
-    borsh.u8('stakeWithdrawBumpSeed'),
-    borsh.publicKey('validatorList'),
-    borsh.publicKey('reserveStake'),
-    borsh.publicKey('poolMint'),
-    borsh.publicKey('managerFeeAccount'),
-    borsh.publicKey('tokenProgramId'),
-    borsh.u64('totalLamports'),
-    borsh.u64('poolTokenSupply'),
-    borsh.u64('lastUpdateEpoch'),
-    borsh.struct([borsh.u64('unixTimestamp'), borsh.u64('epoch'), borsh.publicKey('custodian')], 'lockup'),
-    borsh.struct(feeFields, 'epochFee'),
-    borsh.option(borsh.struct(feeFields), 'nextEpochFee'),
-    borsh.option(borsh.publicKey(), 'preferredDepositValidatorVoteAddress'),
-    borsh.option(borsh.publicKey(), 'preferredWithdrawValidatorVoteAddress'),
-    borsh.struct(feeFields, 'stakeDepositFee'),
-    borsh.struct(feeFields, 'stakeWithdrawalFee'),
-    borsh.option(borsh.struct(feeFields), 'nextStakeWithdrawalFee'),
-    borsh.u8('stakeReferralFee'),
-    borsh.option(borsh.publicKey(), 'solDepositAuthority'),
-    borsh.struct(feeFields, 'solDepositFee'),
-    borsh.u8('solReferralFee'),
-    borsh.option(borsh.publicKey(), 'solWithdrawAuthority'),
-    borsh.struct(feeFields, 'solWithdrawalFee'),
-    borsh.option(borsh.struct(feeFields), 'nextSolWithdrawalFee'),
-    borsh.u64('lastEpochPoolTokenSupply'),
-    borsh.u64('lastEpochTotalLamports'),
+const StakePoolLayout = BufferLayout.struct([
+    BufferLayout.u8('accountType'),
+    publicKey('manager'),
+    publicKey('staker'),
+    publicKey('stakeDepositAuthority'),
+    BufferLayout.u8('stakeWithdrawBumpSeed'),
+    publicKey('validatorList'),
+    publicKey('reserveStake'),
+    publicKey('poolMint'),
+    publicKey('managerFeeAccount'),
+    publicKey('tokenProgramId'),
+    u64('totalLamports'),
+    u64('poolTokenSupply'),
+    u64('lastUpdateEpoch'),
+    lockup('lockup'),
+    fee('epochFee'),
+    option(fee('nextEpochFee')),
+    option(publicKey('preferredDepositValidatorVoteAddress')),
+    option(publicKey('preferredWithdrawValidatorVoteAddress')),
+    fee('stakeDepositFee'),
+    fee('stakeWithdrawalFee'),
+    option(fee('nextStakeWithdrawalFee')),
+    BufferLayout.u8('stakeReferralFee'),
+    option(publicKey('solDepositAuthority')),
+    fee('solDepositFee'),
+    BufferLayout.u8('solReferralFee'),
+    option(publicKey('solWithdrawAuthority')),
+    fee('solWithdrawalFee'),
+    option(fee('nextSolWithdrawalFee')),
+    u64('lastEpochPoolTokenSupply'),
+    u64('lastEpochTotalLamports'),
 ]);
 var ValidatorStakeInfoStatus;
 (function (ValidatorStakeInfoStatus) {
@@ -676,30 +745,30 @@ var ValidatorStakeInfoStatus;
     ValidatorStakeInfoStatus[ValidatorStakeInfoStatus["DeactivatingTransient"] = 1] = "DeactivatingTransient";
     ValidatorStakeInfoStatus[ValidatorStakeInfoStatus["ReadyForRemoval"] = 2] = "ReadyForRemoval";
 })(ValidatorStakeInfoStatus || (ValidatorStakeInfoStatus = {}));
-const ValidatorStakeInfoLayout = borsh.struct([
+const ValidatorStakeInfoLayout = BufferLayout.struct([
     /// Amount of active stake delegated to this validator
     /// Note that if `last_update_epoch` does not match the current epoch then
     /// this field may not be accurate
-    borsh.u64('activeStakeLamports'),
+    u64('activeStakeLamports'),
     /// Amount of transient stake delegated to this validator
     /// Note that if `last_update_epoch` does not match the current epoch then
     /// this field may not be accurate
-    borsh.u64('transientStakeLamports'),
+    u64('transientStakeLamports'),
     /// Last epoch the active and transient stake lamports fields were updated
-    borsh.u64('lastUpdateEpoch'),
+    u64('lastUpdateEpoch'),
     /// Start of the validator transient account seed suffixes
-    borsh.u64('transientSeedSuffixStart'),
+    u64('transientSeedSuffixStart'),
     /// End of the validator transient account seed suffixes
-    borsh.u64('transientSeedSuffixEnd'),
+    u64('transientSeedSuffixEnd'),
     /// Status of the validator stake account
-    borsh.u8('status'),
+    BufferLayout.u8('status'),
     /// Validator vote account address
-    borsh.publicKey('voteAccountAddress'),
+    publicKey('voteAccountAddress'),
 ]);
-const ValidatorListLayout = borsh.struct([
-    borsh.u8('accountType'),
-    borsh.u32('maxValidators'),
-    borsh.vec(ValidatorStakeInfoLayout, 'validators'),
+const ValidatorListLayout = BufferLayout.struct([
+    BufferLayout.u8('accountType'),
+    BufferLayout.u32('maxValidators'),
+    vec(ValidatorStakeInfoLayout, 'validators'),
 ]);
 
 async function getValidatorListAccount(connection, pubkey) {
@@ -718,10 +787,10 @@ async function getValidatorListAccount(connection, pubkey) {
     };
 }
 async function prepareWithdrawAccounts(connection, stakePool, stakePoolAddress, amount, compareFn, skipFee) {
-    var _a, _b;
+    var _a, _b, _c;
     const validatorListAcc = await connection.getAccountInfo(stakePool.validatorList);
-    const validatorList = ValidatorListLayout.decode(validatorListAcc === null || validatorListAcc === void 0 ? void 0 : validatorListAcc.data);
-    if (!(validatorList === null || validatorList === void 0 ? void 0 : validatorList.validators) || (validatorList === null || validatorList === void 0 ? void 0 : validatorList.validators.length) == 0) {
+    const validatorList = ValidatorListLayout.decode(Uint8Array.from((_a = validatorListAcc === null || validatorListAcc === void 0 ? void 0 : validatorListAcc.data) !== null && _a !== void 0 ? _a : []));
+    if (!(validatorList === null || validatorList === void 0 ? void 0 : validatorList.validators) || (validatorList === null || validatorList === void 0 ? void 0 : validatorList.validators.length) === 0) {
         throw new Error('No accounts found');
     }
     const minBalanceForRentExemption = await connection.getMinimumBalanceForRentExemption(web3_js.StakeProgram.space);
@@ -734,7 +803,7 @@ async function prepareWithdrawAccounts(connection, stakePool, stakePoolAddress, 
         }
         const stakeAccountAddress = await findStakeProgramAddress(STAKE_POOL_PROGRAM_ID, validator.voteAccountAddress, stakePoolAddress);
         if (!validator.activeStakeLamports.isZero()) {
-            const isPreferred = (_a = stakePool === null || stakePool === void 0 ? void 0 : stakePool.preferredWithdrawValidatorVoteAddress) === null || _a === void 0 ? void 0 : _a.equals(validator.voteAccountAddress);
+            const isPreferred = (_b = stakePool === null || stakePool === void 0 ? void 0 : stakePool.preferredWithdrawValidatorVoteAddress) === null || _b === void 0 ? void 0 : _b.equals(validator.voteAccountAddress);
             accounts.push({
                 type: isPreferred ? 'preferred' : 'active',
                 voteAddress: validator.voteAccountAddress,
@@ -754,9 +823,9 @@ async function prepareWithdrawAccounts(connection, stakePool, stakePoolAddress, 
         }
     }
     // Sort from highest to lowest balance
-    accounts = accounts.sort(compareFn ? compareFn : (a, b) => b.lamports - a.lamports);
+    accounts = accounts.sort(compareFn || ((a, b) => b.lamports - a.lamports));
     const reserveStake = await connection.getAccountInfo(stakePool.reserveStake);
-    const reserveStakeBalance = ((_b = reserveStake === null || reserveStake === void 0 ? void 0 : reserveStake.lamports) !== null && _b !== void 0 ? _b : 0) - minBalanceForRentExemption - 1;
+    const reserveStakeBalance = ((_c = reserveStake === null || reserveStake === void 0 ? void 0 : reserveStake.lamports) !== null && _c !== void 0 ? _c : 0) - minBalanceForRentExemption - 1;
     if (reserveStakeBalance > 0) {
         accounts.push({
             type: 'reserve',
@@ -773,9 +842,9 @@ async function prepareWithdrawAccounts(connection, stakePool, stakePoolAddress, 
         denominator: fee.denominator,
     };
     for (const type of ['preferred', 'active', 'transient', 'reserve']) {
-        const filteredAccounts = accounts.filter((a) => a.type == type);
+        const filteredAccounts = accounts.filter((a) => a.type === type);
         for (const { stakeAddress, voteAddress, lamports } of filteredAccounts) {
-            if (lamports <= minBalance && type == 'transient') {
+            if (lamports <= minBalance && type === 'transient') {
                 continue;
             }
             let availableForWithdrawal = calcPoolTokensForDeposit(stakePool, lamports);
@@ -789,11 +858,11 @@ async function prepareWithdrawAccounts(connection, stakePool, stakePoolAddress, 
             // Those accounts will be withdrawn completely with `claim` instruction
             withdrawFrom.push({ stakeAddress, voteAddress, poolAmount });
             remainingAmount -= poolAmount;
-            if (remainingAmount == 0) {
+            if (remainingAmount === 0) {
                 break;
             }
         }
-        if (remainingAmount == 0) {
+        if (remainingAmount === 0) {
             break;
         }
     }
@@ -879,7 +948,9 @@ const TOKEN_METADATA_LAYOUT = BufferLayout__namespace.struct([
     BufferLayout__namespace.blob(METADATA_MAX_SYMBOL_LENGTH, 'symbol'),
     BufferLayout__namespace.blob(METADATA_MAX_URI_LENGTH, 'uri'),
 ]);
-const feeLayout = (property) => BufferLayout__namespace.struct([BufferLayout__namespace.nu64('denominator'), BufferLayout__namespace.nu64('numerator')], property);
+function feeLayout(property) {
+    return BufferLayout__namespace.struct([BufferLayout__namespace.nu64('denominator'), BufferLayout__namespace.nu64('numerator')], property);
+}
 /**
  * An enumeration of valid stake InstructionType's
  * @internal
@@ -1557,7 +1628,7 @@ async function getStakeAccount(connection, stakeAccount) {
         throw new Error('Invalid stake account');
     }
     const program = result.data.program;
-    if (program != 'stake') {
+    if (program !== 'stake') {
         throw new Error('Not a stake account');
     }
     return create(result.data.parsed, StakeAccount);
@@ -1698,7 +1769,7 @@ async function depositSol(connection, stakePoolAddress, from, lamports, destinat
  * Creates instructions required to withdraw stake from a stake pool.
  */
 async function withdrawStake(connection, stakePoolAddress, tokenOwner, amount, useReserve = false, voteAccountAddress, stakeReceiver, poolTokenAccount, validatorComparator) {
-    var _c, _d, _e, _f;
+    var _c, _d, _e, _f, _g;
     const stakePool = await getStakePoolAccount(connection, stakePoolAddress);
     const poolAmount = solToLamports(amount);
     if (!poolTokenAccount) {
@@ -1724,12 +1795,13 @@ async function withdrawStake(connection, stakePoolAddress, tokenOwner, amount, u
             poolAmount,
         });
     }
-    else if (stakeReceiverAccount && (stakeReceiverAccount === null || stakeReceiverAccount === void 0 ? void 0 : stakeReceiverAccount.type) == 'delegated') {
-        const voteAccount = (_d = (_c = stakeReceiverAccount.info) === null || _c === void 0 ? void 0 : _c.stake) === null || _d === void 0 ? void 0 : _d.delegation.voter;
-        if (!voteAccount)
-            throw new Error(`Invalid stake reciever ${stakeReceiver} delegation`);
+    else if ((stakeReceiverAccount === null || stakeReceiverAccount === void 0 ? void 0 : stakeReceiverAccount.type) === 'delegated') {
+        const voteAccount = (_d = (_c = stakeReceiverAccount === null || stakeReceiverAccount === void 0 ? void 0 : stakeReceiverAccount.info) === null || _c === void 0 ? void 0 : _c.stake) === null || _d === void 0 ? void 0 : _d.delegation.voter;
+        if (!voteAccount) {
+            throw new Error(`Invalid stake receiver ${stakeReceiver} delegation`);
+        }
         const validatorListAccount = await connection.getAccountInfo(stakePool.account.data.validatorList);
-        const validatorList = ValidatorListLayout.decode(validatorListAccount === null || validatorListAccount === void 0 ? void 0 : validatorListAccount.data);
+        const validatorList = ValidatorListLayout.decode(Uint8Array.from((_e = validatorListAccount === null || validatorListAccount === void 0 ? void 0 : validatorListAccount.data) !== null && _e !== void 0 ? _e : []));
         const isValidVoter = validatorList.validators.find((val) => val.voteAccountAddress.equals(voteAccount));
         if (voteAccountAddress && voteAccountAddress !== voteAccount) {
             throw new Error(`Provided withdrawal vote account ${voteAccountAddress} does not match delegation on stake receiver account ${voteAccount},
@@ -1739,7 +1811,7 @@ async function withdrawStake(connection, stakePoolAddress, tokenOwner, amount, u
             const stakeAccountAddress = findStakeProgramAddress(STAKE_POOL_PROGRAM_ID, voteAccount, stakePoolAddress);
             const stakeAccount = await connection.getAccountInfo(stakeAccountAddress);
             if (!stakeAccount) {
-                throw new Error(`Preferred withdraw valdator's stake account is invalid`);
+                throw new Error("Preferred withdraw validator's stake account is invalid");
             }
             const availableForWithdrawal = calcLamportsWithdrawAmount(stakePool.account.data, stakeAccount.lamports - MINIMUM_ACTIVE_STAKE - stakeAccountRentExemption);
             if (availableForWithdrawal < poolAmount) {
@@ -1795,9 +1867,9 @@ async function withdrawStake(connection, stakePoolAddress, tokenOwner, amount, u
         // Convert pool tokens amount to lamports
         const solWithdrawAmount = Math.ceil(calcLamportsWithdrawAmount(stakePool.account.data, withdrawAccount.poolAmount));
         let infoMsg = `Withdrawing ◎${solWithdrawAmount},
-      from stake account ${(_e = withdrawAccount.stakeAddress) === null || _e === void 0 ? void 0 : _e.toBase58()}`;
+      from stake account ${(_f = withdrawAccount.stakeAddress) === null || _f === void 0 ? void 0 : _f.toBase58()}`;
         if (withdrawAccount.voteAddress) {
-            infoMsg = `${infoMsg}, delegated to ${(_f = withdrawAccount.voteAddress) === null || _f === void 0 ? void 0 : _f.toBase58()}`;
+            infoMsg = `${infoMsg}, delegated to ${(_g = withdrawAccount.voteAddress) === null || _g === void 0 ? void 0 : _g.toBase58()}`;
         }
         console.info(infoMsg);
         let stakeToReceive;
@@ -1825,7 +1897,7 @@ async function withdrawStake(connection, stakePoolAddress, tokenOwner, amount, u
         }));
         i++;
     }
-    if (stakeReceiver && stakeReceiverAccount && stakeReceiverAccount.type === 'delegated') {
+    if (stakeReceiver && (stakeReceiverAccount === null || stakeReceiverAccount === void 0 ? void 0 : stakeReceiverAccount.type) === 'delegated') {
         signers.forEach((newStakeKeypair) => {
             instructions.concat(web3_js.StakeProgram.merge({
                 stakePubkey: stakeReceiver,
@@ -1865,7 +1937,7 @@ async function withdrawSol(connection, stakePoolAddress, tokenOwner, solReceiver
         if (!expectedSolWithdrawAuthority) {
             throw new Error('SOL withdraw authority specified in arguments but stake pool has none');
         }
-        if (solWithdrawAuthority.toBase58() != expectedSolWithdrawAuthority.toBase58()) {
+        if (solWithdrawAuthority.toBase58() !== expectedSolWithdrawAuthority.toBase58()) {
             throw new Error(`Invalid deposit withdraw specified, expected ${expectedSolWithdrawAuthority.toBase58()}, received ${solWithdrawAuthority.toBase58()}`);
         }
     }
@@ -1893,7 +1965,7 @@ async function withdrawSol(connection, stakePoolAddress, tokenOwner, solReceiver
 async function increaseValidatorStake(connection, stakePoolAddress, validatorVote, lamports, ephemeralStakeSeed) {
     const stakePool = await getStakePoolAccount(connection, stakePoolAddress);
     const validatorList = await getValidatorListAccount(connection, stakePool.account.data.validatorList);
-    const validatorInfo = validatorList.account.data.validators.find((v) => v.voteAccountAddress.toBase58() == validatorVote.toBase58());
+    const validatorInfo = validatorList.account.data.validators.find((v) => v.voteAccountAddress.toBase58() === validatorVote.toBase58());
     if (!validatorInfo) {
         throw new Error('Vote account not found in validator list');
     }
@@ -1902,7 +1974,7 @@ async function increaseValidatorStake(connection, stakePoolAddress, validatorVot
     const transientStake = findTransientStakeProgramAddress(STAKE_POOL_PROGRAM_ID, validatorInfo.voteAccountAddress, stakePoolAddress, transientStakeSeed);
     const validatorStake = findStakeProgramAddress(STAKE_POOL_PROGRAM_ID, validatorInfo.voteAccountAddress, stakePoolAddress);
     const instructions = [];
-    if (ephemeralStakeSeed != undefined) {
+    if (ephemeralStakeSeed !== undefined) {
         const ephemeralStake = findEphemeralStakeProgramAddress(STAKE_POOL_PROGRAM_ID, stakePoolAddress, new BN__default["default"](ephemeralStakeSeed));
         StakePoolInstruction.increaseAdditionalValidatorStake({
             stakePool: stakePoolAddress,
@@ -1943,7 +2015,7 @@ async function increaseValidatorStake(connection, stakePoolAddress, validatorVot
 async function decreaseValidatorStake(connection, stakePoolAddress, validatorVote, lamports, ephemeralStakeSeed) {
     const stakePool = await getStakePoolAccount(connection, stakePoolAddress);
     const validatorList = await getValidatorListAccount(connection, stakePool.account.data.validatorList);
-    const validatorInfo = validatorList.account.data.validators.find((v) => v.voteAccountAddress.toBase58() == validatorVote.toBase58());
+    const validatorInfo = validatorList.account.data.validators.find((v) => v.voteAccountAddress.toBase58() === validatorVote.toBase58());
     if (!validatorInfo) {
         throw new Error('Vote account not found in validator list');
     }
@@ -1952,7 +2024,7 @@ async function decreaseValidatorStake(connection, stakePoolAddress, validatorVot
     const transientStakeSeed = validatorInfo.transientSeedSuffixStart.addn(1); // bump up by one to avoid reuse
     const transientStake = findTransientStakeProgramAddress(STAKE_POOL_PROGRAM_ID, validatorInfo.voteAccountAddress, stakePoolAddress, transientStakeSeed);
     const instructions = [];
-    if (ephemeralStakeSeed != undefined) {
+    if (ephemeralStakeSeed !== undefined) {
         const ephemeralStake = findEphemeralStakeProgramAddress(STAKE_POOL_PROGRAM_ID, stakePoolAddress, new BN__default["default"](ephemeralStakeSeed));
         instructions.push(StakePoolInstruction.decreaseAdditionalValidatorStake({
             stakePool: stakePoolAddress,
