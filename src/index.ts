@@ -90,7 +90,8 @@ interface InitializeProps {
   managerPoolAccount: PublicKey;
   fee: Fee;
   referralFee: number;
-  maxValidators: number;
+  // Default: 2950
+  maxValidators?: number;
 }
 
 interface UpdateStakePoolTokenMetadataProps {
