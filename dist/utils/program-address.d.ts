@@ -19,4 +19,4 @@ export declare function findEphemeralStakeProgramAddress(programId: PublicKey, s
 /**
  * Generates the token metadata address by {@link mint}
  */
-export declare function findTokenMetadataAddress(mint: PublicKey): PublicKey;
+export declare function findMetadataAddress(mint: PublicKey): PublicKey;

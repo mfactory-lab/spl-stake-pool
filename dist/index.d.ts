@@ -2,7 +2,7 @@ import type { AccountInfo, Connection, Signer, TransactionInstruction } from '@s
 import { Keypair, PublicKey } from '@solana/web3.js';
 import BN from 'bn.js';
 import type { ValidatorAccount } from './utils';
-import type { StakePool, ValidatorList } from './layouts';
+import type { Fee, StakePool, ValidatorList } from './layouts';
 import { StakeAccount } from './layouts';
 export type { StakePool, AccountType, ValidatorList, ValidatorStakeInfo } from './layouts';
 export { STAKE_POOL_PROGRAM_ID } from './constants';
@@ -20,10 +20,6 @@ export interface WithdrawAccount {
     voteAddress?: PublicKey;
     poolAmount: number;
 }
-export interface Fee {
-    denominator: BN;
-    numerator: BN;
-}
 /**
  * Wrapper class for a stake pool.
  * Each stake pool has a stake pool account and a validator list account.
@@ -32,65 +28,24 @@ export interface StakePoolAccounts {
     stakePool: StakePoolAccount | undefined;
     validatorList: ValidatorListAccount | undefined;
 }
-interface InitializeProps {
-    connection: Connection;
-    manager: Keypair;
-    stakePool?: Keypair;
-    validatorList?: Keypair;
-    poolMint: PublicKey;
-    reserveStake: PublicKey;
-    managerPoolAccount: PublicKey;
-    fee: Fee;
-    referralFee: number;
-    maxValidators?: number;
-}
-interface UpdateStakePoolTokenMetadataProps {
-    connection: Connection;
-    stakePool: StakePoolAccount | PublicKey;
-    tokenMetadata?: PublicKey;
-    name: string;
-    symbol: string;
-    uri: string;
-}
-interface CreateStakePoolTokenMetadataProps extends UpdateStakePoolTokenMetadataProps {
-    payer: PublicKey;
-}
-interface RedelegateProps {
-    connection: Connection;
-    stakePoolAddress: PublicKey;
-    sourceVoteAccount: PublicKey;
-    destinationVoteAccount: PublicKey;
-    sourceTransientStakeSeed: number | BN;
-    destinationTransientStakeSeed: number | BN;
-    ephemeralStakeSeed: number | BN;
-    lamports: number | BN;
-}
 /**
  * Retrieves and deserializes a StakePool account using a web3js connection and the stake pool address.
- * @param connection: An active web3js connection.
- * @param stakePoolAddress: The public key (address) of the stake pool account.
+ * @param connection An active web3js connection.
+ * @param stakePoolAddress The public key (address) of the stake pool account.
  */
 export declare function getStakePoolAccount(connection: Connection, stakePoolAddress: PublicKey): Promise<StakePoolAccount>;
 /**
  * Retrieves and deserializes a Stake account using a web3js connection and the stake address.
- * @param connection: An active web3js connection.
- * @param stakeAccount: The public key (address) of the stake account.
+ * @param connection An active web3js connection.
+ * @param stakeAccount The public key (address) of the stake account.
  */
 export declare function getStakeAccount(connection: Connection, stakeAccount: PublicKey): Promise<StakeAccount>;
 /**
  * Retrieves all StakePool and ValidatorList accounts that are running a particular StakePool program.
- * @param connection: An active web3js connection.
- * @param stakePoolProgramAddress: The public key (address) of the StakePool program.
+ * @param connection An active web3js connection.
+ * @param stakePoolProgramAddress The public key (address) of the StakePool program.
  */
-export declare function getStakePoolAccounts(connection: Connection, stakePoolProgramAddress: PublicKey): Promise<{
-    pubkey: PublicKey;
-    account: {
-        data: StakePool | ValidatorList | undefined;
-        executable: boolean;
-        lamports: number;
-        owner: PublicKey;
-    };
-}[]>;
+export declare function getStakePoolAccounts(connection: Connection, stakePoolProgramAddress: PublicKey): Promise<(StakePoolAccount | ValidatorListAccount)[] | undefined>;
 /**
  * Creates instructions required to deposit stake to stake pool.
  */
@@ -206,12 +161,36 @@ export declare function stakePoolInfo(connection: Connection, stakePoolAddress: 
         updateRequired: boolean;
     };
 }>;
+interface RedelegateProps {
+    connection: Connection;
+    stakePoolAddress: PublicKey;
+    sourceVoteAccount: PublicKey;
+    destinationVoteAccount: PublicKey;
+    sourceTransientStakeSeed: number | BN;
+    destinationTransientStakeSeed: number | BN;
+    ephemeralStakeSeed: number | BN;
+    lamports: number | BN;
+}
 /**
  * Creates instructions required to redelegate stake.
  */
 export declare function redelegate(props: RedelegateProps): Promise<{
     instructions: TransactionInstruction[];
 }>;
+interface InitializeProps {
+    connection: Connection;
+    manager: Keypair;
+    stakePool?: Keypair;
+    validatorList?: Keypair;
+    poolMint: PublicKey;
+    reserveStake: PublicKey;
+    managerPoolAccount: PublicKey;
+    fee?: Fee;
+    depositFee?: Fee;
+    withdrawalFee?: Fee;
+    referralFee?: number;
+    maxValidators?: number;
+}
 /**
  * Initializes a new StakePool.
  */
@@ -219,12 +198,23 @@ export declare function initialize(props: InitializeProps): Promise<{
     instructions: TransactionInstruction[];
     signers: Signer[];
 }>;
+interface CreateStakePoolTokenMetadataProps extends UpdateStakePoolTokenMetadataProps {
+    payer: PublicKey;
+}
 /**
  * Creates instructions required to create pool token metadata.
  */
 export declare function createPoolTokenMetadata(props: CreateStakePoolTokenMetadataProps): Promise<{
     instructions: TransactionInstruction[];
 }>;
+interface UpdateStakePoolTokenMetadataProps {
+    connection: Connection;
+    stakePool: StakePoolAccount | PublicKey;
+    tokenMetadata?: PublicKey;
+    name: string;
+    symbol: string;
+    uri: string;
+}
 /**
  * Creates instructions required to update pool token metadata.
  */
@@ -234,7 +224,7 @@ export declare function updatePoolTokenMetadata(props: UpdateStakePoolTokenMetad
 /**
  * Creates instructions required to add a validator to the pool.
  */
-export declare function addValidatorToPool(connection: Connection, stakePoolAddress: PublicKey, validatorVote: PublicKey, funder: PublicKey): Promise<{
+export declare function addValidatorToPool(connection: Connection, stakePoolAddress: PublicKey, validatorVote: PublicKey, seed?: number): Promise<{
     instructions: TransactionInstruction[];
 }>;
 /**

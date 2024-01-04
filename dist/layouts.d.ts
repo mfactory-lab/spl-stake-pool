@@ -1,7 +1,11 @@
+/// <reference types="types/buffer-layout" />
 import { PublicKey } from '@solana/web3.js';
 import BN from 'bn.js';
 import type { Infer } from 'superstruct';
-import type { Fee } from './index';
+export interface Fee {
+    denominator: BN;
+    numerator: BN;
+}
 export interface Lockup {
     unixTimestamp: BN;
     epoch: BN;
@@ -14,13 +18,14 @@ export declare enum AccountType {
 }
 export declare const BigNumFromString: import("superstruct").Struct<BN, null>;
 export declare const PublicKeyFromString: import("superstruct").Struct<PublicKey, null>;
+export type StakeAccountType = Infer<typeof StakeAccountType>;
 export declare const StakeAccountType: import("superstruct").Struct<"uninitialized" | "initialized" | "delegated" | "rewardsPool", {
     uninitialized: "uninitialized";
     initialized: "initialized";
     delegated: "delegated";
     rewardsPool: "rewardsPool";
 }>;
-export declare type StakeAccountType = Infer<typeof StakeAccountType>;
+export type StakeMeta = Infer<typeof StakeMeta>;
 export declare const StakeMeta: import("superstruct").Struct<{
     rentExemptReserve: BN;
     authorized: {
@@ -51,7 +56,7 @@ export declare const StakeMeta: import("superstruct").Struct<{
         custodian: import("superstruct").Struct<PublicKey, null>;
     }>;
 }>;
-export declare type StakeMeta = Infer<typeof StakeMeta>;
+export type StakeAccountInfo = Infer<typeof StakeAccountInfo>;
 export declare const StakeAccountInfo: import("superstruct").Struct<{
     meta: {
         rentExemptReserve: BN;
@@ -132,7 +137,7 @@ export declare const StakeAccountInfo: import("superstruct").Struct<{
         creditsObserved: import("superstruct").Struct<number, null>;
     }>;
 }>;
-export declare type StakeAccountInfo = Infer<typeof StakeAccountInfo>;
+export type StakeAccount = Infer<typeof StakeAccount>;
 export declare const StakeAccount: import("superstruct").Struct<{
     type: "uninitialized" | "initialized" | "delegated" | "rewardsPool";
     info?: {
@@ -247,7 +252,6 @@ export declare const StakeAccount: import("superstruct").Struct<{
         }>;
     }>;
 }>;
-export declare type StakeAccount = Infer<typeof StakeAccount>;
 export interface StakePool {
     accountType: AccountType;
     manager: PublicKey;
@@ -280,7 +284,7 @@ export interface StakePool {
     lastEpochPoolTokenSupply: BN;
     lastEpochTotalLamports: BN;
 }
-export declare const StakePoolLayout: import("@solana/buffer-layout").Structure<StakePool>;
+export declare const StakePoolLayout: import("buffer-layout").Layout<StakePool>;
 export declare enum ValidatorStakeInfoStatus {
     Active = 0,
     DeactivatingTransient = 1,
@@ -295,10 +299,10 @@ export interface ValidatorStakeInfo {
     transientSeedSuffixEnd: BN;
     lastUpdateEpoch: BN;
 }
-export declare const ValidatorStakeInfoLayout: import("@solana/buffer-layout").Structure<ValidatorStakeInfo>;
+export declare const ValidatorStakeInfoLayout: import("buffer-layout").Layout<ValidatorStakeInfo>;
 export interface ValidatorList {
     accountType: number;
     maxValidators: number;
     validators: ValidatorStakeInfo[];
 }
-export declare const ValidatorListLayout: import("@solana/buffer-layout").Structure<ValidatorList>;
+export declare const ValidatorListLayout: import("buffer-layout").Layout<ValidatorList>;

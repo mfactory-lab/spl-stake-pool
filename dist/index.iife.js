@@ -3,7 +3,7 @@ var solanaStakePool = (function (exports) {
 
 	var commonjsGlobal = typeof globalThis !== 'undefined' ? globalThis : typeof window !== 'undefined' ? window : typeof global !== 'undefined' ? global : typeof self !== 'undefined' ? self : {};
 
-	function getDefaultExportFromCjs (x) {
+	function getDefaultExportFromCjs$1 (x) {
 		return x && x.__esModule && Object.prototype.hasOwnProperty.call(x, 'default') ? x['default'] : x;
 	}
 
@@ -13,10 +13,7 @@ var solanaStakePool = (function (exports) {
 		if (typeof f == "function") {
 			var a = function a () {
 				if (this instanceof a) {
-					var args = [null];
-					args.push.apply(args, arguments);
-					var Ctor = Function.bind.apply(f, args);
-					return new Ctor();
+	        return Reflect.construct(f, arguments, this.constructor);
 				}
 				return f.apply(this, arguments);
 			};
@@ -48,9 +45,9 @@ var solanaStakePool = (function (exports) {
 	var Arr = typeof Uint8Array !== 'undefined' ? Uint8Array : Array;
 
 	var code = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-	for (var i = 0, len = code.length; i < len; ++i) {
-	  lookup[i] = code[i];
-	  revLookup[code.charCodeAt(i)] = i;
+	for (var i$1 = 0, len = code.length; i$1 < len; ++i$1) {
+	  lookup[i$1] = code[i$1];
+	  revLookup[code.charCodeAt(i$1)] = i$1;
 	}
 
 	// Support decoding URL-safe base64 strings, as Node.js does.
@@ -2384,25 +2381,26 @@ var solanaStakePool = (function (exports) {
 		} 
 	} (buffer));
 
-	function number$1(n) {
+	function number$2(n) {
 	    if (!Number.isSafeInteger(n) || n < 0)
 	        throw new Error(`Wrong positive integer: ${n}`);
 	}
-	function bool$1(b) {
-	    if (typeof b !== 'boolean')
-	        throw new Error(`Expected boolean, not ${b}`);
+	// copied from utils
+	function isBytes$2(a) {
+	    return (a instanceof Uint8Array ||
+	        (a != null && typeof a === 'object' && a.constructor.name === 'Uint8Array'));
 	}
 	function bytes(b, ...lengths) {
-	    if (!(b instanceof Uint8Array))
-	        throw new TypeError('Expected Uint8Array');
+	    if (!isBytes$2(b))
+	        throw new Error('Expected Uint8Array');
 	    if (lengths.length > 0 && !lengths.includes(b.length))
-	        throw new TypeError(`Expected Uint8Array of length ${lengths}, not of length=${b.length}`);
+	        throw new Error(`Expected Uint8Array of length ${lengths}, not of length=${b.length}`);
 	}
 	function hash(hash) {
 	    if (typeof hash !== 'function' || typeof hash.create !== 'function')
 	        throw new Error('Hash should be wrapped by utils.wrapConstructor');
-	    number$1(hash.outputLen);
-	    number$1(hash.blockLen);
+	    number$2(hash.outputLen);
+	    number$2(hash.blockLen);
 	}
 	function exists(instance, checkFinished = true) {
 	    if (instance.destroyed)
@@ -2417,59 +2415,70 @@ var solanaStakePool = (function (exports) {
 	        throw new Error(`digestInto() expects output buffer of length at least ${min}`);
 	    }
 	}
-	const assert$2 = {
-	    number: number$1,
-	    bool: bool$1,
-	    bytes,
-	    hash,
-	    exists,
-	    output,
-	};
-	var assert$3 = assert$2;
 
-	const crypto = typeof globalThis === 'object' && 'crypto' in globalThis ? globalThis.crypto : undefined;
+	const crypto$1 = typeof globalThis === 'object' && 'crypto' in globalThis ? globalThis.crypto : undefined;
 
 	/*! noble-hashes - MIT License (c) 2022 Paul Miller (paulmillr.com) */
+	// We use WebCrypto aka globalThis.crypto, which exists in browsers and node.js 16+.
+	// node.js versions earlier than v19 don't declare it in global scope.
+	// For node.js, package.json#exports field mapping rewrites import
+	// from `crypto` to `cryptoNode`, which imports native module.
+	// Makes the utils un-importable in browsers without a bundler.
+	// Once node.js 18 is deprecated (2025-04-30), we can just drop the import.
+	const u32$1 = (arr) => new Uint32Array(arr.buffer, arr.byteOffset, Math.floor(arr.byteLength / 4));
+	function isBytes$1(a) {
+	    return (a instanceof Uint8Array ||
+	        (a != null && typeof a === 'object' && a.constructor.name === 'Uint8Array'));
+	}
 	// Cast array to view
 	const createView = (arr) => new DataView(arr.buffer, arr.byteOffset, arr.byteLength);
 	// The rotate right (circular right shift) operation for uint32
 	const rotr = (word, shift) => (word << (32 - shift)) | (word >>> shift);
 	// big-endian hardware is rare. Just in case someone still decides to run hashes:
 	// early-throw an error because we don't support BE yet.
+	// Other libraries would silently corrupt the data instead of throwing an error,
+	// when they don't support it.
 	const isLE = new Uint8Array(new Uint32Array([0x11223344]).buffer)[0] === 0x44;
 	if (!isLE)
 	    throw new Error('Non little-endian hardware is not supported');
-	Array.from({ length: 256 }, (v, i) => i.toString(16).padStart(2, '0'));
+	/**
+	 * @example utf8ToBytes('abc') // new Uint8Array([97, 98, 99])
+	 */
 	function utf8ToBytes$1(str) {
-	    if (typeof str !== 'string') {
-	        throw new TypeError(`utf8ToBytes expected string, got ${typeof str}`);
-	    }
-	    return new TextEncoder().encode(str);
+	    if (typeof str !== 'string')
+	        throw new Error(`utf8ToBytes expected string, got ${typeof str}`);
+	    return new Uint8Array(new TextEncoder().encode(str)); // https://bugzil.la/1681809
 	}
+	/**
+	 * Normalizes (non-hex) string or Uint8Array to Uint8Array.
+	 * Warning: when Uint8Array is passed, it would NOT get copied.
+	 * Keep in mind for future mutable operations.
+	 */
 	function toBytes(data) {
 	    if (typeof data === 'string')
 	        data = utf8ToBytes$1(data);
-	    if (!(data instanceof Uint8Array))
-	        throw new TypeError(`Expected input type is Uint8Array (got ${typeof data})`);
+	    if (!isBytes$1(data))
+	        throw new Error(`expected Uint8Array, got ${typeof data}`);
 	    return data;
 	}
 	/**
-	 * Concats Uint8Array-s into one; like `Buffer.concat([buf1, buf2])`
-	 * @example concatBytes(buf1, buf2)
+	 * Copies several Uint8Arrays into one.
 	 */
 	function concatBytes$1(...arrays) {
-	    if (!arrays.every((a) => a instanceof Uint8Array))
-	        throw new Error('Uint8Array list expected');
-	    if (arrays.length === 1)
-	        return arrays[0];
-	    const length = arrays.reduce((a, arr) => a + arr.length, 0);
-	    const result = new Uint8Array(length);
-	    for (let i = 0, pad = 0; i < arrays.length; i++) {
-	        const arr = arrays[i];
-	        result.set(arr, pad);
-	        pad += arr.length;
+	    let sum = 0;
+	    for (let i = 0; i < arrays.length; i++) {
+	        const a = arrays[i];
+	        if (!isBytes$1(a))
+	            throw new Error('Uint8Array expected');
+	        sum += a.length;
 	    }
-	    return result;
+	    const res = new Uint8Array(sum);
+	    for (let i = 0, pad = 0; i < arrays.length; i++) {
+	        const a = arrays[i];
+	        res.set(a, pad);
+	        pad += a.length;
+	    }
+	    return res;
 	}
 	// For runtime check if class implements interface
 	class Hash {
@@ -2478,20 +2487,20 @@ var solanaStakePool = (function (exports) {
 	        return this._cloneInto();
 	    }
 	}
-	function wrapConstructor(hashConstructor) {
-	    const hashC = (message) => hashConstructor().update(toBytes(message)).digest();
-	    const tmp = hashConstructor();
+	function wrapConstructor(hashCons) {
+	    const hashC = (msg) => hashCons().update(toBytes(msg)).digest();
+	    const tmp = hashCons();
 	    hashC.outputLen = tmp.outputLen;
 	    hashC.blockLen = tmp.blockLen;
-	    hashC.create = () => hashConstructor();
+	    hashC.create = () => hashCons();
 	    return hashC;
 	}
 	/**
-	 * Secure PRNG. Uses `globalThis.crypto` or node.js crypto module.
+	 * Secure PRNG. Uses `crypto.getRandomValues`, which defers to OS.
 	 */
 	function randomBytes(bytesLength = 32) {
-	    if (crypto && typeof crypto.getRandomValues === 'function') {
-	        return crypto.getRandomValues(new Uint8Array(bytesLength));
+	    if (crypto$1 && typeof crypto$1.getRandomValues === 'function') {
+	        return crypto$1.getRandomValues(new Uint8Array(bytesLength));
 	    }
 	    throw new Error('crypto.getRandomValues must be defined');
 	}
@@ -2525,7 +2534,7 @@ var solanaStakePool = (function (exports) {
 	        this.view = createView(this.buffer);
 	    }
 	    update(data) {
-	        assert$3.exists(this);
+	        exists(this);
 	        const { view, buffer, blockLen } = this;
 	        data = toBytes(data);
 	        const len = data.length;
@@ -2551,8 +2560,8 @@ var solanaStakePool = (function (exports) {
 	        return this;
 	    }
 	    digestInto(out) {
-	        assert$3.exists(this);
-	        assert$3.output(out, this);
+	        exists(this);
+	        output(out, this);
 	        this.finished = true;
 	        // Padding
 	        // We can avoid allocation of buffer for padding completely if it
@@ -2608,8 +2617,8 @@ var solanaStakePool = (function (exports) {
 	    }
 	}
 
-	const U32_MASK64 = BigInt(2 ** 32 - 1);
-	const _32n = BigInt(32);
+	const U32_MASK64 = /* @__PURE__ */ BigInt(2 ** 32 - 1);
+	const _32n = /* @__PURE__ */ BigInt(32);
 	// We are not using BigUint64Array, because they are extremely slow as per 2022
 	function fromBig(n, le = false) {
 	    if (le)
@@ -2627,7 +2636,7 @@ var solanaStakePool = (function (exports) {
 	}
 	const toBig = (h, l) => (BigInt(h >>> 0) << _32n) | BigInt(l >>> 0);
 	// for Shift in [0, 32)
-	const shrSH = (h, l, s) => h >>> s;
+	const shrSH = (h, _l, s) => h >>> s;
 	const shrSL = (h, l, s) => (h << (32 - s)) | (l >>> s);
 	// Right rotate for Shift in [1, 32)
 	const rotrSH = (h, l, s) => (h >>> s) | (l << (32 - s));
@@ -2636,8 +2645,8 @@ var solanaStakePool = (function (exports) {
 	const rotrBH = (h, l, s) => (h << (64 - s)) | (l >>> (s - 32));
 	const rotrBL = (h, l, s) => (h >>> (s - 32)) | (l << (64 - s));
 	// Right rotate for shift===32 (just swaps l&h)
-	const rotr32H = (h, l) => l;
-	const rotr32L = (h, l) => h;
+	const rotr32H = (_h, l) => l;
+	const rotr32L = (h, _l) => h;
 	// Left rotate for Shift in [1, 32)
 	const rotlSH = (h, l, s) => (h << s) | (l >>> (32 - s));
 	const rotlSL = (h, l, s) => (l << s) | (h >>> (32 - s));
@@ -2646,7 +2655,6 @@ var solanaStakePool = (function (exports) {
 	const rotlBL = (h, l, s) => (h << (s - 32)) | (l >>> (64 - s));
 	// JS uses 32-bit signed integers for bitwise operations which means we cannot
 	// simple take carry out of low bit sum by shift, we need to use division.
-	// Removing "export" has 5% perf penalty -_-
 	function add(Ah, Al, Bh, Bl) {
 	    const l = (Al >>> 0) + (Bl >>> 0);
 	    return { h: (Ah + Bh + ((l / 2 ** 32) | 0)) | 0, l: l | 0 };
@@ -2659,7 +2667,7 @@ var solanaStakePool = (function (exports) {
 	const add5L = (Al, Bl, Cl, Dl, El) => (Al >>> 0) + (Bl >>> 0) + (Cl >>> 0) + (Dl >>> 0) + (El >>> 0);
 	const add5H = (low, Ah, Bh, Ch, Dh, Eh) => (Ah + Bh + Ch + Dh + Eh + ((low / 2 ** 32) | 0)) | 0;
 	// prettier-ignore
-	const u64$3 = {
+	const u64$2 = {
 	    fromBig, split, toBig,
 	    shrSH, shrSL,
 	    rotrSH, rotrSL, rotrBH, rotrBL,
@@ -2667,11 +2675,10 @@ var solanaStakePool = (function (exports) {
 	    rotlSH, rotlSL, rotlBH, rotlBL,
 	    add, add3L, add3H, add4L, add4H, add5H, add5L,
 	};
-	var u64$4 = u64$3;
 
 	// Round contants (first 32 bits of the fractional parts of the cube roots of the first 80 primes 2..409):
 	// prettier-ignore
-	const [SHA512_Kh, SHA512_Kl] = u64$4.split([
+	const [SHA512_Kh, SHA512_Kl] = /* @__PURE__ */ (() => u64$2.split([
 	    '0x428a2f98d728ae22', '0x7137449123ef65cd', '0xb5c0fbcfec4d3b2f', '0xe9b5dba58189dbbc',
 	    '0x3956c25bf348b538', '0x59f111f1b605d019', '0x923f82a4af194f9b', '0xab1c5ed5da6d8118',
 	    '0xd807aa98a3030242', '0x12835b0145706fbe', '0x243185be4ee4b28c', '0x550c7dc3d5ffb4e2',
@@ -2692,10 +2699,10 @@ var solanaStakePool = (function (exports) {
 	    '0x06f067aa72176fba', '0x0a637dc5a2c898a6', '0x113f9804bef90dae', '0x1b710b35131c471b',
 	    '0x28db77f523047d84', '0x32caab7b40c72493', '0x3c9ebe0a15c9bebc', '0x431d67c49c100d4c',
 	    '0x4cc5d4becb3e42b6', '0x597f299cfc657e2a', '0x5fcb6fab3ad6faec', '0x6c44198c4a475817'
-	].map(n => BigInt(n)));
+	].map(n => BigInt(n))))();
 	// Temporary buffer, not used to store anything between runs
-	const SHA512_W_H = new Uint32Array(80);
-	const SHA512_W_L = new Uint32Array(80);
+	const SHA512_W_H = /* @__PURE__ */ new Uint32Array(80);
+	const SHA512_W_L = /* @__PURE__ */ new Uint32Array(80);
 	class SHA512 extends SHA2 {
 	    constructor() {
 	        super(128, 64, 16, false);
@@ -2754,16 +2761,16 @@ var solanaStakePool = (function (exports) {
 	            // s0 := (w[i-15] rightrotate 1) xor (w[i-15] rightrotate 8) xor (w[i-15] rightshift 7)
 	            const W15h = SHA512_W_H[i - 15] | 0;
 	            const W15l = SHA512_W_L[i - 15] | 0;
-	            const s0h = u64$4.rotrSH(W15h, W15l, 1) ^ u64$4.rotrSH(W15h, W15l, 8) ^ u64$4.shrSH(W15h, W15l, 7);
-	            const s0l = u64$4.rotrSL(W15h, W15l, 1) ^ u64$4.rotrSL(W15h, W15l, 8) ^ u64$4.shrSL(W15h, W15l, 7);
+	            const s0h = u64$2.rotrSH(W15h, W15l, 1) ^ u64$2.rotrSH(W15h, W15l, 8) ^ u64$2.shrSH(W15h, W15l, 7);
+	            const s0l = u64$2.rotrSL(W15h, W15l, 1) ^ u64$2.rotrSL(W15h, W15l, 8) ^ u64$2.shrSL(W15h, W15l, 7);
 	            // s1 := (w[i-2] rightrotate 19) xor (w[i-2] rightrotate 61) xor (w[i-2] rightshift 6)
 	            const W2h = SHA512_W_H[i - 2] | 0;
 	            const W2l = SHA512_W_L[i - 2] | 0;
-	            const s1h = u64$4.rotrSH(W2h, W2l, 19) ^ u64$4.rotrBH(W2h, W2l, 61) ^ u64$4.shrSH(W2h, W2l, 6);
-	            const s1l = u64$4.rotrSL(W2h, W2l, 19) ^ u64$4.rotrBL(W2h, W2l, 61) ^ u64$4.shrSL(W2h, W2l, 6);
+	            const s1h = u64$2.rotrSH(W2h, W2l, 19) ^ u64$2.rotrBH(W2h, W2l, 61) ^ u64$2.shrSH(W2h, W2l, 6);
+	            const s1l = u64$2.rotrSL(W2h, W2l, 19) ^ u64$2.rotrBL(W2h, W2l, 61) ^ u64$2.shrSL(W2h, W2l, 6);
 	            // SHA256_W[i] = s0 + s1 + SHA256_W[i - 7] + SHA256_W[i - 16];
-	            const SUMl = u64$4.add4L(s0l, s1l, SHA512_W_L[i - 7], SHA512_W_L[i - 16]);
-	            const SUMh = u64$4.add4H(SUMl, s0h, s1h, SHA512_W_H[i - 7], SHA512_W_H[i - 16]);
+	            const SUMl = u64$2.add4L(s0l, s1l, SHA512_W_L[i - 7], SHA512_W_L[i - 16]);
+	            const SUMh = u64$2.add4H(SUMl, s0h, s1h, SHA512_W_H[i - 7], SHA512_W_H[i - 16]);
 	            SHA512_W_H[i] = SUMh | 0;
 	            SHA512_W_L[i] = SUMl | 0;
 	        }
@@ -2771,19 +2778,19 @@ var solanaStakePool = (function (exports) {
 	        // Compression function main loop, 80 rounds
 	        for (let i = 0; i < 80; i++) {
 	            // S1 := (e rightrotate 14) xor (e rightrotate 18) xor (e rightrotate 41)
-	            const sigma1h = u64$4.rotrSH(Eh, El, 14) ^ u64$4.rotrSH(Eh, El, 18) ^ u64$4.rotrBH(Eh, El, 41);
-	            const sigma1l = u64$4.rotrSL(Eh, El, 14) ^ u64$4.rotrSL(Eh, El, 18) ^ u64$4.rotrBL(Eh, El, 41);
+	            const sigma1h = u64$2.rotrSH(Eh, El, 14) ^ u64$2.rotrSH(Eh, El, 18) ^ u64$2.rotrBH(Eh, El, 41);
+	            const sigma1l = u64$2.rotrSL(Eh, El, 14) ^ u64$2.rotrSL(Eh, El, 18) ^ u64$2.rotrBL(Eh, El, 41);
 	            //const T1 = (H + sigma1 + Chi(E, F, G) + SHA256_K[i] + SHA256_W[i]) | 0;
 	            const CHIh = (Eh & Fh) ^ (~Eh & Gh);
 	            const CHIl = (El & Fl) ^ (~El & Gl);
 	            // T1 = H + sigma1 + Chi(E, F, G) + SHA512_K[i] + SHA512_W[i]
 	            // prettier-ignore
-	            const T1ll = u64$4.add5L(Hl, sigma1l, CHIl, SHA512_Kl[i], SHA512_W_L[i]);
-	            const T1h = u64$4.add5H(T1ll, Hh, sigma1h, CHIh, SHA512_Kh[i], SHA512_W_H[i]);
+	            const T1ll = u64$2.add5L(Hl, sigma1l, CHIl, SHA512_Kl[i], SHA512_W_L[i]);
+	            const T1h = u64$2.add5H(T1ll, Hh, sigma1h, CHIh, SHA512_Kh[i], SHA512_W_H[i]);
 	            const T1l = T1ll | 0;
 	            // S0 := (a rightrotate 28) xor (a rightrotate 34) xor (a rightrotate 39)
-	            const sigma0h = u64$4.rotrSH(Ah, Al, 28) ^ u64$4.rotrBH(Ah, Al, 34) ^ u64$4.rotrBH(Ah, Al, 39);
-	            const sigma0l = u64$4.rotrSL(Ah, Al, 28) ^ u64$4.rotrBL(Ah, Al, 34) ^ u64$4.rotrBL(Ah, Al, 39);
+	            const sigma0h = u64$2.rotrSH(Ah, Al, 28) ^ u64$2.rotrBH(Ah, Al, 34) ^ u64$2.rotrBH(Ah, Al, 39);
+	            const sigma0l = u64$2.rotrSL(Ah, Al, 28) ^ u64$2.rotrBL(Ah, Al, 34) ^ u64$2.rotrBL(Ah, Al, 39);
 	            const MAJh = (Ah & Bh) ^ (Ah & Ch) ^ (Bh & Ch);
 	            const MAJl = (Al & Bl) ^ (Al & Cl) ^ (Bl & Cl);
 	            Hh = Gh | 0;
@@ -2792,26 +2799,26 @@ var solanaStakePool = (function (exports) {
 	            Gl = Fl | 0;
 	            Fh = Eh | 0;
 	            Fl = El | 0;
-	            ({ h: Eh, l: El } = u64$4.add(Dh | 0, Dl | 0, T1h | 0, T1l | 0));
+	            ({ h: Eh, l: El } = u64$2.add(Dh | 0, Dl | 0, T1h | 0, T1l | 0));
 	            Dh = Ch | 0;
 	            Dl = Cl | 0;
 	            Ch = Bh | 0;
 	            Cl = Bl | 0;
 	            Bh = Ah | 0;
 	            Bl = Al | 0;
-	            const All = u64$4.add3L(T1l, sigma0l, MAJl);
-	            Ah = u64$4.add3H(All, T1h, sigma0h, MAJh);
+	            const All = u64$2.add3L(T1l, sigma0l, MAJl);
+	            Ah = u64$2.add3H(All, T1h, sigma0h, MAJh);
 	            Al = All | 0;
 	        }
 	        // Add the compressed chunk to the current hash value
-	        ({ h: Ah, l: Al } = u64$4.add(this.Ah | 0, this.Al | 0, Ah | 0, Al | 0));
-	        ({ h: Bh, l: Bl } = u64$4.add(this.Bh | 0, this.Bl | 0, Bh | 0, Bl | 0));
-	        ({ h: Ch, l: Cl } = u64$4.add(this.Ch | 0, this.Cl | 0, Ch | 0, Cl | 0));
-	        ({ h: Dh, l: Dl } = u64$4.add(this.Dh | 0, this.Dl | 0, Dh | 0, Dl | 0));
-	        ({ h: Eh, l: El } = u64$4.add(this.Eh | 0, this.El | 0, Eh | 0, El | 0));
-	        ({ h: Fh, l: Fl } = u64$4.add(this.Fh | 0, this.Fl | 0, Fh | 0, Fl | 0));
-	        ({ h: Gh, l: Gl } = u64$4.add(this.Gh | 0, this.Gl | 0, Gh | 0, Gl | 0));
-	        ({ h: Hh, l: Hl } = u64$4.add(this.Hh | 0, this.Hl | 0, Hh | 0, Hl | 0));
+	        ({ h: Ah, l: Al } = u64$2.add(this.Ah | 0, this.Al | 0, Ah | 0, Al | 0));
+	        ({ h: Bh, l: Bl } = u64$2.add(this.Bh | 0, this.Bl | 0, Bh | 0, Bl | 0));
+	        ({ h: Ch, l: Cl } = u64$2.add(this.Ch | 0, this.Cl | 0, Ch | 0, Cl | 0));
+	        ({ h: Dh, l: Dl } = u64$2.add(this.Dh | 0, this.Dl | 0, Dh | 0, Dl | 0));
+	        ({ h: Eh, l: El } = u64$2.add(this.Eh | 0, this.El | 0, Eh | 0, El | 0));
+	        ({ h: Fh, l: Fl } = u64$2.add(this.Fh | 0, this.Fl | 0, Fh | 0, Fl | 0));
+	        ({ h: Gh, l: Gl } = u64$2.add(this.Gh | 0, this.Gl | 0, Gh | 0, Gl | 0));
+	        ({ h: Hh, l: Hl } = u64$2.add(this.Hh | 0, this.Hl | 0, Hh | 0, Hl | 0));
 	        this.set(Ah, Al, Bh, Bl, Ch, Cl, Dh, Dl, Eh, El, Fh, Fl, Gh, Gl, Hh, Hl);
 	    }
 	    roundClean() {
@@ -2823,88 +2830,27 @@ var solanaStakePool = (function (exports) {
 	        this.set(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
 	    }
 	}
-	class SHA512_224 extends SHA512 {
-	    constructor() {
-	        super();
-	        // h -- high 32 bits, l -- low 32 bits
-	        this.Ah = 0x8c3d37c8 | 0;
-	        this.Al = 0x19544da2 | 0;
-	        this.Bh = 0x73e19966 | 0;
-	        this.Bl = 0x89dcd4d6 | 0;
-	        this.Ch = 0x1dfab7ae | 0;
-	        this.Cl = 0x32ff9c82 | 0;
-	        this.Dh = 0x679dd514 | 0;
-	        this.Dl = 0x582f9fcf | 0;
-	        this.Eh = 0x0f6d2b69 | 0;
-	        this.El = 0x7bd44da8 | 0;
-	        this.Fh = 0x77e36f73 | 0;
-	        this.Fl = 0x04c48942 | 0;
-	        this.Gh = 0x3f9d85a8 | 0;
-	        this.Gl = 0x6a1d36c8 | 0;
-	        this.Hh = 0x1112e6ad | 0;
-	        this.Hl = 0x91d692a1 | 0;
-	        this.outputLen = 28;
-	    }
-	}
-	class SHA512_256 extends SHA512 {
-	    constructor() {
-	        super();
-	        // h -- high 32 bits, l -- low 32 bits
-	        this.Ah = 0x22312194 | 0;
-	        this.Al = 0xfc2bf72c | 0;
-	        this.Bh = 0x9f555fa3 | 0;
-	        this.Bl = 0xc84c64c2 | 0;
-	        this.Ch = 0x2393b86b | 0;
-	        this.Cl = 0x6f53b151 | 0;
-	        this.Dh = 0x96387719 | 0;
-	        this.Dl = 0x5940eabd | 0;
-	        this.Eh = 0x96283ee2 | 0;
-	        this.El = 0xa88effe3 | 0;
-	        this.Fh = 0xbe5e1e25 | 0;
-	        this.Fl = 0x53863992 | 0;
-	        this.Gh = 0x2b0199fc | 0;
-	        this.Gl = 0x2c85b8aa | 0;
-	        this.Hh = 0x0eb72ddc | 0;
-	        this.Hl = 0x81c52ca2 | 0;
-	        this.outputLen = 32;
-	    }
-	}
-	class SHA384 extends SHA512 {
-	    constructor() {
-	        super();
-	        // h -- high 32 bits, l -- low 32 bits
-	        this.Ah = 0xcbbb9d5d | 0;
-	        this.Al = 0xc1059ed8 | 0;
-	        this.Bh = 0x629a292a | 0;
-	        this.Bl = 0x367cd507 | 0;
-	        this.Ch = 0x9159015a | 0;
-	        this.Cl = 0x3070dd17 | 0;
-	        this.Dh = 0x152fecd8 | 0;
-	        this.Dl = 0xf70e5939 | 0;
-	        this.Eh = 0x67332667 | 0;
-	        this.El = 0xffc00b31 | 0;
-	        this.Fh = 0x8eb44a87 | 0;
-	        this.Fl = 0x68581511 | 0;
-	        this.Gh = 0xdb0c2e0d | 0;
-	        this.Gl = 0x64f98fa7 | 0;
-	        this.Hh = 0x47b5481d | 0;
-	        this.Hl = 0xbefa4fa4 | 0;
-	        this.outputLen = 48;
-	    }
-	}
-	const sha512 = wrapConstructor(() => new SHA512());
-	wrapConstructor(() => new SHA512_224());
-	wrapConstructor(() => new SHA512_256());
-	wrapConstructor(() => new SHA384());
+	const sha512 = /* @__PURE__ */ wrapConstructor(() => new SHA512());
 
 	/*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-	const _0n$7 = BigInt(0);
+	// 100 lines of code in the file are duplicated from noble-hashes (utils).
+	// This is OK: `abstract` directory does not use noble-hashes.
+	// User may opt-in into using different hashing library. This way, noble-hashes
+	// won't be included into their bundle.
+	const _0n$5 = BigInt(0);
 	const _1n$7 = BigInt(1);
 	const _2n$5 = BigInt(2);
-	const u8a = (a) => a instanceof Uint8Array;
-	const hexes = Array.from({ length: 256 }, (v, i) => i.toString(16).padStart(2, '0'));
+	function isBytes(a) {
+	    return (a instanceof Uint8Array ||
+	        (a != null && typeof a === 'object' && a.constructor.name === 'Uint8Array'));
+	}
+	// Array where index 0xf0 (240) is mapped to string 'f0'
+	const hexes = /* @__PURE__ */ Array.from({ length: 256 }, (_, i) => i.toString(16).padStart(2, '0'));
+	/**
+	 * @example bytesToHex(Uint8Array.from([0xca, 0xfe, 0x01, 0x23])) // 'cafe0123'
+	 */
 	function bytesToHex(bytes) {
-	    if (!u8a(bytes))
+	    if (!isBytes(bytes))
 	        throw new Error('Uint8Array expected');
 	    // pre-caching improves the speed 6x
 	    let hex = '';
@@ -2923,36 +2869,67 @@ var solanaStakePool = (function (exports) {
 	    // Big Endian
 	    return BigInt(hex === '' ? '0' : `0x${hex}`);
 	}
-	// Caching slows it down 2-3x
+	// We use optimized technique to convert hex string to byte array
+	const asciis = { _0: 48, _9: 57, _A: 65, _F: 70, _a: 97, _f: 102 };
+	function asciiToBase16(char) {
+	    if (char >= asciis._0 && char <= asciis._9)
+	        return char - asciis._0;
+	    if (char >= asciis._A && char <= asciis._F)
+	        return char - (asciis._A - 10);
+	    if (char >= asciis._a && char <= asciis._f)
+	        return char - (asciis._a - 10);
+	    return;
+	}
+	/**
+	 * @example hexToBytes('cafe0123') // Uint8Array.from([0xca, 0xfe, 0x01, 0x23])
+	 */
 	function hexToBytes(hex) {
 	    if (typeof hex !== 'string')
 	        throw new Error('hex string expected, got ' + typeof hex);
-	    if (hex.length % 2)
-	        throw new Error('hex string is invalid: unpadded ' + hex.length);
-	    const array = new Uint8Array(hex.length / 2);
-	    for (let i = 0; i < array.length; i++) {
-	        const j = i * 2;
-	        const hexByte = hex.slice(j, j + 2);
-	        const byte = Number.parseInt(hexByte, 16);
-	        if (Number.isNaN(byte) || byte < 0)
-	            throw new Error('invalid byte sequence');
-	        array[i] = byte;
+	    const hl = hex.length;
+	    const al = hl / 2;
+	    if (hl % 2)
+	        throw new Error('padded hex string expected, got unpadded hex of length ' + hl);
+	    const array = new Uint8Array(al);
+	    for (let ai = 0, hi = 0; ai < al; ai++, hi += 2) {
+	        const n1 = asciiToBase16(hex.charCodeAt(hi));
+	        const n2 = asciiToBase16(hex.charCodeAt(hi + 1));
+	        if (n1 === undefined || n2 === undefined) {
+	            const char = hex[hi] + hex[hi + 1];
+	            throw new Error('hex string expected, got non-hex character "' + char + '" at index ' + hi);
+	        }
+	        array[ai] = n1 * 16 + n2;
 	    }
 	    return array;
 	}
-	// Big Endian
+	// BE: Big Endian, LE: Little Endian
 	function bytesToNumberBE(bytes) {
 	    return hexToNumber(bytesToHex(bytes));
 	}
 	function bytesToNumberLE(bytes) {
-	    if (!u8a(bytes))
+	    if (!isBytes(bytes))
 	        throw new Error('Uint8Array expected');
 	    return hexToNumber(bytesToHex(Uint8Array.from(bytes).reverse()));
 	}
-	const numberToBytesBE = (n, len) => hexToBytes(n.toString(16).padStart(len * 2, '0'));
-	const numberToBytesLE = (n, len) => numberToBytesBE(n, len).reverse();
-	// Returns variable number bytes (minimal bigint encoding?)
-	const numberToVarBytesBE = (n) => hexToBytes(numberToHexUnpadded(n));
+	function numberToBytesBE(n, len) {
+	    return hexToBytes(n.toString(16).padStart(len * 2, '0'));
+	}
+	function numberToBytesLE(n, len) {
+	    return numberToBytesBE(n, len).reverse();
+	}
+	// Unpadded, rarely used
+	function numberToVarBytesBE(n) {
+	    return hexToBytes(numberToHexUnpadded(n));
+	}
+	/**
+	 * Takes hex string or Uint8Array, converts to Uint8Array.
+	 * Validates output length.
+	 * Will throw error for other types.
+	 * @param title descriptive title for an error e.g. 'private key'
+	 * @param hex hex string or Uint8Array
+	 * @param expectedLength optional, will compare to result array's length
+	 * @returns
+	 */
 	function ensureBytes(title, hex, expectedLength) {
 	    let res;
 	    if (typeof hex === 'string') {
@@ -2963,7 +2940,7 @@ var solanaStakePool = (function (exports) {
 	            throw new Error(`${title} must be valid hex string, got "${hex}". Cause: ${e}`);
 	        }
 	    }
-	    else if (u8a(hex)) {
+	    else if (isBytes(hex)) {
 	        // Uint8Array.from() instead of hash.slice() because node.js Buffer
 	        // is instance of Uint8Array, and its slice() creates **mutable** copy
 	        res = Uint8Array.from(hex);
@@ -2976,48 +2953,72 @@ var solanaStakePool = (function (exports) {
 	        throw new Error(`${title} expected ${expectedLength} bytes, got ${len}`);
 	    return res;
 	}
-	// Copies several Uint8Arrays into one.
-	function concatBytes(...arrs) {
-	    const r = new Uint8Array(arrs.reduce((sum, a) => sum + a.length, 0));
-	    let pad = 0; // walk through each item, ensure they have proper type
-	    arrs.forEach((a) => {
-	        if (!u8a(a))
+	/**
+	 * Copies several Uint8Arrays into one.
+	 */
+	function concatBytes(...arrays) {
+	    let sum = 0;
+	    for (let i = 0; i < arrays.length; i++) {
+	        const a = arrays[i];
+	        if (!isBytes(a))
 	            throw new Error('Uint8Array expected');
-	        r.set(a, pad);
-	        pad += a.length;
-	    });
-	    return r;
-	}
-	function equalBytes(b1, b2) {
-	    // We don't care about timing attacks here
-	    if (b1.length !== b2.length)
-	        return false;
-	    for (let i = 0; i < b1.length; i++)
-	        if (b1[i] !== b2[i])
-	            return false;
-	    return true;
-	}
-	function utf8ToBytes(str) {
-	    if (typeof str !== 'string') {
-	        throw new Error(`utf8ToBytes expected string, got ${typeof str}`);
+	        sum += a.length;
 	    }
-	    return new TextEncoder().encode(str);
+	    let res = new Uint8Array(sum);
+	    let pad = 0;
+	    for (let i = 0; i < arrays.length; i++) {
+	        const a = arrays[i];
+	        res.set(a, pad);
+	        pad += a.length;
+	    }
+	    return res;
+	}
+	// Compares 2 u8a-s in kinda constant time
+	function equalBytes(a, b) {
+	    if (a.length !== b.length)
+	        return false;
+	    let diff = 0;
+	    for (let i = 0; i < a.length; i++)
+	        diff |= a[i] ^ b[i];
+	    return diff === 0;
+	}
+	/**
+	 * @example utf8ToBytes('abc') // new Uint8Array([97, 98, 99])
+	 */
+	function utf8ToBytes(str) {
+	    if (typeof str !== 'string')
+	        throw new Error(`utf8ToBytes expected string, got ${typeof str}`);
+	    return new Uint8Array(new TextEncoder().encode(str)); // https://bugzil.la/1681809
 	}
 	// Bit operations
-	// Amount of bits inside bigint (Same as n.toString(2).length)
+	/**
+	 * Calculates amount of bits in a bigint.
+	 * Same as `n.toString(2).length`
+	 */
 	function bitLen(n) {
 	    let len;
-	    for (len = 0; n > _0n$7; n >>= _1n$7, len += 1)
+	    for (len = 0; n > _0n$5; n >>= _1n$7, len += 1)
 	        ;
 	    return len;
 	}
-	// Gets single bit at position. NOTE: first bit position is 0 (same as arrays)
-	// Same as !!+Array.from(n.toString(2)).reverse()[pos]
-	const bitGet = (n, pos) => (n >> BigInt(pos)) & _1n$7;
-	// Sets single bit at position
-	const bitSet = (n, pos, value) => n | ((value ? _1n$7 : _0n$7) << BigInt(pos));
-	// Return mask for N bits (Same as BigInt(`0b${Array(i).fill('1').join('')}`))
-	// Not using ** operator with bigints for old engines.
+	/**
+	 * Gets single bit at position.
+	 * NOTE: first bit position is 0 (same as arrays)
+	 * Same as `!!+Array.from(n.toString(2)).reverse()[pos]`
+	 */
+	function bitGet(n, pos) {
+	    return (n >> BigInt(pos)) & _1n$7;
+	}
+	/**
+	 * Sets single bit at position.
+	 */
+	const bitSet = (n, pos, value) => {
+	    return n | ((value ? _1n$7 : _0n$5) << BigInt(pos));
+	};
+	/**
+	 * Calculate mask for N bits. Not using ** operator with bigints because of old engines.
+	 * Same as BigInt(`0b${Array(i).fill('1').join('')}`)
+	 */
 	const bitMask = (n) => (_2n$5 << BigInt(n - 1)) - _1n$7;
 	// DRBG
 	const u8n = (data) => new Uint8Array(data); // creates Uint8Array
@@ -3086,6 +3087,7 @@ var solanaStakePool = (function (exports) {
 	    function: (val) => typeof val === 'function',
 	    boolean: (val) => typeof val === 'boolean',
 	    string: (val) => typeof val === 'string',
+	    stringOrUint8Array: (val) => typeof val === 'string' || isBytes(val),
 	    isSafeInteger: (val) => Number.isSafeInteger(val),
 	    array: (val) => Array.isArray(val),
 	    field: (val, object) => object.Fp.isValid(val),
@@ -3121,53 +3123,55 @@ var solanaStakePool = (function (exports) {
 
 	var ut = /*#__PURE__*/Object.freeze({
 		__proto__: null,
+		bitGet: bitGet,
+		bitLen: bitLen,
+		bitMask: bitMask,
+		bitSet: bitSet,
 		bytesToHex: bytesToHex,
-		numberToHexUnpadded: numberToHexUnpadded,
-		hexToNumber: hexToNumber,
-		hexToBytes: hexToBytes,
 		bytesToNumberBE: bytesToNumberBE,
 		bytesToNumberLE: bytesToNumberLE,
+		concatBytes: concatBytes,
+		createHmacDrbg: createHmacDrbg,
+		ensureBytes: ensureBytes,
+		equalBytes: equalBytes,
+		hexToBytes: hexToBytes,
+		hexToNumber: hexToNumber,
+		isBytes: isBytes,
 		numberToBytesBE: numberToBytesBE,
 		numberToBytesLE: numberToBytesLE,
+		numberToHexUnpadded: numberToHexUnpadded,
 		numberToVarBytesBE: numberToVarBytesBE,
-		ensureBytes: ensureBytes,
-		concatBytes: concatBytes,
-		equalBytes: equalBytes,
 		utf8ToBytes: utf8ToBytes,
-		bitLen: bitLen,
-		bitGet: bitGet,
-		bitSet: bitSet,
-		bitMask: bitMask,
-		createHmacDrbg: createHmacDrbg,
 		validateObject: validateObject
 	});
 
 	/*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
+	// Utilities for modular arithmetics and finite fields
 	// prettier-ignore
-	const _0n$6 = BigInt(0), _1n$6 = BigInt(1), _2n$4 = BigInt(2), _3n$1 = BigInt(3);
+	const _0n$4 = BigInt(0), _1n$6 = BigInt(1), _2n$4 = BigInt(2), _3n$1 = BigInt(3);
 	// prettier-ignore
-	const _4n$1 = BigInt(4), _5n$1 = BigInt(5), _8n$1 = BigInt(8);
+	const _4n = BigInt(4), _5n$1 = BigInt(5), _8n$1 = BigInt(8);
 	// prettier-ignore
 	BigInt(9); BigInt(16);
 	// Calculates a modulo b
 	function mod(a, b) {
 	    const result = a % b;
-	    return result >= _0n$6 ? result : b + result;
+	    return result >= _0n$4 ? result : b + result;
 	}
 	/**
-	 * Efficiently exponentiate num to power and do modular division.
+	 * Efficiently raise num to power and do modular division.
 	 * Unsafe in some contexts: uses ladder, so can expose bigint bits.
 	 * @example
-	 * powMod(2n, 6n, 11n) // 64n % 11n == 9n
+	 * pow(2n, 6n, 11n) // 64n % 11n == 9n
 	 */
 	// TODO: use field version && remove
 	function pow(num, power, modulo) {
-	    if (modulo <= _0n$6 || power < _0n$6)
+	    if (modulo <= _0n$4 || power < _0n$4)
 	        throw new Error('Expected power/modulo > 0');
 	    if (modulo === _1n$6)
-	        return _0n$6;
+	        return _0n$4;
 	    let res = _1n$6;
-	    while (power > _0n$6) {
+	    while (power > _0n$4) {
 	        if (power & _1n$6)
 	            res = (res * num) % modulo;
 	        num = (num * num) % modulo;
@@ -3178,7 +3182,7 @@ var solanaStakePool = (function (exports) {
 	// Does x ^ (2 ^ power) mod p. pow2(30, 4) == 30 ^ (2 ^ 4)
 	function pow2(x, power, modulo) {
 	    let res = x;
-	    while (power-- > _0n$6) {
+	    while (power-- > _0n$4) {
 	        res *= res;
 	        res %= modulo;
 	    }
@@ -3186,16 +3190,16 @@ var solanaStakePool = (function (exports) {
 	}
 	// Inverses number over modulo
 	function invert(number, modulo) {
-	    if (number === _0n$6 || modulo <= _0n$6) {
+	    if (number === _0n$4 || modulo <= _0n$4) {
 	        throw new Error(`invert: expected positive integers, got n=${number} mod=${modulo}`);
 	    }
-	    // Eucledian GCD https://brilliant.org/wiki/extended-euclidean-algorithm/
+	    // Euclidean GCD https://brilliant.org/wiki/extended-euclidean-algorithm/
 	    // Fermat's little theorem "CT-like" version inv(n) = n^(m-2) mod m is 30x slower.
 	    let a = mod(number, modulo);
 	    let b = modulo;
 	    // prettier-ignore
-	    let x = _0n$6, u = _1n$6;
-	    while (a !== _0n$6) {
+	    let x = _0n$4, u = _1n$6;
+	    while (a !== _0n$4) {
 	        // JIT applies optimization if those two lines follow each other
 	        const q = b / a;
 	        const r = b % a;
@@ -3208,9 +3212,14 @@ var solanaStakePool = (function (exports) {
 	        throw new Error('invert: does not exist');
 	    return mod(x, modulo);
 	}
-	// Tonelli-Shanks algorithm
-	// Paper 1: https://eprint.iacr.org/2012/685.pdf (page 12)
-	// Paper 2: Square Roots from 1; 24, 51, 10 to Dan Shanks
+	/**
+	 * Tonelli-Shanks square root search algorithm.
+	 * 1. https://eprint.iacr.org/2012/685.pdf (page 12)
+	 * 2. Square Roots from 1; 24, 51, 10 to Dan Shanks
+	 * Will start an infinite loop if field order P is not prime.
+	 * @param P field order
+	 * @returns function that takes field Fp (created from P) and number n
+	 */
 	function tonelliShanks(P) {
 	    // Legendre constant: used to calculate Legendre symbol (a | p),
 	    // which denotes the value of a^((p-1)/2) (mod p).
@@ -3221,14 +3230,14 @@ var solanaStakePool = (function (exports) {
 	    let Q, S, Z;
 	    // Step 1: By factoring out powers of 2 from p - 1,
 	    // find q and s such that p - 1 = q*(2^s) with q odd
-	    for (Q = P - _1n$6, S = 0; Q % _2n$4 === _0n$6; Q /= _2n$4, S++)
+	    for (Q = P - _1n$6, S = 0; Q % _2n$4 === _0n$4; Q /= _2n$4, S++)
 	        ;
 	    // Step 2: Select a non-square z such that (z | p) ≡ -1 and set c ≡ zq
 	    for (Z = _2n$4; Z < P && pow(Z, legendreC, P) !== P - _1n$6; Z++)
 	        ;
 	    // Fast-path
 	    if (S === 1) {
-	        const p1div4 = (P + _1n$6) / _4n$1;
+	        const p1div4 = (P + _1n$6) / _4n;
 	        return function tonelliFast(Fp, n) {
 	            const root = Fp.pow(n, p1div4);
 	            if (!Fp.eql(Fp.sqr(root), n))
@@ -3272,12 +3281,12 @@ var solanaStakePool = (function (exports) {
 	    // For example there is FpSqrtOdd/FpSqrtEven to choice root based on oddness (used for hash-to-curve).
 	    // P ≡ 3 (mod 4)
 	    // √n = n^((P+1)/4)
-	    if (P % _4n$1 === _3n$1) {
+	    if (P % _4n === _3n$1) {
 	        // Not all roots possible!
 	        // const ORDER =
 	        //   0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaabn;
 	        // const NUM = 72057594037927816n;
-	        const p1div4 = (P + _1n$6) / _4n$1;
+	        const p1div4 = (P + _1n$6) / _4n;
 	        return function sqrt3mod4(Fp, n) {
 	            const root = Fp.pow(n, p1div4);
 	            // Throw if root**2 != n
@@ -3325,18 +3334,22 @@ var solanaStakePool = (function (exports) {
 	    return validateObject(field, opts);
 	}
 	// Generic field functions
+	/**
+	 * Same as `pow` but for Fp: non-constant-time.
+	 * Unsafe in some contexts: uses ladder, so can expose bigint bits.
+	 */
 	function FpPow(f, num, power) {
 	    // Should have same speed as pow for bigints
 	    // TODO: benchmark!
-	    if (power < _0n$6)
+	    if (power < _0n$4)
 	        throw new Error('Expected power > 0');
-	    if (power === _0n$6)
+	    if (power === _0n$4)
 	        return f.ONE;
 	    if (power === _1n$6)
 	        return num;
 	    let p = f.ONE;
 	    let d = num;
-	    while (power > _0n$6) {
+	    while (power > _0n$4) {
 	        if (power & _1n$6)
 	            p = f.mul(p, d);
 	        d = f.sqr(d);
@@ -3344,7 +3357,10 @@ var solanaStakePool = (function (exports) {
 	    }
 	    return p;
 	}
-	// 0 is non-invertible: non-batched version will throw on 0
+	/**
+	 * Efficiently invert an array of Field elements.
+	 * `inv(0)` will return `undefined` here: make sure to throw an error.
+	 */
 	function FpInvertBatch(f, nums) {
 	    const tmp = new Array(nums.length);
 	    // Walk from first to last, multiply them by each other MOD p
@@ -3373,20 +3389,20 @@ var solanaStakePool = (function (exports) {
 	    return { nBitLength: _nBitLength, nByteLength };
 	}
 	/**
-	 * Initializes a galois field over prime. Non-primes are not supported for now.
-	 * Do not init in loop: slow. Very fragile: always run a benchmark on change.
-	 * Major performance gains:
-	 * a) non-normalized operations like mulN instead of mul
-	 * b) `Object.freeze`
-	 * c) Same object shape: never add or remove keys
+	 * Initializes a finite field over prime. **Non-primes are not supported.**
+	 * Do not init in loop: slow. Very fragile: always run a benchmark on a change.
+	 * Major performance optimizations:
+	 * * a) denormalized operations like mulN instead of mul
+	 * * b) same object shape: never add or remove keys
+	 * * c) Object.freeze
 	 * @param ORDER prime positive bigint
 	 * @param bitLen how many bits the field consumes
 	 * @param isLE (def: false) if encoding / decoding should be in little-endian
 	 * @param redef optional faster redefinitions of sqrt and other methods
 	 */
 	function Field(ORDER, bitLen, isLE = false, redef = {}) {
-	    if (ORDER <= _0n$6)
-	        throw new Error(`Expected Fp ORDER > 0, got ${ORDER}`);
+	    if (ORDER <= _0n$4)
+	        throw new Error(`Expected Field ORDER > 0, got ${ORDER}`);
 	    const { nBitLength: BITS, nByteLength: BYTES } = nLength(ORDER, bitLen);
 	    if (BYTES > 2048)
 	        throw new Error('Field lengths over 2048 bytes are not supported');
@@ -3396,15 +3412,15 @@ var solanaStakePool = (function (exports) {
 	        BITS,
 	        BYTES,
 	        MASK: bitMask(BITS),
-	        ZERO: _0n$6,
+	        ZERO: _0n$4,
 	        ONE: _1n$6,
 	        create: (num) => mod(num, ORDER),
 	        isValid: (num) => {
 	            if (typeof num !== 'bigint')
 	                throw new Error(`Invalid field element: expected bigint, got ${typeof num}`);
-	            return _0n$6 <= num && num < ORDER; // 0 is valid element, but it's not invertible
+	            return _0n$4 <= num && num < ORDER; // 0 is valid element, but it's not invertible
 	        },
-	        is0: (num) => num === _0n$6,
+	        is0: (num) => num === _0n$4,
 	        isOdd: (num) => (num & _1n$6) === _1n$6,
 	        neg: (num) => mod(-num, ORDER),
 	        eql: (lhs, rhs) => lhs === rhs,
@@ -3441,26 +3457,57 @@ var solanaStakePool = (function (exports) {
 	    return Fp.isOdd(root) ? Fp.neg(root) : root;
 	}
 	/**
-	 * FIPS 186 B.4.1-compliant "constant-time" private key generation utility.
-	 * Can take (n+8) or more bytes of uniform input e.g. from CSPRNG or KDF
-	 * and convert them into private scalar, with the modulo bias being neglible.
-	 * Needs at least 40 bytes of input for 32-byte private key.
+	 * Returns total number of bytes consumed by the field element.
+	 * For example, 32 bytes for usual 256-bit weierstrass curve.
+	 * @param fieldOrder number of field elements, usually CURVE.n
+	 * @returns byte length of field
+	 */
+	function getFieldBytesLength(fieldOrder) {
+	    if (typeof fieldOrder !== 'bigint')
+	        throw new Error('field order must be bigint');
+	    const bitLength = fieldOrder.toString(2).length;
+	    return Math.ceil(bitLength / 8);
+	}
+	/**
+	 * Returns minimal amount of bytes that can be safely reduced
+	 * by field order.
+	 * Should be 2^-128 for 128-bit curve such as P256.
+	 * @param fieldOrder number of field elements, usually CURVE.n
+	 * @returns byte length of target hash
+	 */
+	function getMinHashLength(fieldOrder) {
+	    const length = getFieldBytesLength(fieldOrder);
+	    return length + Math.ceil(length / 2);
+	}
+	/**
+	 * "Constant-time" private key generation utility.
+	 * Can take (n + n/2) or more bytes of uniform input e.g. from CSPRNG or KDF
+	 * and convert them into private scalar, with the modulo bias being negligible.
+	 * Needs at least 48 bytes of input for 32-byte private key.
 	 * https://research.kudelskisecurity.com/2020/07/28/the-definitive-guide-to-modulo-bias-and-how-to-avoid-it/
+	 * FIPS 186-5, A.2 https://csrc.nist.gov/publications/detail/fips/186/5/final
+	 * RFC 9380, https://www.rfc-editor.org/rfc/rfc9380#section-5
 	 * @param hash hash output from SHA3 or a similar function
+	 * @param groupOrder size of subgroup - (e.g. secp256k1.CURVE.n)
+	 * @param isLE interpret hash bytes as LE num
 	 * @returns valid private scalar
 	 */
-	function hashToPrivateScalar(hash, groupOrder, isLE = false) {
-	    hash = ensureBytes('privateHash', hash);
-	    const hashLen = hash.length;
-	    const minLen = nLength(groupOrder).nByteLength + 8;
-	    if (minLen < 24 || hashLen < minLen || hashLen > 1024)
-	        throw new Error(`hashToPrivateScalar: expected ${minLen}-1024 bytes of input, got ${hashLen}`);
-	    const num = isLE ? bytesToNumberLE(hash) : bytesToNumberBE(hash);
-	    return mod(num, groupOrder - _1n$6) + _1n$6;
+	function mapHashToField(key, fieldOrder, isLE = false) {
+	    const len = key.length;
+	    const fieldLen = getFieldBytesLength(fieldOrder);
+	    const minLen = getMinHashLength(fieldOrder);
+	    // No small numbers: need to understand bias story. No huge numbers: easier to detect JS timings.
+	    if (len < 16 || len < minLen || len > 1024)
+	        throw new Error(`expected ${minLen}-1024 bytes of input, got ${len}`);
+	    const num = isLE ? bytesToNumberBE(key) : bytesToNumberLE(key);
+	    // `mod(x, 11)` can sometimes produce 0. `mod(x, 10) + 1` is the same, but no 0
+	    const reduced = mod(num, fieldOrder - _1n$6) + _1n$6;
+	    return isLE ? numberToBytesLE(reduced, fieldLen) : numberToBytesBE(reduced, fieldLen);
 	}
 
 	/*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-	const _0n$5 = BigInt(0);
+	// Abelian group utilities
+	const _0n$3 = BigInt(0);
 	const _1n$5 = BigInt(1);
 	// Elliptic curve multiplication of Point by scalar. Fragile.
 	// Scalars should always be less than curve order: this should be checked inside of a curve itself.
@@ -3489,7 +3536,7 @@ var solanaStakePool = (function (exports) {
 	        unsafeLadder(elm, n) {
 	            let p = c.ZERO;
 	            let d = elm;
-	            while (n > _0n$5) {
+	            while (n > _0n$3) {
 	                if (n & _1n$5)
 	                    p = p.add(d);
 	                d = d.double();
@@ -3613,12 +3660,13 @@ var solanaStakePool = (function (exports) {
 	}
 
 	/*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
+	// Twisted Edwards curve. The formula is: ax² + y² = 1 + dx²y²
 	// Be friendly to bad ECMAScript parsers by not using bigint literals
 	// prettier-ignore
-	const _0n$4 = BigInt(0), _1n$4 = BigInt(1), _2n$3 = BigInt(2), _8n = BigInt(8);
+	const _0n$2 = BigInt(0), _1n$4 = BigInt(1), _2n$3 = BigInt(2), _8n = BigInt(8);
 	// verification rule is either zip215 or rfc8032 / nist186-5. Consult fromHex:
 	const VERIFY_DEFAULT = { zip215: true };
-	function validateOpts$2(curve) {
+	function validateOpts$1(curve) {
 	    const opts = validateBasic(curve);
 	    validateObject(curve, {
 	        hash: 'function',
@@ -3636,9 +3684,9 @@ var solanaStakePool = (function (exports) {
 	}
 	// It is not generic twisted curve for now, but ed25519/ed448 generic implementation
 	function twistedEdwards(curveDef) {
-	    const CURVE = validateOpts$2(curveDef);
+	    const CURVE = validateOpts$1(curveDef);
 	    const { Fp, n: CURVE_ORDER, prehash: prehash, hash: cHash, randomBytes, nByteLength, h: cofactor, } = CURVE;
-	    const MASK = _2n$3 ** BigInt(nByteLength * 8);
+	    const MASK = _2n$3 << (BigInt(nByteLength * 8) - _1n$4);
 	    const modP = Fp.create; // Function overrides
 	    // sqrt(u/v)
 	    const uvRatio = CURVE.uvRatio ||
@@ -3647,7 +3695,7 @@ var solanaStakePool = (function (exports) {
 	                return { isValid: true, value: Fp.sqrt(u * Fp.inv(v)) };
 	            }
 	            catch (e) {
-	                return { isValid: false, value: _0n$4 };
+	                return { isValid: false, value: _0n$2 };
 	            }
 	        });
 	    const adjustScalarBytes = CURVE.adjustScalarBytes || ((bytes) => bytes); // NOOP
@@ -3657,9 +3705,9 @@ var solanaStakePool = (function (exports) {
 	                throw new Error('Contexts/pre-hash are not supported');
 	            return data;
 	        }); // NOOP
-	    const inBig = (n) => typeof n === 'bigint' && _0n$4 < n; // n in [1..]
+	    const inBig = (n) => typeof n === 'bigint' && _0n$2 < n; // n in [1..]
 	    const inRange = (n, max) => inBig(n) && inBig(max) && n < max; // n in [1..max-1]
-	    const in0MaskRange = (n) => n === _0n$4 || inRange(n, MASK); // n in [0..MASK-1]
+	    const in0MaskRange = (n) => n === _0n$2 || inRange(n, MASK); // n in [0..MASK-1]
 	    function assertInRange(n, max) {
 	        // n in [1..max-1]
 	        if (inRange(n, max))
@@ -3668,7 +3716,7 @@ var solanaStakePool = (function (exports) {
 	    }
 	    function assertGE0(n) {
 	        // n in [0..CURVE_ORDER-1]
-	        return n === _0n$4 ? n : assertInRange(n, CURVE_ORDER); // GE = prime subgroup, not full group
+	        return n === _0n$2 ? n : assertInRange(n, CURVE_ORDER); // GE = prime subgroup, not full group
 	    }
 	    const pointPrecomputes = new Map();
 	    function isPoint(other) {
@@ -3794,7 +3842,7 @@ var solanaStakePool = (function (exports) {
 	                const A = modP((Y1 - X1) * (Y2 + X2));
 	                const B = modP((Y1 + X1) * (Y2 - X2));
 	                const F = modP(B - A);
-	                if (F === _0n$4)
+	                if (F === _0n$2)
 	                    return this.double(); // Same point. Tests say it doesn't affect timing
 	                const C = modP(Z1 * _2n$3 * T2);
 	                const D = modP(T1 * _2n$3 * Z2);
@@ -3838,7 +3886,7 @@ var solanaStakePool = (function (exports) {
 	        // Does NOT allow scalars higher than CURVE.n.
 	        multiplyUnsafe(scalar) {
 	            let n = assertGE0(scalar); // 0 <= scalar < CURVE.n
-	            if (n === _0n$4)
+	            if (n === _0n$2)
 	                return I;
 	            if (this.equals(I) || n === _1n$4)
 	                return this;
@@ -3869,7 +3917,7 @@ var solanaStakePool = (function (exports) {
 	            const ay = modP(y * iz);
 	            const zz = modP(z * iz);
 	            if (is0)
-	                return { x: _0n$4, y: _1n$4 };
+	                return { x: _0n$2, y: _1n$4 };
 	            if (zz !== _1n$4)
 	                throw new Error('invZ was invalid');
 	            return { x: ax, y: ay };
@@ -3890,7 +3938,7 @@ var solanaStakePool = (function (exports) {
 	            const lastByte = hex[len - 1]; // select last byte
 	            normed[len - 1] = lastByte & ~0x80; // clear last bit
 	            const y = bytesToNumberLE(normed);
-	            if (y === _0n$4) ;
+	            if (y === _0n$2) ;
 	            else {
 	                // RFC8032 prohibits >= p, but ZIP215 doesn't
 	                if (zip215)
@@ -3907,7 +3955,10 @@ var solanaStakePool = (function (exports) {
 	            if (!isValid)
 	                throw new Error('Point.fromHex: invalid y coordinate');
 	            const isXOdd = (x & _1n$4) === _1n$4; // There are 2 square roots. Use x_0 bit to select proper
-	            const isLastByteOdd = (lastByte & 0x80) !== 0; // if x=0 and x_0 = 1, fail
+	            const isLastByteOdd = (lastByte & 0x80) !== 0; // x_0, last bit
+	            if (!zip215 && x === _0n$2 && isLastByteOdd)
+	                // if x=0 and x_0 = 1, fail
+	                throw new Error('Point.fromHex: x=0 and x_0=1');
 	            if (isLastByteOdd !== isXOdd)
 	                x = modP(-x); // if x_0 != x mod 2, set x = p-x
 	            return Point.fromAffine({ x, y });
@@ -3926,7 +3977,7 @@ var solanaStakePool = (function (exports) {
 	        }
 	    }
 	    Point.BASE = new Point(CURVE.Gx, CURVE.Gy, _1n$4, modP(CURVE.Gx * CURVE.Gy));
-	    Point.ZERO = new Point(_0n$4, _1n$4, _1n$4, _0n$4); // 0, 1, 1, 0
+	    Point.ZERO = new Point(_0n$2, _1n$4, _1n$4, _0n$2); // 0, 1, 1, 0
 	    const { BASE: G, ZERO: I } = Point;
 	    const wnaf = wNAF(Point, nByteLength * 8);
 	    function modN(a) {
@@ -3993,6 +4044,8 @@ var solanaStakePool = (function (exports) {
 	        catch (error) {
 	            return false;
 	        }
+	        if (!zip215 && A.isSmallOrder())
+	            return false;
 	        const k = hashDomainToScalar(context, R.toRawBytes(), A.toRawBytes(), msg);
 	        const RkA = R.add(A.multiplyUnsafe(k));
 	        // [8][S]B = [8]R + [8][k]A'
@@ -4026,326 +4079,6 @@ var solanaStakePool = (function (exports) {
 	}
 
 	/*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-	const _0n$3 = BigInt(0);
-	const _1n$3 = BigInt(1);
-	function validateOpts$1(curve) {
-	    validateObject(curve, {
-	        a: 'bigint',
-	    }, {
-	        montgomeryBits: 'isSafeInteger',
-	        nByteLength: 'isSafeInteger',
-	        adjustScalarBytes: 'function',
-	        domain: 'function',
-	        powPminus2: 'function',
-	        Gu: 'bigint',
-	    });
-	    // Set defaults
-	    return Object.freeze({ ...curve });
-	}
-	// NOTE: not really montgomery curve, just bunch of very specific methods for X25519/X448 (RFC 7748, https://www.rfc-editor.org/rfc/rfc7748)
-	// Uses only one coordinate instead of two
-	function montgomery(curveDef) {
-	    const CURVE = validateOpts$1(curveDef);
-	    const { P } = CURVE;
-	    const modP = (n) => mod(n, P);
-	    const montgomeryBits = CURVE.montgomeryBits;
-	    const montgomeryBytes = Math.ceil(montgomeryBits / 8);
-	    const fieldLen = CURVE.nByteLength;
-	    const adjustScalarBytes = CURVE.adjustScalarBytes || ((bytes) => bytes);
-	    const powPminus2 = CURVE.powPminus2 || ((x) => pow(x, P - BigInt(2), P));
-	    // cswap from RFC7748. But it is not from RFC7748!
-	    /*
-	      cswap(swap, x_2, x_3):
-	           dummy = mask(swap) AND (x_2 XOR x_3)
-	           x_2 = x_2 XOR dummy
-	           x_3 = x_3 XOR dummy
-	           Return (x_2, x_3)
-	    Where mask(swap) is the all-1 or all-0 word of the same length as x_2
-	     and x_3, computed, e.g., as mask(swap) = 0 - swap.
-	    */
-	    function cswap(swap, x_2, x_3) {
-	        const dummy = modP(swap * (x_2 - x_3));
-	        x_2 = modP(x_2 - dummy);
-	        x_3 = modP(x_3 + dummy);
-	        return [x_2, x_3];
-	    }
-	    // Accepts 0 as well
-	    function assertFieldElement(n) {
-	        if (typeof n === 'bigint' && _0n$3 <= n && n < P)
-	            return n;
-	        throw new Error('Expected valid scalar 0 < scalar < CURVE.P');
-	    }
-	    // x25519 from 4
-	    // The constant a24 is (486662 - 2) / 4 = 121665 for curve25519/X25519
-	    const a24 = (CURVE.a - BigInt(2)) / BigInt(4);
-	    /**
-	     *
-	     * @param pointU u coordinate (x) on Montgomery Curve 25519
-	     * @param scalar by which the point would be multiplied
-	     * @returns new Point on Montgomery curve
-	     */
-	    function montgomeryLadder(pointU, scalar) {
-	        const u = assertFieldElement(pointU);
-	        // Section 5: Implementations MUST accept non-canonical values and process them as
-	        // if they had been reduced modulo the field prime.
-	        const k = assertFieldElement(scalar);
-	        const x_1 = u;
-	        let x_2 = _1n$3;
-	        let z_2 = _0n$3;
-	        let x_3 = u;
-	        let z_3 = _1n$3;
-	        let swap = _0n$3;
-	        let sw;
-	        for (let t = BigInt(montgomeryBits - 1); t >= _0n$3; t--) {
-	            const k_t = (k >> t) & _1n$3;
-	            swap ^= k_t;
-	            sw = cswap(swap, x_2, x_3);
-	            x_2 = sw[0];
-	            x_3 = sw[1];
-	            sw = cswap(swap, z_2, z_3);
-	            z_2 = sw[0];
-	            z_3 = sw[1];
-	            swap = k_t;
-	            const A = x_2 + z_2;
-	            const AA = modP(A * A);
-	            const B = x_2 - z_2;
-	            const BB = modP(B * B);
-	            const E = AA - BB;
-	            const C = x_3 + z_3;
-	            const D = x_3 - z_3;
-	            const DA = modP(D * A);
-	            const CB = modP(C * B);
-	            const dacb = DA + CB;
-	            const da_cb = DA - CB;
-	            x_3 = modP(dacb * dacb);
-	            z_3 = modP(x_1 * modP(da_cb * da_cb));
-	            x_2 = modP(AA * BB);
-	            z_2 = modP(E * (AA + modP(a24 * E)));
-	        }
-	        // (x_2, x_3) = cswap(swap, x_2, x_3)
-	        sw = cswap(swap, x_2, x_3);
-	        x_2 = sw[0];
-	        x_3 = sw[1];
-	        // (z_2, z_3) = cswap(swap, z_2, z_3)
-	        sw = cswap(swap, z_2, z_3);
-	        z_2 = sw[0];
-	        z_3 = sw[1];
-	        // z_2^(p - 2)
-	        const z2 = powPminus2(z_2);
-	        // Return x_2 * (z_2^(p - 2))
-	        return modP(x_2 * z2);
-	    }
-	    function encodeUCoordinate(u) {
-	        return numberToBytesLE(modP(u), montgomeryBytes);
-	    }
-	    function decodeUCoordinate(uEnc) {
-	        // Section 5: When receiving such an array, implementations of X25519
-	        // MUST mask the most significant bit in the final byte.
-	        // This is very ugly way, but it works because fieldLen-1 is outside of bounds for X448, so this becomes NOOP
-	        // fieldLen - scalaryBytes = 1 for X448 and = 0 for X25519
-	        const u = ensureBytes('u coordinate', uEnc, montgomeryBytes);
-	        // u[fieldLen-1] crashes QuickJS (TypeError: out-of-bound numeric index)
-	        if (fieldLen === montgomeryBytes)
-	            u[fieldLen - 1] &= 127; // 0b0111_1111
-	        return bytesToNumberLE(u);
-	    }
-	    function decodeScalar(n) {
-	        const bytes = ensureBytes('scalar', n);
-	        if (bytes.length !== montgomeryBytes && bytes.length !== fieldLen)
-	            throw new Error(`Expected ${montgomeryBytes} or ${fieldLen} bytes, got ${bytes.length}`);
-	        return bytesToNumberLE(adjustScalarBytes(bytes));
-	    }
-	    function scalarMult(scalar, u) {
-	        const pointU = decodeUCoordinate(u);
-	        const _scalar = decodeScalar(scalar);
-	        const pu = montgomeryLadder(pointU, _scalar);
-	        // The result was not contributory
-	        // https://cr.yp.to/ecdh.html#validate
-	        if (pu === _0n$3)
-	            throw new Error('Invalid private or public key received');
-	        return encodeUCoordinate(pu);
-	    }
-	    // Computes public key from private. By doing scalar multiplication of base point.
-	    const GuBytes = encodeUCoordinate(CURVE.Gu);
-	    function scalarMultBase(scalar) {
-	        return scalarMult(scalar, GuBytes);
-	    }
-	    return {
-	        scalarMult,
-	        scalarMultBase,
-	        getSharedSecret: (privateKey, publicKey) => scalarMult(privateKey, publicKey),
-	        getPublicKey: (privateKey) => scalarMultBase(privateKey),
-	        utils: { randomPrivateKey: () => CURVE.randomBytes(CURVE.nByteLength) },
-	        GuBytes: GuBytes,
-	    };
-	}
-
-	function validateDST(dst) {
-	    if (dst instanceof Uint8Array)
-	        return dst;
-	    if (typeof dst === 'string')
-	        return utf8ToBytes(dst);
-	    throw new Error('DST must be Uint8Array or string');
-	}
-	// Octet Stream to Integer. "spec" implementation of os2ip is 2.5x slower vs bytesToNumberBE.
-	const os2ip = bytesToNumberBE;
-	// Integer to Octet Stream (numberToBytesBE)
-	function i2osp(value, length) {
-	    if (value < 0 || value >= 1 << (8 * length)) {
-	        throw new Error(`bad I2OSP call: value=${value} length=${length}`);
-	    }
-	    const res = Array.from({ length }).fill(0);
-	    for (let i = length - 1; i >= 0; i--) {
-	        res[i] = value & 0xff;
-	        value >>>= 8;
-	    }
-	    return new Uint8Array(res);
-	}
-	function strxor(a, b) {
-	    const arr = new Uint8Array(a.length);
-	    for (let i = 0; i < a.length; i++) {
-	        arr[i] = a[i] ^ b[i];
-	    }
-	    return arr;
-	}
-	function isBytes(item) {
-	    if (!(item instanceof Uint8Array))
-	        throw new Error('Uint8Array expected');
-	}
-	function isNum(item) {
-	    if (!Number.isSafeInteger(item))
-	        throw new Error('number expected');
-	}
-	// Produces a uniformly random byte string using a cryptographic hash function H that outputs b bits
-	// https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-5.4.1
-	function expand_message_xmd(msg, DST, lenInBytes, H) {
-	    isBytes(msg);
-	    isBytes(DST);
-	    isNum(lenInBytes);
-	    // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-16#section-5.3.3
-	    if (DST.length > 255)
-	        DST = H(concatBytes(utf8ToBytes('H2C-OVERSIZE-DST-'), DST));
-	    const { outputLen: b_in_bytes, blockLen: r_in_bytes } = H;
-	    const ell = Math.ceil(lenInBytes / b_in_bytes);
-	    if (ell > 255)
-	        throw new Error('Invalid xmd length');
-	    const DST_prime = concatBytes(DST, i2osp(DST.length, 1));
-	    const Z_pad = i2osp(0, r_in_bytes);
-	    const l_i_b_str = i2osp(lenInBytes, 2); // len_in_bytes_str
-	    const b = new Array(ell);
-	    const b_0 = H(concatBytes(Z_pad, msg, l_i_b_str, i2osp(0, 1), DST_prime));
-	    b[0] = H(concatBytes(b_0, i2osp(1, 1), DST_prime));
-	    for (let i = 1; i <= ell; i++) {
-	        const args = [strxor(b_0, b[i - 1]), i2osp(i + 1, 1), DST_prime];
-	        b[i] = H(concatBytes(...args));
-	    }
-	    const pseudo_random_bytes = concatBytes(...b);
-	    return pseudo_random_bytes.slice(0, lenInBytes);
-	}
-	function expand_message_xof(msg, DST, lenInBytes, k, H) {
-	    isBytes(msg);
-	    isBytes(DST);
-	    isNum(lenInBytes);
-	    // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-16#section-5.3.3
-	    // DST = H('H2C-OVERSIZE-DST-' || a_very_long_DST, Math.ceil((lenInBytes * k) / 8));
-	    if (DST.length > 255) {
-	        const dkLen = Math.ceil((2 * k) / 8);
-	        DST = H.create({ dkLen }).update(utf8ToBytes('H2C-OVERSIZE-DST-')).update(DST).digest();
-	    }
-	    if (lenInBytes > 65535 || DST.length > 255)
-	        throw new Error('expand_message_xof: invalid lenInBytes');
-	    return (H.create({ dkLen: lenInBytes })
-	        .update(msg)
-	        .update(i2osp(lenInBytes, 2))
-	        // 2. DST_prime = DST || I2OSP(len(DST), 1)
-	        .update(DST)
-	        .update(i2osp(DST.length, 1))
-	        .digest());
-	}
-	/**
-	 * Hashes arbitrary-length byte strings to a list of one or more elements of a finite field F
-	 * https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-11#section-5.3
-	 * @param msg a byte string containing the message to hash
-	 * @param count the number of elements of F to output
-	 * @param options `{DST: string, p: bigint, m: number, k: number, expand: 'xmd' | 'xof', hash: H}`, see above
-	 * @returns [u_0, ..., u_(count - 1)], a list of field elements.
-	 */
-	function hash_to_field(msg, count, options) {
-	    validateObject(options, {
-	        DST: 'string',
-	        p: 'bigint',
-	        m: 'isSafeInteger',
-	        k: 'isSafeInteger',
-	        hash: 'hash',
-	    });
-	    const { p, k, m, hash, expand, DST: _DST } = options;
-	    isBytes(msg);
-	    isNum(count);
-	    const DST = validateDST(_DST);
-	    const log2p = p.toString(2).length;
-	    const L = Math.ceil((log2p + k) / 8); // section 5.1 of ietf draft link above
-	    const len_in_bytes = count * m * L;
-	    let prb; // pseudo_random_bytes
-	    if (expand === 'xmd') {
-	        prb = expand_message_xmd(msg, DST, len_in_bytes, hash);
-	    }
-	    else if (expand === 'xof') {
-	        prb = expand_message_xof(msg, DST, len_in_bytes, k, hash);
-	    }
-	    else if (expand === '_internal_pass') {
-	        // for internal tests only
-	        prb = msg;
-	    }
-	    else {
-	        throw new Error('expand must be "xmd" or "xof"');
-	    }
-	    const u = new Array(count);
-	    for (let i = 0; i < count; i++) {
-	        const e = new Array(m);
-	        for (let j = 0; j < m; j++) {
-	            const elm_offset = L * (j + i * m);
-	            const tv = prb.subarray(elm_offset, elm_offset + L);
-	            e[j] = mod(os2ip(tv), p);
-	        }
-	        u[i] = e;
-	    }
-	    return u;
-	}
-	function isogenyMap(field, map) {
-	    // Make same order as in spec
-	    const COEFF = map.map((i) => Array.from(i).reverse());
-	    return (x, y) => {
-	        const [xNum, xDen, yNum, yDen] = COEFF.map((val) => val.reduce((acc, i) => field.add(field.mul(acc, x), i)));
-	        x = field.div(xNum, xDen); // xNum / xDen
-	        y = field.mul(y, field.div(yNum, yDen)); // y * (yNum / yDev)
-	        return { x, y };
-	    };
-	}
-	function createHasher(Point, mapToCurve, def) {
-	    if (typeof mapToCurve !== 'function')
-	        throw new Error('mapToCurve() must be defined');
-	    return {
-	        // Encodes byte string to elliptic curve
-	        // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-16#section-3
-	        hashToCurve(msg, options) {
-	            const u = hash_to_field(msg, 2, { ...def, DST: def.DST, ...options });
-	            const u0 = Point.fromAffine(mapToCurve(u[0]));
-	            const u1 = Point.fromAffine(mapToCurve(u[1]));
-	            const P = u0.add(u1).clearCofactor();
-	            P.assertValidity();
-	            return P;
-	        },
-	        // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-16#section-3
-	        encodeToCurve(msg, options) {
-	            const u = hash_to_field(msg, 1, { ...def, DST: def.encodeDST, ...options });
-	            const P = Point.fromAffine(mapToCurve(u[0])).clearCofactor();
-	            P.assertValidity();
-	            return P;
-	        },
-	    };
-	}
-
-	/*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 	/**
 	 * ed25519 Twisted Edwards curve with following addons:
 	 * - X25519 ECDH
@@ -4356,7 +4089,7 @@ var solanaStakePool = (function (exports) {
 	// √(-1) aka √(a) aka 2^((p-1)/4)
 	const ED25519_SQRT_M1 = BigInt('19681161376707505956807079304988542015446066515923890162744021073123829784752');
 	// prettier-ignore
-	const _0n$2 = BigInt(0), _1n$2 = BigInt(1), _2n$2 = BigInt(2), _5n = BigInt(5);
+	BigInt(0); const _1n$3 = BigInt(1), _2n$2 = BigInt(2), _5n = BigInt(5);
 	// prettier-ignore
 	const _10n = BigInt(10), _20n = BigInt(20), _40n = BigInt(40), _80n = BigInt(80);
 	function ed25519_pow_2_252_3(x) {
@@ -4364,7 +4097,7 @@ var solanaStakePool = (function (exports) {
 	    const x2 = (x * x) % P;
 	    const b2 = (x2 * x) % P; // x^3, 11
 	    const b4 = (pow2(b2, _2n$2, P) * b2) % P; // x^15, 1111
-	    const b5 = (pow2(b4, _1n$2, P) * x) % P; // x^31
+	    const b5 = (pow2(b4, _1n$3, P) * x) % P; // x^31
 	    const b10 = (pow2(b5, _5n, P) * b5) % P;
 	    const b20 = (pow2(b10, _10n, P) * b10) % P;
 	    const b40 = (pow2(b20, _20n, P) * b20) % P;
@@ -4411,14 +4144,14 @@ var solanaStakePool = (function (exports) {
 	const Fp$1 = Field(ED25519_P, undefined, true);
 	const ed25519Defaults = {
 	    // Param: a
-	    a: BigInt(-1),
+	    a: BigInt(-1), // Fp.create(-1) is proper; our way still works and is faster
 	    // d is equal to -121665/121666 over finite field.
 	    // Negative number is P - number, and division is invert(number, P)
 	    d: BigInt('37095705934669439343138083508754565189542113879843219016388785533085940283555'),
-	    // Finite field 𝔽p over which we'll do calculations; 2n ** 255n - 19n
+	    // Finite field 𝔽p over which we'll do calculations; 2n**255n - 19n
 	    Fp: Fp$1,
 	    // Subgroup order: how many points curve has
-	    // 2n ** 252n + 27742317777372353535851937790883648493n;
+	    // 2n**252n + 27742317777372353535851937790883648493n;
 	    n: BigInt('7237005577332262213973186563042994240857116359379907606001950938285454250989'),
 	    // Cofactor
 	    h: BigInt(8),
@@ -4433,286 +4166,39 @@ var solanaStakePool = (function (exports) {
 	    // Constant-time, u/√v
 	    uvRatio,
 	};
-	const ed25519 = twistedEdwards(ed25519Defaults);
+	const ed25519 = /* @__PURE__ */ twistedEdwards(ed25519Defaults);
 	function ed25519_domain(data, ctx, phflag) {
 	    if (ctx.length > 255)
 	        throw new Error('Context is too big');
 	    return concatBytes$1(utf8ToBytes$1('SigEd25519 no Ed25519 collisions'), new Uint8Array([phflag ? 1 : 0, ctx.length]), ctx, data);
 	}
-	twistedEdwards({ ...ed25519Defaults, domain: ed25519_domain });
-	twistedEdwards({
+	/* @__PURE__ */ twistedEdwards({
+	    ...ed25519Defaults,
+	    domain: ed25519_domain,
+	});
+	/* @__PURE__ */ twistedEdwards({
 	    ...ed25519Defaults,
 	    domain: ed25519_domain,
 	    prehash: sha512,
-	});
-	montgomery({
-	    P: ED25519_P,
-	    a: BigInt(486662),
-	    montgomeryBits: 255,
-	    nByteLength: 32,
-	    Gu: BigInt(9),
-	    powPminus2: (x) => {
-	        const P = ED25519_P;
-	        // x^(p-2) aka x^(2^255-21)
-	        const { pow_p_5_8, b2 } = ed25519_pow_2_252_3(x);
-	        return mod(pow2(pow_p_5_8, BigInt(3), P) * b2, P);
-	    },
-	    adjustScalarBytes,
-	    randomBytes,
 	});
 	// Hash To Curve Elligator2 Map (NOTE: different from ristretto255 elligator)
 	// NOTE: very important part is usage of FpSqrtEven for ELL2_C1_EDWARDS, since
 	// SageMath returns different root first and everything falls apart
 	const ELL2_C1 = (Fp$1.ORDER + BigInt(3)) / BigInt(8); // 1. c1 = (q + 3) / 8       # Integer arithmetic
-	const ELL2_C2 = Fp$1.pow(_2n$2, ELL2_C1); // 2. c2 = 2^c1
-	const ELL2_C3 = Fp$1.sqrt(Fp$1.neg(Fp$1.ONE)); // 3. c3 = sqrt(-1)
-	const ELL2_C4 = (Fp$1.ORDER - BigInt(5)) / BigInt(8); // 4. c4 = (q - 5) / 8       # Integer arithmetic
-	const ELL2_J = BigInt(486662);
-	// prettier-ignore
-	function map_to_curve_elligator2_curve25519(u) {
-	    let tv1 = Fp$1.sqr(u); //  1.  tv1 = u^2
-	    tv1 = Fp$1.mul(tv1, _2n$2); //  2.  tv1 = 2 * tv1
-	    let xd = Fp$1.add(tv1, Fp$1.ONE); //  3.   xd = tv1 + 1         # Nonzero: -1 is square (mod p), tv1 is not
-	    let x1n = Fp$1.neg(ELL2_J); //  4.  x1n = -J              # x1 = x1n / xd = -J / (1 + 2 * u^2)
-	    let tv2 = Fp$1.sqr(xd); //  5.  tv2 = xd^2
-	    let gxd = Fp$1.mul(tv2, xd); //  6.  gxd = tv2 * xd        # gxd = xd^3
-	    let gx1 = Fp$1.mul(tv1, ELL2_J); //  7.  gx1 = J * tv1         # x1n + J * xd
-	    gx1 = Fp$1.mul(gx1, x1n); //  8.  gx1 = gx1 * x1n       # x1n^2 + J * x1n * xd
-	    gx1 = Fp$1.add(gx1, tv2); //  9.  gx1 = gx1 + tv2       # x1n^2 + J * x1n * xd + xd^2
-	    gx1 = Fp$1.mul(gx1, x1n); //  10. gx1 = gx1 * x1n       # x1n^3 + J * x1n^2 * xd + x1n * xd^2
-	    let tv3 = Fp$1.sqr(gxd); //  11. tv3 = gxd^2
-	    tv2 = Fp$1.sqr(tv3); //  12. tv2 = tv3^2           # gxd^4
-	    tv3 = Fp$1.mul(tv3, gxd); //  13. tv3 = tv3 * gxd       # gxd^3
-	    tv3 = Fp$1.mul(tv3, gx1); //  14. tv3 = tv3 * gx1       # gx1 * gxd^3
-	    tv2 = Fp$1.mul(tv2, tv3); //  15. tv2 = tv2 * tv3       # gx1 * gxd^7
-	    let y11 = Fp$1.pow(tv2, ELL2_C4); //  16. y11 = tv2^c4        # (gx1 * gxd^7)^((p - 5) / 8)
-	    y11 = Fp$1.mul(y11, tv3); //  17. y11 = y11 * tv3       # gx1*gxd^3*(gx1*gxd^7)^((p-5)/8)
-	    let y12 = Fp$1.mul(y11, ELL2_C3); //  18. y12 = y11 * c3
-	    tv2 = Fp$1.sqr(y11); //  19. tv2 = y11^2
-	    tv2 = Fp$1.mul(tv2, gxd); //  20. tv2 = tv2 * gxd
-	    let e1 = Fp$1.eql(tv2, gx1); //  21.  e1 = tv2 == gx1
-	    let y1 = Fp$1.cmov(y12, y11, e1); //  22.  y1 = CMOV(y12, y11, e1)  # If g(x1) is square, this is its sqrt
-	    let x2n = Fp$1.mul(x1n, tv1); //  23. x2n = x1n * tv1       # x2 = x2n / xd = 2 * u^2 * x1n / xd
-	    let y21 = Fp$1.mul(y11, u); //  24. y21 = y11 * u
-	    y21 = Fp$1.mul(y21, ELL2_C2); //  25. y21 = y21 * c2
-	    let y22 = Fp$1.mul(y21, ELL2_C3); //  26. y22 = y21 * c3
-	    let gx2 = Fp$1.mul(gx1, tv1); //  27. gx2 = gx1 * tv1       # g(x2) = gx2 / gxd = 2 * u^2 * g(x1)
-	    tv2 = Fp$1.sqr(y21); //  28. tv2 = y21^2
-	    tv2 = Fp$1.mul(tv2, gxd); //  29. tv2 = tv2 * gxd
-	    let e2 = Fp$1.eql(tv2, gx2); //  30.  e2 = tv2 == gx2
-	    let y2 = Fp$1.cmov(y22, y21, e2); //  31.  y2 = CMOV(y22, y21, e2)  # If g(x2) is square, this is its sqrt
-	    tv2 = Fp$1.sqr(y1); //  32. tv2 = y1^2
-	    tv2 = Fp$1.mul(tv2, gxd); //  33. tv2 = tv2 * gxd
-	    let e3 = Fp$1.eql(tv2, gx1); //  34.  e3 = tv2 == gx1
-	    let xn = Fp$1.cmov(x2n, x1n, e3); //  35.  xn = CMOV(x2n, x1n, e3)  # If e3, x = x1, else x = x2
-	    let y = Fp$1.cmov(y2, y1, e3); //  36.   y = CMOV(y2, y1, e3)    # If e3, y = y1, else y = y2
-	    let e4 = Fp$1.isOdd(y); //  37.  e4 = sgn0(y) == 1        # Fix sign of y
-	    y = Fp$1.cmov(y, Fp$1.neg(y), e3 !== e4); //  38.   y = CMOV(y, -y, e3 XOR e4)
-	    return { xMn: xn, xMd: xd, yMn: y, yMd: _1n$2 }; //  39. return (xn, xd, y, 1)
-	}
-	const ELL2_C1_EDWARDS = FpSqrtEven(Fp$1, Fp$1.neg(BigInt(486664))); // sgn0(c1) MUST equal 0
-	function map_to_curve_elligator2_edwards25519(u) {
-	    const { xMn, xMd, yMn, yMd } = map_to_curve_elligator2_curve25519(u); //  1.  (xMn, xMd, yMn, yMd) = map_to_curve_elligator2_curve25519(u)
-	    let xn = Fp$1.mul(xMn, yMd); //  2.  xn = xMn * yMd
-	    xn = Fp$1.mul(xn, ELL2_C1_EDWARDS); //  3.  xn = xn * c1
-	    let xd = Fp$1.mul(xMd, yMn); //  4.  xd = xMd * yMn    # xn / xd = c1 * xM / yM
-	    let yn = Fp$1.sub(xMn, xMd); //  5.  yn = xMn - xMd
-	    let yd = Fp$1.add(xMn, xMd); //  6.  yd = xMn + xMd    # (n / d - 1) / (n / d + 1) = (n - d) / (n + d)
-	    let tv1 = Fp$1.mul(xd, yd); //  7. tv1 = xd * yd
-	    let e = Fp$1.eql(tv1, Fp$1.ZERO); //  8.   e = tv1 == 0
-	    xn = Fp$1.cmov(xn, Fp$1.ZERO, e); //  9.  xn = CMOV(xn, 0, e)
-	    xd = Fp$1.cmov(xd, Fp$1.ONE, e); //  10. xd = CMOV(xd, 1, e)
-	    yn = Fp$1.cmov(yn, Fp$1.ONE, e); //  11. yn = CMOV(yn, 1, e)
-	    yd = Fp$1.cmov(yd, Fp$1.ONE, e); //  12. yd = CMOV(yd, 1, e)
-	    const inv = Fp$1.invertBatch([xd, yd]); // batch division
-	    return { x: Fp$1.mul(xn, inv[0]), y: Fp$1.mul(yn, inv[1]) }; //  13. return (xn, xd, yn, yd)
-	}
-	createHasher(ed25519.ExtendedPoint, (scalars) => map_to_curve_elligator2_edwards25519(scalars[0]), {
-	    DST: 'edwards25519_XMD:SHA-512_ELL2_RO_',
-	    encodeDST: 'edwards25519_XMD:SHA-512_ELL2_NU_',
-	    p: Fp$1.ORDER,
-	    m: 1,
-	    k: 128,
-	    expand: 'xmd',
-	    hash: sha512,
-	});
-	function assertRstPoint(other) {
-	    if (!(other instanceof RistrettoPoint))
-	        throw new Error('RistrettoPoint expected');
-	}
-	// √(-1) aka √(a) aka 2^((p-1)/4)
-	const SQRT_M1 = BigInt('19681161376707505956807079304988542015446066515923890162744021073123829784752');
+	Fp$1.pow(_2n$2, ELL2_C1); // 2. c2 = 2^c1
+	Fp$1.sqrt(Fp$1.neg(Fp$1.ONE)); // 3. c3 = sqrt(-1)
+	(Fp$1.ORDER - BigInt(5)) / BigInt(8); // 4. c4 = (q - 5) / 8       # Integer arithmetic
+	BigInt(486662);
+	FpSqrtEven(Fp$1, Fp$1.neg(BigInt(486664))); // sgn0(c1) MUST equal 0
 	// √(ad - 1)
-	const SQRT_AD_MINUS_ONE = BigInt('25063068953384623474111414158702152701244531502492656460079210482610430750235');
+	BigInt('25063068953384623474111414158702152701244531502492656460079210482610430750235');
 	// 1 / √(a-d)
-	const INVSQRT_A_MINUS_D = BigInt('54469307008909316920995813868745141605393597292927456921205312896311721017578');
+	BigInt('54469307008909316920995813868745141605393597292927456921205312896311721017578');
 	// 1-d²
-	const ONE_MINUS_D_SQ = BigInt('1159843021668779879193775521855586647937357759715417654439879720876111806838');
+	BigInt('1159843021668779879193775521855586647937357759715417654439879720876111806838');
 	// (d-1)²
-	const D_MINUS_ONE_SQ = BigInt('40440834346308536858101042469323190826248399146238708352240133220865137265952');
-	// Calculates 1/√(number)
-	const invertSqrt = (number) => uvRatio(_1n$2, number);
-	const MAX_255B = BigInt('0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff');
-	const bytes255ToNumberLE = (bytes) => ed25519.CURVE.Fp.create(bytesToNumberLE(bytes) & MAX_255B);
-	// Computes Elligator map for Ristretto
-	// https://ristretto.group/formulas/elligator.html
-	function calcElligatorRistrettoMap(r0) {
-	    const { d } = ed25519.CURVE;
-	    const P = ed25519.CURVE.Fp.ORDER;
-	    const mod = ed25519.CURVE.Fp.create;
-	    const r = mod(SQRT_M1 * r0 * r0); // 1
-	    const Ns = mod((r + _1n$2) * ONE_MINUS_D_SQ); // 2
-	    let c = BigInt(-1); // 3
-	    const D = mod((c - d * r) * mod(r + d)); // 4
-	    let { isValid: Ns_D_is_sq, value: s } = uvRatio(Ns, D); // 5
-	    let s_ = mod(s * r0); // 6
-	    if (!isNegativeLE(s_, P))
-	        s_ = mod(-s_);
-	    if (!Ns_D_is_sq)
-	        s = s_; // 7
-	    if (!Ns_D_is_sq)
-	        c = r; // 8
-	    const Nt = mod(c * (r - _1n$2) * D_MINUS_ONE_SQ - D); // 9
-	    const s2 = s * s;
-	    const W0 = mod((s + s) * D); // 10
-	    const W1 = mod(Nt * SQRT_AD_MINUS_ONE); // 11
-	    const W2 = mod(_1n$2 - s2); // 12
-	    const W3 = mod(_1n$2 + s2); // 13
-	    return new ed25519.ExtendedPoint(mod(W0 * W3), mod(W2 * W1), mod(W1 * W3), mod(W0 * W2));
-	}
-	/**
-	 * Each ed25519/ExtendedPoint has 8 different equivalent points. This can be
-	 * a source of bugs for protocols like ring signatures. Ristretto was created to solve this.
-	 * Ristretto point operates in X:Y:Z:T extended coordinates like ExtendedPoint,
-	 * but it should work in its own namespace: do not combine those two.
-	 * https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-ristretto255-decaf448
-	 */
-	class RistrettoPoint {
-	    // Private property to discourage combining ExtendedPoint + RistrettoPoint
-	    // Always use Ristretto encoding/decoding instead.
-	    constructor(ep) {
-	        this.ep = ep;
-	    }
-	    static fromAffine(ap) {
-	        return new RistrettoPoint(ed25519.ExtendedPoint.fromAffine(ap));
-	    }
-	    /**
-	     * Takes uniform output of 64-bit hash function like sha512 and converts it to `RistrettoPoint`.
-	     * The hash-to-group operation applies Elligator twice and adds the results.
-	     * **Note:** this is one-way map, there is no conversion from point to hash.
-	     * https://ristretto.group/formulas/elligator.html
-	     * @param hex 64-bit output of a hash function
-	     */
-	    static hashToCurve(hex) {
-	        hex = ensureBytes('ristrettoHash', hex, 64);
-	        const r1 = bytes255ToNumberLE(hex.slice(0, 32));
-	        const R1 = calcElligatorRistrettoMap(r1);
-	        const r2 = bytes255ToNumberLE(hex.slice(32, 64));
-	        const R2 = calcElligatorRistrettoMap(r2);
-	        return new RistrettoPoint(R1.add(R2));
-	    }
-	    /**
-	     * Converts ristretto-encoded string to ristretto point.
-	     * https://ristretto.group/formulas/decoding.html
-	     * @param hex Ristretto-encoded 32 bytes. Not every 32-byte string is valid ristretto encoding
-	     */
-	    static fromHex(hex) {
-	        hex = ensureBytes('ristrettoHex', hex, 32);
-	        const { a, d } = ed25519.CURVE;
-	        const P = ed25519.CURVE.Fp.ORDER;
-	        const mod = ed25519.CURVE.Fp.create;
-	        const emsg = 'RistrettoPoint.fromHex: the hex is not valid encoding of RistrettoPoint';
-	        const s = bytes255ToNumberLE(hex);
-	        // 1. Check that s_bytes is the canonical encoding of a field element, or else abort.
-	        // 3. Check that s is non-negative, or else abort
-	        if (!equalBytes(numberToBytesLE(s, 32), hex) || isNegativeLE(s, P))
-	            throw new Error(emsg);
-	        const s2 = mod(s * s);
-	        const u1 = mod(_1n$2 + a * s2); // 4 (a is -1)
-	        const u2 = mod(_1n$2 - a * s2); // 5
-	        const u1_2 = mod(u1 * u1);
-	        const u2_2 = mod(u2 * u2);
-	        const v = mod(a * d * u1_2 - u2_2); // 6
-	        const { isValid, value: I } = invertSqrt(mod(v * u2_2)); // 7
-	        const Dx = mod(I * u2); // 8
-	        const Dy = mod(I * Dx * v); // 9
-	        let x = mod((s + s) * Dx); // 10
-	        if (isNegativeLE(x, P))
-	            x = mod(-x); // 10
-	        const y = mod(u1 * Dy); // 11
-	        const t = mod(x * y); // 12
-	        if (!isValid || isNegativeLE(t, P) || y === _0n$2)
-	            throw new Error(emsg);
-	        return new RistrettoPoint(new ed25519.ExtendedPoint(x, y, _1n$2, t));
-	    }
-	    /**
-	     * Encodes ristretto point to Uint8Array.
-	     * https://ristretto.group/formulas/encoding.html
-	     */
-	    toRawBytes() {
-	        let { ex: x, ey: y, ez: z, et: t } = this.ep;
-	        const P = ed25519.CURVE.Fp.ORDER;
-	        const mod = ed25519.CURVE.Fp.create;
-	        const u1 = mod(mod(z + y) * mod(z - y)); // 1
-	        const u2 = mod(x * y); // 2
-	        // Square root always exists
-	        const u2sq = mod(u2 * u2);
-	        const { value: invsqrt } = invertSqrt(mod(u1 * u2sq)); // 3
-	        const D1 = mod(invsqrt * u1); // 4
-	        const D2 = mod(invsqrt * u2); // 5
-	        const zInv = mod(D1 * D2 * t); // 6
-	        let D; // 7
-	        if (isNegativeLE(t * zInv, P)) {
-	            let _x = mod(y * SQRT_M1);
-	            let _y = mod(x * SQRT_M1);
-	            x = _x;
-	            y = _y;
-	            D = mod(D1 * INVSQRT_A_MINUS_D);
-	        }
-	        else {
-	            D = D2; // 8
-	        }
-	        if (isNegativeLE(x * zInv, P))
-	            y = mod(-y); // 9
-	        let s = mod((z - y) * D); // 10 (check footer's note, no sqrt(-a))
-	        if (isNegativeLE(s, P))
-	            s = mod(-s);
-	        return numberToBytesLE(s, 32); // 11
-	    }
-	    toHex() {
-	        return bytesToHex(this.toRawBytes());
-	    }
-	    toString() {
-	        return this.toHex();
-	    }
-	    // Compare one point to another.
-	    equals(other) {
-	        assertRstPoint(other);
-	        const { ex: X1, ey: Y1 } = this.ep;
-	        const { ex: X2, ey: Y2 } = other.ep;
-	        const mod = ed25519.CURVE.Fp.create;
-	        // (x1 * y2 == y1 * x2) | (y1 * y2 == x1 * x2)
-	        const one = mod(X1 * Y2) === mod(Y1 * X2);
-	        const two = mod(Y1 * Y2) === mod(X1 * X2);
-	        return one || two;
-	    }
-	    add(other) {
-	        assertRstPoint(other);
-	        return new RistrettoPoint(this.ep.add(other.ep));
-	    }
-	    subtract(other) {
-	        assertRstPoint(other);
-	        return new RistrettoPoint(this.ep.subtract(other.ep));
-	    }
-	    multiply(scalar) {
-	        return new RistrettoPoint(this.ep.multiply(scalar));
-	    }
-	    multiplyUnsafe(scalar) {
-	        return new RistrettoPoint(this.ep.multiplyUnsafe(scalar));
-	    }
-	}
-	RistrettoPoint.BASE = new RistrettoPoint(ed25519.ExtendedPoint.BASE);
-	RistrettoPoint.ZERO = new RistrettoPoint(ed25519.ExtendedPoint.ZERO);
+	BigInt('40440834346308536858101042469323190826248399146238708352240133220865137265952');
+	BigInt('0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff');
 
 	var bn = {exports: {}};
 
@@ -4720,10 +4206,10 @@ var solanaStakePool = (function (exports) {
 
 	var _nodeResolve_empty$1 = /*#__PURE__*/Object.freeze({
 		__proto__: null,
-		'default': _nodeResolve_empty
+		default: _nodeResolve_empty
 	});
 
-	var require$$0 = /*@__PURE__*/getAugmentedNamespace(_nodeResolve_empty$1);
+	var require$$0$1 = /*@__PURE__*/getAugmentedNamespace(_nodeResolve_empty$1);
 
 	bn.exports;
 
@@ -4782,7 +4268,7 @@ var solanaStakePool = (function (exports) {
 		    if (typeof window !== 'undefined' && typeof window.Buffer !== 'undefined') {
 		      Buffer = window.Buffer;
 		    } else {
-		      Buffer = require$$0.Buffer;
+		      Buffer = require$$0$1.Buffer;
 		    }
 		  } catch (e) {
 		  }
@@ -5209,15 +4695,15 @@ var solanaStakePool = (function (exports) {
 		        var w = this.words[i];
 		        var word = (((w << off) | carry) & 0xffffff).toString(16);
 		        carry = (w >>> (24 - off)) & 0xffffff;
-		        if (carry !== 0 || i !== this.length - 1) {
-		          out = zeros[6 - word.length] + word + out;
-		        } else {
-		          out = word + out;
-		        }
 		        off += 2;
 		        if (off >= 26) {
 		          off -= 26;
 		          i--;
+		        }
+		        if (carry !== 0 || i !== this.length - 1) {
+		          out = zeros[6 - word.length] + word + out;
+		        } else {
+		          out = word + out;
 		        }
 		      }
 		      if (carry !== 0) {
@@ -8079,12 +7565,11 @@ var solanaStakePool = (function (exports) {
 	} (bn));
 
 	var bnExports = bn.exports;
-	var BN = /*@__PURE__*/getDefaultExportFromCjs(bnExports);
+	var BN = /*@__PURE__*/getDefaultExportFromCjs$1(bnExports);
 
 	var safeBuffer = {exports: {}};
 
 	/*! safe-buffer. MIT License. Feross Aboukhadijeh <https://feross.org/opensource> */
-	safeBuffer.exports;
 
 	(function (module, exports) {
 		/* eslint-disable node/no-deprecated-api */
@@ -8279,8 +7764,10 @@ var solanaStakePool = (function (exports) {
 
 	var bs58 = basex(ALPHABET);
 
-	var bs58$1 = /*@__PURE__*/getDefaultExportFromCjs(bs58);
+	var bs58$1 = /*@__PURE__*/getDefaultExportFromCjs$1(bs58);
 
+	// SHA2-256 need to try 2^128 hashes to execute birthday attack.
+	// BTC network is doing 2^67 hashes/sec as per early 2023.
 	// Choice: a ? b : c
 	const Chi = (a, b, c) => (a & b) ^ (~a & c);
 	// Majority function, true if any two inpust is true
@@ -8288,7 +7775,7 @@ var solanaStakePool = (function (exports) {
 	// Round constants:
 	// first 32 bits of the fractional parts of the cube roots of the first 64 primes 2..311)
 	// prettier-ignore
-	const SHA256_K = new Uint32Array([
+	const SHA256_K = /* @__PURE__ */ new Uint32Array([
 	    0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
 	    0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
 	    0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
@@ -8300,12 +7787,12 @@ var solanaStakePool = (function (exports) {
 	]);
 	// Initial state (first 32 bits of the fractional parts of the square roots of the first 8 primes 2..19):
 	// prettier-ignore
-	const IV = new Uint32Array([
+	const IV = /* @__PURE__ */ new Uint32Array([
 	    0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19
 	]);
 	// Temporary buffer, not used to store anything between runs
 	// Named this way because it matches specification.
-	const SHA256_W = new Uint32Array(64);
+	const SHA256_W = /* @__PURE__ */ new Uint32Array(64);
 	class SHA256 extends SHA2 {
 	    constructor() {
 	        super(64, 32, 8, false);
@@ -8381,27 +7868,11 @@ var solanaStakePool = (function (exports) {
 	        this.buffer.fill(0);
 	    }
 	}
-	// Constants from https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.180-4.pdf
-	class SHA224 extends SHA256 {
-	    constructor() {
-	        super();
-	        this.A = 0xc1059ed8 | 0;
-	        this.B = 0x367cd507 | 0;
-	        this.C = 0x3070dd17 | 0;
-	        this.D = 0xf70e5939 | 0;
-	        this.E = 0xffc00b31 | 0;
-	        this.F = 0x68581511 | 0;
-	        this.G = 0x64f98fa7 | 0;
-	        this.H = 0xbefa4fa4 | 0;
-	        this.outputLen = 28;
-	    }
-	}
 	/**
 	 * SHA2-256 hash function
 	 * @param message - data that would be hashed
 	 */
-	const sha256 = wrapConstructor(() => new SHA256());
-	wrapConstructor(() => new SHA224());
+	const sha256 = /* @__PURE__ */ wrapConstructor(() => new SHA256());
 
 	var lib = {};
 
@@ -9488,7 +8959,7 @@ var solanaStakePool = (function (exports) {
 	}
 	deserializeUnchecked_1 = lib.deserializeUnchecked = deserializeUnchecked;
 
-	var Layout$1 = {};
+	var Layout$3 = {};
 
 	/* The MIT License (MIT)
 	 *
@@ -9512,9 +8983,9 @@ var solanaStakePool = (function (exports) {
 	 * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 	 * THE SOFTWARE.
 	 */
-	Object.defineProperty(Layout$1, "__esModule", { value: true });
-	Layout$1.s16 = Layout$1.s8 = Layout$1.nu64be = Layout$1.u48be = Layout$1.u40be = Layout$1.u32be = Layout$1.u24be = Layout$1.u16be = nu64 = Layout$1.nu64 = Layout$1.u48 = Layout$1.u40 = u32 = Layout$1.u32 = Layout$1.u24 = u16 = Layout$1.u16 = u8 = Layout$1.u8 = offset = Layout$1.offset = Layout$1.greedy = Layout$1.Constant = Layout$1.UTF8 = Layout$1.CString = Layout$1.Blob = Layout$1.Boolean = Layout$1.BitField = Layout$1.BitStructure = Layout$1.VariantLayout = Layout$1.Union = Layout$1.UnionLayoutDiscriminator = Layout$1.UnionDiscriminator = Layout$1.Structure = Layout$1.Sequence = Layout$1.DoubleBE = Layout$1.Double = Layout$1.FloatBE = Layout$1.Float = Layout$1.NearInt64BE = Layout$1.NearInt64 = Layout$1.NearUInt64BE = Layout$1.NearUInt64 = Layout$1.IntBE = Layout$1.Int = Layout$1.UIntBE = Layout$1.UInt = Layout$1.OffsetLayout = Layout$1.GreedyCount = Layout$1.ExternalLayout = Layout$1.bindConstructorLayout = Layout$1.nameWithProperty = Layout_2 = Layout$1.Layout = Layout$1.uint8ArrayToBuffer = Layout$1.checkUint8Array = void 0;
-	Layout$1.constant = Layout$1.utf8 = Layout$1.cstr = blob = Layout$1.blob = Layout$1.unionLayoutDiscriminator = Layout$1.union = seq = Layout$1.seq = Layout$1.bits = struct = Layout$1.struct = Layout$1.f64be = Layout$1.f64 = Layout$1.f32be = Layout$1.f32 = Layout$1.ns64be = Layout$1.s48be = Layout$1.s40be = Layout$1.s32be = Layout$1.s24be = Layout$1.s16be = ns64 = Layout$1.ns64 = Layout$1.s48 = Layout$1.s40 = Layout$1.s32 = Layout$1.s24 = void 0;
+	Object.defineProperty(Layout$3, "__esModule", { value: true });
+	Layout$3.s16 = Layout$3.s8 = Layout$3.nu64be = Layout$3.u48be = Layout$3.u40be = Layout$3.u32be = Layout$3.u24be = Layout$3.u16be = nu64 = Layout$3.nu64 = Layout$3.u48 = Layout$3.u40 = u32 = Layout$3.u32 = Layout$3.u24 = u16 = Layout$3.u16 = u8 = Layout$3.u8 = offset = Layout$3.offset = Layout$3.greedy = Layout$3.Constant = Layout$3.UTF8 = Layout$3.CString = Layout$3.Blob = Layout$3.Boolean = Layout$3.BitField = Layout$3.BitStructure = Layout$3.VariantLayout = Layout$3.Union = Layout$3.UnionLayoutDiscriminator = Layout$3.UnionDiscriminator = Layout$3.Structure = Layout$3.Sequence = Layout$3.DoubleBE = Layout$3.Double = Layout$3.FloatBE = Layout$3.Float = Layout$3.NearInt64BE = Layout$3.NearInt64 = Layout$3.NearUInt64BE = Layout$3.NearUInt64 = Layout$3.IntBE = Layout$3.Int = Layout$3.UIntBE = Layout$3.UInt = Layout$3.OffsetLayout = Layout$3.GreedyCount = Layout$3.ExternalLayout = Layout$3.bindConstructorLayout = Layout$3.nameWithProperty = Layout$3.Layout = Layout$3.uint8ArrayToBuffer = Layout$3.checkUint8Array = void 0;
+	Layout$3.constant = Layout$3.utf8 = Layout$3.cstr = blob = Layout$3.blob = Layout$3.unionLayoutDiscriminator = Layout$3.union = seq = Layout$3.seq = Layout$3.bits = struct = Layout$3.struct = Layout$3.f64be = Layout$3.f64 = Layout$3.f32be = Layout$3.f32 = Layout$3.ns64be = Layout$3.s48be = Layout$3.s40be = Layout$3.s32be = Layout$3.s24be = Layout$3.s16be = ns64 = Layout$3.ns64 = Layout$3.s48 = Layout$3.s40 = Layout$3.s32 = Layout$3.s24 = void 0;
 	const buffer_1 = buffer;
 	/* Check if a value is a Uint8Array.
 	 *
@@ -9524,7 +8995,7 @@ var solanaStakePool = (function (exports) {
 	        throw new TypeError('b must be a Uint8Array');
 	    }
 	}
-	Layout$1.checkUint8Array = checkUint8Array;
+	Layout$3.checkUint8Array = checkUint8Array;
 	/* Create a Buffer instance from a Uint8Array.
 	 *
 	 * @ignore */
@@ -9532,7 +9003,7 @@ var solanaStakePool = (function (exports) {
 	    checkUint8Array(b);
 	    return buffer_1.Buffer.from(b.buffer, b.byteOffset, b.length);
 	}
-	Layout$1.uint8ArrayToBuffer = uint8ArrayToBuffer;
+	Layout$3.uint8ArrayToBuffer = uint8ArrayToBuffer;
 	/**
 	 * Base class for layout objects.
 	 *
@@ -9549,7 +9020,7 @@ var solanaStakePool = (function (exports) {
 	 *
 	 * @abstract
 	 */
-	class Layout {
+	let Layout$2 = class Layout {
 	    constructor(span, property) {
 	        if (!Number.isInteger(span)) {
 	            throw new TypeError('span must be an integer');
@@ -9659,20 +9130,20 @@ var solanaStakePool = (function (exports) {
 	    fromArray(values) {
 	        return undefined;
 	    }
-	}
-	var Layout_2 = Layout$1.Layout = Layout;
+	};
+	Layout$3.Layout = Layout$2;
 	/* Provide text that carries a name (such as for a function that will
 	 * be throwing an error) annotated with the property of a given layout
 	 * (such as one for which the value was unacceptable).
 	 *
 	 * @ignore */
-	function nameWithProperty(name, lo) {
+	function nameWithProperty$1(name, lo) {
 	    if (lo.property) {
 	        return name + '[' + lo.property + ']';
 	    }
 	    return name;
 	}
-	Layout$1.nameWithProperty = nameWithProperty;
+	Layout$3.nameWithProperty = nameWithProperty$1;
 	/**
 	 * Augment a class so that instances can be encoded/decoded using a
 	 * given layout.
@@ -9702,14 +9173,14 @@ var solanaStakePool = (function (exports) {
 	 */
 	// `Class` must be a constructor Function, but the assignment of a `layout_` property to it makes it difficult to type
 	// eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types
-	function bindConstructorLayout(Class, layout) {
+	function bindConstructorLayout$1(Class, layout) {
 	    if ('function' !== typeof Class) {
 	        throw new TypeError('Class must be constructor');
 	    }
 	    if (Object.prototype.hasOwnProperty.call(Class, 'layout_')) {
 	        throw new Error('Class is already bound to a layout');
 	    }
-	    if (!(layout && (layout instanceof Layout))) {
+	    if (!(layout && (layout instanceof Layout$2))) {
 	        throw new TypeError('layout must be a Layout');
 	    }
 	    if (Object.prototype.hasOwnProperty.call(layout, 'boundConstructor_')) {
@@ -9731,7 +9202,7 @@ var solanaStakePool = (function (exports) {
 	        writable: true,
 	    });
 	}
-	Layout$1.bindConstructorLayout = bindConstructorLayout;
+	Layout$3.bindConstructorLayout = bindConstructorLayout$1;
 	/**
 	 * An object that behaves like a layout but does not consume space
 	 * within its containing layout.
@@ -9753,7 +9224,7 @@ var solanaStakePool = (function (exports) {
 	 * @abstract
 	 * @augments {Layout}
 	 */
-	class ExternalLayout extends Layout {
+	let ExternalLayout$1 = class ExternalLayout extends Layout$2 {
 	    /**
 	     * Return `true` iff the external layout decodes to an unsigned
 	     * integer layout.
@@ -9768,8 +9239,8 @@ var solanaStakePool = (function (exports) {
 	    isCount() {
 	        throw new Error('ExternalLayout is abstract');
 	    }
-	}
-	Layout$1.ExternalLayout = ExternalLayout;
+	};
+	Layout$3.ExternalLayout = ExternalLayout$1;
 	/**
 	 * An {@link ExternalLayout} that determines its {@link
 	 * Layout#decode|value} based on offset into and length of the buffer
@@ -9785,7 +9256,7 @@ var solanaStakePool = (function (exports) {
 	 *
 	 * @augments {ExternalLayout}
 	 */
-	class GreedyCount extends ExternalLayout {
+	let GreedyCount$1 = class GreedyCount extends ExternalLayout$1 {
 	    constructor(elementSpan = 1, property) {
 	        if ((!Number.isInteger(elementSpan)) || (0 >= elementSpan)) {
 	            throw new TypeError('elementSpan must be a (positive) integer');
@@ -9810,8 +9281,8 @@ var solanaStakePool = (function (exports) {
 	    encode(src, b, offset) {
 	        return 0;
 	    }
-	}
-	Layout$1.GreedyCount = GreedyCount;
+	};
+	Layout$3.GreedyCount = GreedyCount$1;
 	/**
 	 * An {@link ExternalLayout} that supports accessing a {@link Layout}
 	 * at a fixed offset from the start of another Layout.  The offset may
@@ -9832,9 +9303,9 @@ var solanaStakePool = (function (exports) {
 	 *
 	 * @augments {Layout}
 	 */
-	class OffsetLayout extends ExternalLayout {
+	let OffsetLayout$1 = class OffsetLayout extends ExternalLayout$1 {
 	    constructor(layout, offset = 0, property) {
-	        if (!(layout instanceof Layout)) {
+	        if (!(layout instanceof Layout$2)) {
 	            throw new TypeError('layout must be a Layout');
 	        }
 	        if (!Number.isInteger(offset)) {
@@ -9853,8 +9324,8 @@ var solanaStakePool = (function (exports) {
 	    }
 	    /** @override */
 	    isCount() {
-	        return ((this.layout instanceof UInt)
-	            || (this.layout instanceof UIntBE));
+	        return ((this.layout instanceof UInt$1)
+	            || (this.layout instanceof UIntBE$1));
 	    }
 	    /** @override */
 	    decode(b, offset = 0) {
@@ -9864,8 +9335,8 @@ var solanaStakePool = (function (exports) {
 	    encode(src, b, offset = 0) {
 	        return this.layout.encode(src, b, offset + this.offset);
 	    }
-	}
-	Layout$1.OffsetLayout = OffsetLayout;
+	};
+	Layout$3.OffsetLayout = OffsetLayout$1;
 	/**
 	 * Represent an unsigned integer in little-endian format.
 	 *
@@ -9882,7 +9353,7 @@ var solanaStakePool = (function (exports) {
 	 *
 	 * @augments {Layout}
 	 */
-	class UInt extends Layout {
+	let UInt$1 = class UInt extends Layout$2 {
 	    constructor(span, property) {
 	        super(span, property);
 	        if (6 < this.span) {
@@ -9898,8 +9369,8 @@ var solanaStakePool = (function (exports) {
 	        uint8ArrayToBuffer(b).writeUIntLE(src, offset, this.span);
 	        return this.span;
 	    }
-	}
-	Layout$1.UInt = UInt;
+	};
+	Layout$3.UInt = UInt$1;
 	/**
 	 * Represent an unsigned integer in big-endian format.
 	 *
@@ -9916,7 +9387,7 @@ var solanaStakePool = (function (exports) {
 	 *
 	 * @augments {Layout}
 	 */
-	class UIntBE extends Layout {
+	let UIntBE$1 = class UIntBE extends Layout$2 {
 	    constructor(span, property) {
 	        super(span, property);
 	        if (6 < this.span) {
@@ -9932,8 +9403,8 @@ var solanaStakePool = (function (exports) {
 	        uint8ArrayToBuffer(b).writeUIntBE(src, offset, this.span);
 	        return this.span;
 	    }
-	}
-	Layout$1.UIntBE = UIntBE;
+	};
+	Layout$3.UIntBE = UIntBE$1;
 	/**
 	 * Represent a signed integer in little-endian format.
 	 *
@@ -9950,7 +9421,7 @@ var solanaStakePool = (function (exports) {
 	 *
 	 * @augments {Layout}
 	 */
-	class Int extends Layout {
+	let Int$1 = class Int extends Layout$2 {
 	    constructor(span, property) {
 	        super(span, property);
 	        if (6 < this.span) {
@@ -9966,8 +9437,8 @@ var solanaStakePool = (function (exports) {
 	        uint8ArrayToBuffer(b).writeIntLE(src, offset, this.span);
 	        return this.span;
 	    }
-	}
-	Layout$1.Int = Int;
+	};
+	Layout$3.Int = Int$1;
 	/**
 	 * Represent a signed integer in big-endian format.
 	 *
@@ -9984,7 +9455,7 @@ var solanaStakePool = (function (exports) {
 	 *
 	 * @augments {Layout}
 	 */
-	class IntBE extends Layout {
+	let IntBE$1 = class IntBE extends Layout$2 {
 	    constructor(span, property) {
 	        super(span, property);
 	        if (6 < this.span) {
@@ -10000,19 +9471,19 @@ var solanaStakePool = (function (exports) {
 	        uint8ArrayToBuffer(b).writeIntBE(src, offset, this.span);
 	        return this.span;
 	    }
-	}
-	Layout$1.IntBE = IntBE;
-	const V2E32 = Math.pow(2, 32);
+	};
+	Layout$3.IntBE = IntBE$1;
+	const V2E32$1 = Math.pow(2, 32);
 	/* True modulus high and low 32-bit words, where low word is always
 	 * non-negative. */
-	function divmodInt64(src) {
-	    const hi32 = Math.floor(src / V2E32);
-	    const lo32 = src - (hi32 * V2E32);
+	function divmodInt64$1(src) {
+	    const hi32 = Math.floor(src / V2E32$1);
+	    const lo32 = src - (hi32 * V2E32$1);
 	    return { hi32, lo32 };
 	}
 	/* Reconstruct Number from quotient and non-negative remainder */
-	function roundedInt64(hi32, lo32) {
-	    return hi32 * V2E32 + lo32;
+	function roundedInt64$1(hi32, lo32) {
+	    return hi32 * V2E32$1 + lo32;
 	}
 	/**
 	 * Represent an unsigned 64-bit integer in little-endian format when
@@ -10025,7 +9496,7 @@ var solanaStakePool = (function (exports) {
 	 *
 	 * @augments {Layout}
 	 */
-	class NearUInt64 extends Layout {
+	let NearUInt64$1 = class NearUInt64 extends Layout$2 {
 	    constructor(property) {
 	        super(8, property);
 	    }
@@ -10034,18 +9505,18 @@ var solanaStakePool = (function (exports) {
 	        const buffer = uint8ArrayToBuffer(b);
 	        const lo32 = buffer.readUInt32LE(offset);
 	        const hi32 = buffer.readUInt32LE(offset + 4);
-	        return roundedInt64(hi32, lo32);
+	        return roundedInt64$1(hi32, lo32);
 	    }
 	    /** @override */
 	    encode(src, b, offset = 0) {
-	        const split = divmodInt64(src);
+	        const split = divmodInt64$1(src);
 	        const buffer = uint8ArrayToBuffer(b);
 	        buffer.writeUInt32LE(split.lo32, offset);
 	        buffer.writeUInt32LE(split.hi32, offset + 4);
 	        return 8;
 	    }
-	}
-	Layout$1.NearUInt64 = NearUInt64;
+	};
+	Layout$3.NearUInt64 = NearUInt64$1;
 	/**
 	 * Represent an unsigned 64-bit integer in big-endian format when
 	 * encoded and as a near integral JavaScript Number when decoded.
@@ -10057,7 +9528,7 @@ var solanaStakePool = (function (exports) {
 	 *
 	 * @augments {Layout}
 	 */
-	class NearUInt64BE extends Layout {
+	let NearUInt64BE$1 = class NearUInt64BE extends Layout$2 {
 	    constructor(property) {
 	        super(8, property);
 	    }
@@ -10066,18 +9537,18 @@ var solanaStakePool = (function (exports) {
 	        const buffer = uint8ArrayToBuffer(b);
 	        const hi32 = buffer.readUInt32BE(offset);
 	        const lo32 = buffer.readUInt32BE(offset + 4);
-	        return roundedInt64(hi32, lo32);
+	        return roundedInt64$1(hi32, lo32);
 	    }
 	    /** @override */
 	    encode(src, b, offset = 0) {
-	        const split = divmodInt64(src);
+	        const split = divmodInt64$1(src);
 	        const buffer = uint8ArrayToBuffer(b);
 	        buffer.writeUInt32BE(split.hi32, offset);
 	        buffer.writeUInt32BE(split.lo32, offset + 4);
 	        return 8;
 	    }
-	}
-	Layout$1.NearUInt64BE = NearUInt64BE;
+	};
+	Layout$3.NearUInt64BE = NearUInt64BE$1;
 	/**
 	 * Represent a signed 64-bit integer in little-endian format when
 	 * encoded and as a near integral JavaScript Number when decoded.
@@ -10089,7 +9560,7 @@ var solanaStakePool = (function (exports) {
 	 *
 	 * @augments {Layout}
 	 */
-	class NearInt64 extends Layout {
+	let NearInt64$1 = class NearInt64 extends Layout$2 {
 	    constructor(property) {
 	        super(8, property);
 	    }
@@ -10098,18 +9569,18 @@ var solanaStakePool = (function (exports) {
 	        const buffer = uint8ArrayToBuffer(b);
 	        const lo32 = buffer.readUInt32LE(offset);
 	        const hi32 = buffer.readInt32LE(offset + 4);
-	        return roundedInt64(hi32, lo32);
+	        return roundedInt64$1(hi32, lo32);
 	    }
 	    /** @override */
 	    encode(src, b, offset = 0) {
-	        const split = divmodInt64(src);
+	        const split = divmodInt64$1(src);
 	        const buffer = uint8ArrayToBuffer(b);
 	        buffer.writeUInt32LE(split.lo32, offset);
 	        buffer.writeInt32LE(split.hi32, offset + 4);
 	        return 8;
 	    }
-	}
-	Layout$1.NearInt64 = NearInt64;
+	};
+	Layout$3.NearInt64 = NearInt64$1;
 	/**
 	 * Represent a signed 64-bit integer in big-endian format when
 	 * encoded and as a near integral JavaScript Number when decoded.
@@ -10121,7 +9592,7 @@ var solanaStakePool = (function (exports) {
 	 *
 	 * @augments {Layout}
 	 */
-	class NearInt64BE extends Layout {
+	let NearInt64BE$1 = class NearInt64BE extends Layout$2 {
 	    constructor(property) {
 	        super(8, property);
 	    }
@@ -10130,18 +9601,18 @@ var solanaStakePool = (function (exports) {
 	        const buffer = uint8ArrayToBuffer(b);
 	        const hi32 = buffer.readInt32BE(offset);
 	        const lo32 = buffer.readUInt32BE(offset + 4);
-	        return roundedInt64(hi32, lo32);
+	        return roundedInt64$1(hi32, lo32);
 	    }
 	    /** @override */
 	    encode(src, b, offset = 0) {
-	        const split = divmodInt64(src);
+	        const split = divmodInt64$1(src);
 	        const buffer = uint8ArrayToBuffer(b);
 	        buffer.writeInt32BE(split.hi32, offset);
 	        buffer.writeUInt32BE(split.lo32, offset + 4);
 	        return 8;
 	    }
-	}
-	Layout$1.NearInt64BE = NearInt64BE;
+	};
+	Layout$3.NearInt64BE = NearInt64BE$1;
 	/**
 	 * Represent a 32-bit floating point number in little-endian format.
 	 *
@@ -10152,7 +9623,7 @@ var solanaStakePool = (function (exports) {
 	 *
 	 * @augments {Layout}
 	 */
-	class Float extends Layout {
+	let Float$1 = class Float extends Layout$2 {
 	    constructor(property) {
 	        super(4, property);
 	    }
@@ -10165,8 +9636,8 @@ var solanaStakePool = (function (exports) {
 	        uint8ArrayToBuffer(b).writeFloatLE(src, offset);
 	        return 4;
 	    }
-	}
-	Layout$1.Float = Float;
+	};
+	Layout$3.Float = Float$1;
 	/**
 	 * Represent a 32-bit floating point number in big-endian format.
 	 *
@@ -10177,7 +9648,7 @@ var solanaStakePool = (function (exports) {
 	 *
 	 * @augments {Layout}
 	 */
-	class FloatBE extends Layout {
+	let FloatBE$1 = class FloatBE extends Layout$2 {
 	    constructor(property) {
 	        super(4, property);
 	    }
@@ -10190,8 +9661,8 @@ var solanaStakePool = (function (exports) {
 	        uint8ArrayToBuffer(b).writeFloatBE(src, offset);
 	        return 4;
 	    }
-	}
-	Layout$1.FloatBE = FloatBE;
+	};
+	Layout$3.FloatBE = FloatBE$1;
 	/**
 	 * Represent a 64-bit floating point number in little-endian format.
 	 *
@@ -10202,7 +9673,7 @@ var solanaStakePool = (function (exports) {
 	 *
 	 * @augments {Layout}
 	 */
-	class Double extends Layout {
+	let Double$1 = class Double extends Layout$2 {
 	    constructor(property) {
 	        super(8, property);
 	    }
@@ -10215,8 +9686,8 @@ var solanaStakePool = (function (exports) {
 	        uint8ArrayToBuffer(b).writeDoubleLE(src, offset);
 	        return 8;
 	    }
-	}
-	Layout$1.Double = Double;
+	};
+	Layout$3.Double = Double$1;
 	/**
 	 * Represent a 64-bit floating point number in big-endian format.
 	 *
@@ -10227,7 +9698,7 @@ var solanaStakePool = (function (exports) {
 	 *
 	 * @augments {Layout}
 	 */
-	class DoubleBE extends Layout {
+	let DoubleBE$1 = class DoubleBE extends Layout$2 {
 	    constructor(property) {
 	        super(8, property);
 	    }
@@ -10240,8 +9711,8 @@ var solanaStakePool = (function (exports) {
 	        uint8ArrayToBuffer(b).writeDoubleBE(src, offset);
 	        return 8;
 	    }
-	}
-	Layout$1.DoubleBE = DoubleBE;
+	};
+	Layout$3.DoubleBE = DoubleBE$1;
 	/**
 	 * Represent a contiguous sequence of a specific layout as an Array.
 	 *
@@ -10259,18 +9730,18 @@ var solanaStakePool = (function (exports) {
 	 *
 	 * @augments {Layout}
 	 */
-	class Sequence extends Layout {
+	let Sequence$1 = class Sequence extends Layout$2 {
 	    constructor(elementLayout, count, property) {
-	        if (!(elementLayout instanceof Layout)) {
+	        if (!(elementLayout instanceof Layout$2)) {
 	            throw new TypeError('elementLayout must be a Layout');
 	        }
-	        if (!(((count instanceof ExternalLayout) && count.isCount())
+	        if (!(((count instanceof ExternalLayout$1) && count.isCount())
 	            || (Number.isInteger(count) && (0 <= count)))) {
 	            throw new TypeError('count must be non-negative integer '
 	                + 'or an unsigned integer ExternalLayout');
 	        }
 	        let span = -1;
-	        if ((!(count instanceof ExternalLayout))
+	        if ((!(count instanceof ExternalLayout$1))
 	            && (0 < elementLayout.span)) {
 	            span = count * elementLayout.span;
 	        }
@@ -10291,7 +9762,7 @@ var solanaStakePool = (function (exports) {
 	        }
 	        let span = 0;
 	        let count = this.count;
-	        if (count instanceof ExternalLayout) {
+	        if (count instanceof ExternalLayout$1) {
 	            count = count.decode(b, offset);
 	        }
 	        if (0 < this.elementLayout.span) {
@@ -10311,7 +9782,7 @@ var solanaStakePool = (function (exports) {
 	        const rv = [];
 	        let i = 0;
 	        let count = this.count;
-	        if (count instanceof ExternalLayout) {
+	        if (count instanceof ExternalLayout$1) {
 	            count = count.decode(b, offset);
 	        }
 	        while (i < count) {
@@ -10336,13 +9807,13 @@ var solanaStakePool = (function (exports) {
 	        const span = src.reduce((span, v) => {
 	            return span + elo.encode(v, b, offset + span);
 	        }, 0);
-	        if (this.count instanceof ExternalLayout) {
+	        if (this.count instanceof ExternalLayout$1) {
 	            this.count.encode(src.length, b, offset);
 	        }
 	        return span;
 	    }
-	}
-	Layout$1.Sequence = Sequence;
+	};
+	Layout$3.Sequence = Sequence$1;
 	/**
 	 * Represent a contiguous sequence of arbitrary layout elements as an
 	 * Object.
@@ -10375,10 +9846,10 @@ var solanaStakePool = (function (exports) {
 	 *
 	 * @augments {Layout}
 	 */
-	class Structure extends Layout {
+	let Structure$1 = class Structure extends Layout$2 {
 	    constructor(fields, property, decodePrefixes) {
 	        if (!(Array.isArray(fields)
-	            && fields.reduce((acc, v) => acc && (v instanceof Layout), true))) {
+	            && fields.reduce((acc, v) => acc && (v instanceof Layout$2), true))) {
 	            throw new TypeError('fields must be array of Layout instances');
 	        }
 	        if (('boolean' === typeof property)
@@ -10548,8 +10019,8 @@ var solanaStakePool = (function (exports) {
 	        }
 	        return undefined;
 	    }
-	}
-	Layout$1.Structure = Structure;
+	};
+	Layout$3.Structure = Structure$1;
 	/**
 	 * An object that can provide a {@link
 	 * Union#discriminator|discriminator} API for {@link Union}.
@@ -10564,7 +10035,7 @@ var solanaStakePool = (function (exports) {
 	 *
 	 * @abstract
 	 */
-	class UnionDiscriminator {
+	let UnionDiscriminator$1 = class UnionDiscriminator {
 	    constructor(property) {
 	        /** The {@link Layout#property|property} to be used when the
 	         * discriminator is referenced in isolation (generally when {@link
@@ -10586,8 +10057,8 @@ var solanaStakePool = (function (exports) {
 	    encode(src, b, offset) {
 	        throw new Error('UnionDiscriminator is abstract');
 	    }
-	}
-	Layout$1.UnionDiscriminator = UnionDiscriminator;
+	};
+	Layout$3.UnionDiscriminator = UnionDiscriminator$1;
 	/**
 	 * An object that can provide a {@link
 	 * UnionDiscriminator|discriminator API} for {@link Union} using an
@@ -10605,9 +10076,9 @@ var solanaStakePool = (function (exports) {
 	 *
 	 * @augments {UnionDiscriminator}
 	 */
-	class UnionLayoutDiscriminator extends UnionDiscriminator {
+	let UnionLayoutDiscriminator$1 = class UnionLayoutDiscriminator extends UnionDiscriminator$1 {
 	    constructor(layout, property) {
-	        if (!((layout instanceof ExternalLayout)
+	        if (!((layout instanceof ExternalLayout$1)
 	            && layout.isCount())) {
 	            throw new TypeError('layout must be an unsigned integer ExternalLayout');
 	        }
@@ -10624,8 +10095,8 @@ var solanaStakePool = (function (exports) {
 	    encode(src, b, offset) {
 	        return this.layout.encode(src, b, offset);
 	    }
-	}
-	Layout$1.UnionLayoutDiscriminator = UnionLayoutDiscriminator;
+	};
+	Layout$3.UnionLayoutDiscriminator = UnionLayoutDiscriminator$1;
 	/**
 	 * Represent any number of span-compatible layouts.
 	 *
@@ -10685,18 +10156,18 @@ var solanaStakePool = (function (exports) {
 	 *
 	 * @augments {Layout}
 	 */
-	class Union extends Layout {
+	let Union$1 = class Union extends Layout$2 {
 	    constructor(discr, defaultLayout, property) {
 	        let discriminator;
-	        if ((discr instanceof UInt)
-	            || (discr instanceof UIntBE)) {
-	            discriminator = new UnionLayoutDiscriminator(new OffsetLayout(discr));
+	        if ((discr instanceof UInt$1)
+	            || (discr instanceof UIntBE$1)) {
+	            discriminator = new UnionLayoutDiscriminator$1(new OffsetLayout$1(discr));
 	        }
-	        else if ((discr instanceof ExternalLayout)
+	        else if ((discr instanceof ExternalLayout$1)
 	            && discr.isCount()) {
-	            discriminator = new UnionLayoutDiscriminator(discr);
+	            discriminator = new UnionLayoutDiscriminator$1(discr);
 	        }
-	        else if (!(discr instanceof UnionDiscriminator)) {
+	        else if (!(discr instanceof UnionDiscriminator$1)) {
 	            throw new TypeError('discr must be a UnionDiscriminator '
 	                + 'or an unsigned integer layout');
 	        }
@@ -10707,7 +10178,7 @@ var solanaStakePool = (function (exports) {
 	            defaultLayout = null;
 	        }
 	        if (!((null === defaultLayout)
-	            || (defaultLayout instanceof Layout))) {
+	            || (defaultLayout instanceof Layout$2))) {
 	            throw new TypeError('defaultLayout must be null or a Layout');
 	        }
 	        if (null !== defaultLayout) {
@@ -10725,8 +10196,8 @@ var solanaStakePool = (function (exports) {
 	        let span = -1;
 	        if (defaultLayout) {
 	            span = defaultLayout.span;
-	            if ((0 <= span) && ((discr instanceof UInt)
-	                || (discr instanceof UIntBE))) {
+	            if ((0 <= span) && ((discr instanceof UInt$1)
+	                || (discr instanceof UIntBE$1))) {
 	                span += discriminator.layout.span;
 	            }
 	        }
@@ -10745,8 +10216,8 @@ var solanaStakePool = (function (exports) {
 	         *
 	         * If `false` the discriminator is obtained from somewhere
 	         * else. */
-	        this.usesPrefixDiscriminator = (discr instanceof UInt)
-	            || (discr instanceof UIntBE);
+	        this.usesPrefixDiscriminator = (discr instanceof UInt$1)
+	            || (discr instanceof UIntBE$1);
 	        /** The layout for non-discriminator content when the value of the
 	         * discriminator is not recognized.
 	         *
@@ -10933,7 +10404,7 @@ var solanaStakePool = (function (exports) {
 	     *
 	     * @return {VariantLayout} */
 	    addVariant(variant, layout, property) {
-	        const rv = new VariantLayout(this, variant, layout, property);
+	        const rv = new VariantLayout$1(this, variant, layout, property);
 	        this.registry[variant] = rv;
 	        return rv;
 	    }
@@ -10961,8 +10432,8 @@ var solanaStakePool = (function (exports) {
 	        }
 	        return this.registry[variant];
 	    }
-	}
-	Layout$1.Union = Union;
+	};
+	Layout$3.Union = Union$1;
 	/**
 	 * Represent a specific variant within a containing union.
 	 *
@@ -10992,9 +10463,9 @@ var solanaStakePool = (function (exports) {
 	 *
 	 * @augments {Layout}
 	 */
-	class VariantLayout extends Layout {
+	let VariantLayout$1 = class VariantLayout extends Layout$2 {
 	    constructor(union, variant, layout, property) {
-	        if (!(union instanceof Union)) {
+	        if (!(union instanceof Union$1)) {
 	            throw new TypeError('union must be a Union');
 	        }
 	        if ((!Number.isInteger(variant)) || (0 > variant)) {
@@ -11006,7 +10477,7 @@ var solanaStakePool = (function (exports) {
 	            layout = null;
 	        }
 	        if (layout) {
-	            if (!(layout instanceof Layout)) {
+	            if (!(layout instanceof Layout$2)) {
 	                throw new TypeError('layout must be a Layout');
 	            }
 	            if ((null !== union.defaultLayout)
@@ -11107,15 +10578,15 @@ var solanaStakePool = (function (exports) {
 	        }
 	        return undefined;
 	    }
-	}
-	Layout$1.VariantLayout = VariantLayout;
+	};
+	Layout$3.VariantLayout = VariantLayout$1;
 	/** JavaScript chose to define bitwise operations as operating on
 	 * signed 32-bit values in 2's complement form, meaning any integer
 	 * with bit 31 set is going to look negative.  For right shifts that's
 	 * not a problem, because `>>>` is a logical shift, but for every
 	 * other bitwise operator we have to compensate for possible negative
 	 * results. */
-	function fixBitwiseResult(v) {
+	function fixBitwiseResult$1(v) {
 	    if (0 > v) {
 	        v += 0x100000000;
 	    }
@@ -11152,10 +10623,10 @@ var solanaStakePool = (function (exports) {
 	 *
 	 * @augments {Layout}
 	 */
-	class BitStructure extends Layout {
+	let BitStructure$1 = class BitStructure extends Layout$2 {
 	    constructor(word, msb, property) {
-	        if (!((word instanceof UInt)
-	            || (word instanceof UIntBE))) {
+	        if (!((word instanceof UInt$1)
+	            || (word instanceof UIntBE$1))) {
 	            throw new TypeError('word must be a UInt or UIntBE layout');
 	        }
 	        if (('string' === typeof msb)
@@ -11191,7 +10662,7 @@ var solanaStakePool = (function (exports) {
 	         * value without going through the mutator. */
 	        let value = 0;
 	        this._packedSetValue = function (v) {
-	            value = fixBitwiseResult(v);
+	            value = fixBitwiseResult$1(v);
 	            return this;
 	        };
 	        this._packedGetValue = function () {
@@ -11238,7 +10709,7 @@ var solanaStakePool = (function (exports) {
 	     *
 	     * @return {BitField} */
 	    addField(bits, property) {
-	        const bf = new BitField(this, bits, property);
+	        const bf = new BitField$1(this, bits, property);
 	        this.fields.push(bf);
 	        return bf;
 	    }
@@ -11253,7 +10724,7 @@ var solanaStakePool = (function (exports) {
 	    // eslint-disable-next-line @typescript-eslint/ban-types
 	    addBoolean(property) {
 	        // This is my Boolean, not the Javascript one.
-	        const bf = new Boolean$1(this, property);
+	        const bf = new Boolean$2(this, property);
 	        this.fields.push(bf);
 	        return bf;
 	    }
@@ -11276,8 +10747,8 @@ var solanaStakePool = (function (exports) {
 	        }
 	        return undefined;
 	    }
-	}
-	Layout$1.BitStructure = BitStructure;
+	};
+	Layout$3.BitStructure = BitStructure$1;
 	/**
 	 * Represent a sequence of bits within a {@link BitStructure}.
 	 *
@@ -11298,9 +10769,9 @@ var solanaStakePool = (function (exports) {
 	 * @param {string} [property] - initializer for {@link
 	 * Layout#property|property}.
 	 */
-	class BitField {
+	let BitField$1 = class BitField {
 	    constructor(container, bits, property) {
-	        if (!(container instanceof BitStructure)) {
+	        if (!(container instanceof BitStructure$1)) {
 	            throw new TypeError('container must be a BitStructure');
 	        }
 	        if ((!Number.isInteger(bits)) || (0 >= bits)) {
@@ -11336,7 +10807,7 @@ var solanaStakePool = (function (exports) {
 	        }
 	        /** A mask of {@link BitField#bits|bits} isolating the field value
 	         * within the containing packed unsigned integer. */
-	        this.wordMask = fixBitwiseResult(this.valueMask << this.start);
+	        this.wordMask = fixBitwiseResult$1(this.valueMask << this.start);
 	        /** The property name used when this bitfield is represented in an
 	         * Object.
 	         *
@@ -11353,7 +10824,7 @@ var solanaStakePool = (function (exports) {
 	     * bit field. */
 	    decode(b, offset) {
 	        const word = this.container._packedGetValue();
-	        const wordValue = fixBitwiseResult(word & this.wordMask);
+	        const wordValue = fixBitwiseResult$1(word & this.wordMask);
 	        const value = wordValue >>> this.start;
 	        return value;
 	    }
@@ -11365,17 +10836,17 @@ var solanaStakePool = (function (exports) {
 	    encode(value) {
 	        if ('number' !== typeof value
 	            || !Number.isInteger(value)
-	            || (value !== fixBitwiseResult(value & this.valueMask))) {
-	            throw new TypeError(nameWithProperty('BitField.encode', this)
+	            || (value !== fixBitwiseResult$1(value & this.valueMask))) {
+	            throw new TypeError(nameWithProperty$1('BitField.encode', this)
 	                + ' value must be integer not exceeding ' + this.valueMask);
 	        }
 	        const word = this.container._packedGetValue();
-	        const wordValue = fixBitwiseResult(value << this.start);
-	        this.container._packedSetValue(fixBitwiseResult(word & ~this.wordMask)
+	        const wordValue = fixBitwiseResult$1(value << this.start);
+	        this.container._packedSetValue(fixBitwiseResult$1(word & ~this.wordMask)
 	            | wordValue);
 	    }
-	}
-	Layout$1.BitField = BitField;
+	};
+	Layout$3.BitField = BitField$1;
 	/**
 	 * Represent a single bit within a {@link BitStructure} as a
 	 * JavaScript boolean.
@@ -11393,7 +10864,7 @@ var solanaStakePool = (function (exports) {
 	 * @augments {BitField}
 	 */
 	/* eslint-disable no-extend-native */
-	class Boolean$1 extends BitField {
+	let Boolean$2 = class Boolean extends BitField$1 {
 	    constructor(container, property) {
 	        super(container, 1, property);
 	    }
@@ -11411,8 +10882,8 @@ var solanaStakePool = (function (exports) {
 	        }
 	        super.encode(value);
 	    }
-	}
-	Layout$1.Boolean = Boolean$1;
+	};
+	Layout$3.Boolean = Boolean$2;
 	/* eslint-enable no-extend-native */
 	/**
 	 * Contain a fixed-length block of arbitrary data, represented as a
@@ -11428,15 +10899,15 @@ var solanaStakePool = (function (exports) {
 	 *
 	 * @augments {Layout}
 	 */
-	class Blob extends Layout {
+	let Blob$1 = class Blob extends Layout$2 {
 	    constructor(length, property) {
-	        if (!(((length instanceof ExternalLayout) && length.isCount())
+	        if (!(((length instanceof ExternalLayout$1) && length.isCount())
 	            || (Number.isInteger(length) && (0 <= length)))) {
 	            throw new TypeError('length must be positive integer '
 	                + 'or an unsigned integer ExternalLayout');
 	        }
 	        let span = -1;
-	        if (!(length instanceof ExternalLayout)) {
+	        if (!(length instanceof ExternalLayout$1)) {
 	            span = length;
 	        }
 	        super(span, property);
@@ -11470,11 +10941,11 @@ var solanaStakePool = (function (exports) {
 	     * count after `src` is encoded. */
 	    encode(src, b, offset) {
 	        let span = this.length;
-	        if (this.length instanceof ExternalLayout) {
+	        if (this.length instanceof ExternalLayout$1) {
 	            span = src.length;
 	        }
 	        if (!(src instanceof Uint8Array && span === src.length)) {
-	            throw new TypeError(nameWithProperty('Blob.encode', this)
+	            throw new TypeError(nameWithProperty$1('Blob.encode', this)
 	                + ' requires (length ' + span + ') Uint8Array as src');
 	        }
 	        if ((offset + span) > b.length) {
@@ -11482,13 +10953,13 @@ var solanaStakePool = (function (exports) {
 	        }
 	        const srcBuffer = uint8ArrayToBuffer(src);
 	        uint8ArrayToBuffer(b).write(srcBuffer.toString('hex'), offset, span, 'hex');
-	        if (this.length instanceof ExternalLayout) {
+	        if (this.length instanceof ExternalLayout$1) {
 	            this.length.encode(span, b, offset);
 	        }
 	        return span;
 	    }
-	}
-	Layout$1.Blob = Blob;
+	};
+	Layout$3.Blob = Blob$1;
 	/**
 	 * Contain a `NUL`-terminated UTF8 string.
 	 *
@@ -11502,7 +10973,7 @@ var solanaStakePool = (function (exports) {
 	 *
 	 * @augments {Layout}
 	 */
-	class CString extends Layout {
+	let CString$1 = class CString extends Layout$2 {
 	    constructor(property) {
 	        super(-1, property);
 	    }
@@ -11538,8 +11009,8 @@ var solanaStakePool = (function (exports) {
 	        buffer[offset + span] = 0;
 	        return span + 1;
 	    }
-	}
-	Layout$1.CString = CString;
+	};
+	Layout$3.CString = CString$1;
 	/**
 	 * Contain a UTF8 string with implicit length.
 	 *
@@ -11559,7 +11030,7 @@ var solanaStakePool = (function (exports) {
 	 *
 	 * @augments {Layout}
 	 */
-	class UTF8 extends Layout {
+	let UTF8$1 = class UTF8 extends Layout$2 {
 	    constructor(maxSpan, property) {
 	        if (('string' === typeof maxSpan) && (undefined === property)) {
 	            property = maxSpan;
@@ -11616,8 +11087,8 @@ var solanaStakePool = (function (exports) {
 	        srcb.copy(uint8ArrayToBuffer(b), offset);
 	        return span;
 	    }
-	}
-	Layout$1.UTF8 = UTF8;
+	};
+	Layout$3.UTF8 = UTF8$1;
 	/**
 	 * Contain a constant value.
 	 *
@@ -11637,7 +11108,7 @@ var solanaStakePool = (function (exports) {
 	 *
 	 * @augments {Layout}
 	 */
-	class Constant extends Layout {
+	let Constant$1 = class Constant extends Layout$2 {
 	    constructor(value, property) {
 	        super(0, property);
 	        /** The value produced by this constant when the layout is {@link
@@ -11660,120 +11131,120 @@ var solanaStakePool = (function (exports) {
 	        /* Constants take no space */
 	        return 0;
 	    }
-	}
-	Layout$1.Constant = Constant;
+	};
+	Layout$3.Constant = Constant$1;
 	/** Factory for {@link GreedyCount}. */
-	Layout$1.greedy = ((elementSpan, property) => new GreedyCount(elementSpan, property));
+	Layout$3.greedy = ((elementSpan, property) => new GreedyCount$1(elementSpan, property));
 	/** Factory for {@link OffsetLayout}. */
-	var offset = Layout$1.offset = ((layout, offset, property) => new OffsetLayout(layout, offset, property));
+	var offset = Layout$3.offset = ((layout, offset, property) => new OffsetLayout$1(layout, offset, property));
 	/** Factory for {@link UInt|unsigned int layouts} spanning one
 	 * byte. */
-	var u8 = Layout$1.u8 = ((property) => new UInt(1, property));
+	var u8 = Layout$3.u8 = ((property) => new UInt$1(1, property));
 	/** Factory for {@link UInt|little-endian unsigned int layouts}
 	 * spanning two bytes. */
-	var u16 = Layout$1.u16 = ((property) => new UInt(2, property));
+	var u16 = Layout$3.u16 = ((property) => new UInt$1(2, property));
 	/** Factory for {@link UInt|little-endian unsigned int layouts}
 	 * spanning three bytes. */
-	Layout$1.u24 = ((property) => new UInt(3, property));
+	Layout$3.u24 = ((property) => new UInt$1(3, property));
 	/** Factory for {@link UInt|little-endian unsigned int layouts}
 	 * spanning four bytes. */
-	var u32 = Layout$1.u32 = ((property) => new UInt(4, property));
+	var u32 = Layout$3.u32 = ((property) => new UInt$1(4, property));
 	/** Factory for {@link UInt|little-endian unsigned int layouts}
 	 * spanning five bytes. */
-	Layout$1.u40 = ((property) => new UInt(5, property));
+	Layout$3.u40 = ((property) => new UInt$1(5, property));
 	/** Factory for {@link UInt|little-endian unsigned int layouts}
 	 * spanning six bytes. */
-	Layout$1.u48 = ((property) => new UInt(6, property));
+	Layout$3.u48 = ((property) => new UInt$1(6, property));
 	/** Factory for {@link NearUInt64|little-endian unsigned int
 	 * layouts} interpreted as Numbers. */
-	var nu64 = Layout$1.nu64 = ((property) => new NearUInt64(property));
+	var nu64 = Layout$3.nu64 = ((property) => new NearUInt64$1(property));
 	/** Factory for {@link UInt|big-endian unsigned int layouts}
 	 * spanning two bytes. */
-	Layout$1.u16be = ((property) => new UIntBE(2, property));
+	Layout$3.u16be = ((property) => new UIntBE$1(2, property));
 	/** Factory for {@link UInt|big-endian unsigned int layouts}
 	 * spanning three bytes. */
-	Layout$1.u24be = ((property) => new UIntBE(3, property));
+	Layout$3.u24be = ((property) => new UIntBE$1(3, property));
 	/** Factory for {@link UInt|big-endian unsigned int layouts}
 	 * spanning four bytes. */
-	Layout$1.u32be = ((property) => new UIntBE(4, property));
+	Layout$3.u32be = ((property) => new UIntBE$1(4, property));
 	/** Factory for {@link UInt|big-endian unsigned int layouts}
 	 * spanning five bytes. */
-	Layout$1.u40be = ((property) => new UIntBE(5, property));
+	Layout$3.u40be = ((property) => new UIntBE$1(5, property));
 	/** Factory for {@link UInt|big-endian unsigned int layouts}
 	 * spanning six bytes. */
-	Layout$1.u48be = ((property) => new UIntBE(6, property));
+	Layout$3.u48be = ((property) => new UIntBE$1(6, property));
 	/** Factory for {@link NearUInt64BE|big-endian unsigned int
 	 * layouts} interpreted as Numbers. */
-	Layout$1.nu64be = ((property) => new NearUInt64BE(property));
+	Layout$3.nu64be = ((property) => new NearUInt64BE$1(property));
 	/** Factory for {@link Int|signed int layouts} spanning one
 	 * byte. */
-	Layout$1.s8 = ((property) => new Int(1, property));
+	Layout$3.s8 = ((property) => new Int$1(1, property));
 	/** Factory for {@link Int|little-endian signed int layouts}
 	 * spanning two bytes. */
-	Layout$1.s16 = ((property) => new Int(2, property));
+	Layout$3.s16 = ((property) => new Int$1(2, property));
 	/** Factory for {@link Int|little-endian signed int layouts}
 	 * spanning three bytes. */
-	Layout$1.s24 = ((property) => new Int(3, property));
+	Layout$3.s24 = ((property) => new Int$1(3, property));
 	/** Factory for {@link Int|little-endian signed int layouts}
 	 * spanning four bytes. */
-	Layout$1.s32 = ((property) => new Int(4, property));
+	Layout$3.s32 = ((property) => new Int$1(4, property));
 	/** Factory for {@link Int|little-endian signed int layouts}
 	 * spanning five bytes. */
-	Layout$1.s40 = ((property) => new Int(5, property));
+	Layout$3.s40 = ((property) => new Int$1(5, property));
 	/** Factory for {@link Int|little-endian signed int layouts}
 	 * spanning six bytes. */
-	Layout$1.s48 = ((property) => new Int(6, property));
+	Layout$3.s48 = ((property) => new Int$1(6, property));
 	/** Factory for {@link NearInt64|little-endian signed int layouts}
 	 * interpreted as Numbers. */
-	var ns64 = Layout$1.ns64 = ((property) => new NearInt64(property));
+	var ns64 = Layout$3.ns64 = ((property) => new NearInt64$1(property));
 	/** Factory for {@link Int|big-endian signed int layouts}
 	 * spanning two bytes. */
-	Layout$1.s16be = ((property) => new IntBE(2, property));
+	Layout$3.s16be = ((property) => new IntBE$1(2, property));
 	/** Factory for {@link Int|big-endian signed int layouts}
 	 * spanning three bytes. */
-	Layout$1.s24be = ((property) => new IntBE(3, property));
+	Layout$3.s24be = ((property) => new IntBE$1(3, property));
 	/** Factory for {@link Int|big-endian signed int layouts}
 	 * spanning four bytes. */
-	Layout$1.s32be = ((property) => new IntBE(4, property));
+	Layout$3.s32be = ((property) => new IntBE$1(4, property));
 	/** Factory for {@link Int|big-endian signed int layouts}
 	 * spanning five bytes. */
-	Layout$1.s40be = ((property) => new IntBE(5, property));
+	Layout$3.s40be = ((property) => new IntBE$1(5, property));
 	/** Factory for {@link Int|big-endian signed int layouts}
 	 * spanning six bytes. */
-	Layout$1.s48be = ((property) => new IntBE(6, property));
+	Layout$3.s48be = ((property) => new IntBE$1(6, property));
 	/** Factory for {@link NearInt64BE|big-endian signed int layouts}
 	 * interpreted as Numbers. */
-	Layout$1.ns64be = ((property) => new NearInt64BE(property));
+	Layout$3.ns64be = ((property) => new NearInt64BE$1(property));
 	/** Factory for {@link Float|little-endian 32-bit floating point} values. */
-	Layout$1.f32 = ((property) => new Float(property));
+	Layout$3.f32 = ((property) => new Float$1(property));
 	/** Factory for {@link FloatBE|big-endian 32-bit floating point} values. */
-	Layout$1.f32be = ((property) => new FloatBE(property));
+	Layout$3.f32be = ((property) => new FloatBE$1(property));
 	/** Factory for {@link Double|little-endian 64-bit floating point} values. */
-	Layout$1.f64 = ((property) => new Double(property));
+	Layout$3.f64 = ((property) => new Double$1(property));
 	/** Factory for {@link DoubleBE|big-endian 64-bit floating point} values. */
-	Layout$1.f64be = ((property) => new DoubleBE(property));
+	Layout$3.f64be = ((property) => new DoubleBE$1(property));
 	/** Factory for {@link Structure} values. */
-	var struct = Layout$1.struct = ((fields, property, decodePrefixes) => new Structure(fields, property, decodePrefixes));
+	var struct = Layout$3.struct = ((fields, property, decodePrefixes) => new Structure$1(fields, property, decodePrefixes));
 	/** Factory for {@link BitStructure} values. */
-	Layout$1.bits = ((word, msb, property) => new BitStructure(word, msb, property));
+	Layout$3.bits = ((word, msb, property) => new BitStructure$1(word, msb, property));
 	/** Factory for {@link Sequence} values. */
-	var seq = Layout$1.seq = ((elementLayout, count, property) => new Sequence(elementLayout, count, property));
+	var seq = Layout$3.seq = ((elementLayout, count, property) => new Sequence$1(elementLayout, count, property));
 	/** Factory for {@link Union} values. */
-	Layout$1.union = ((discr, defaultLayout, property) => new Union(discr, defaultLayout, property));
+	Layout$3.union = ((discr, defaultLayout, property) => new Union$1(discr, defaultLayout, property));
 	/** Factory for {@link UnionLayoutDiscriminator} values. */
-	Layout$1.unionLayoutDiscriminator = ((layout, property) => new UnionLayoutDiscriminator(layout, property));
+	Layout$3.unionLayoutDiscriminator = ((layout, property) => new UnionLayoutDiscriminator$1(layout, property));
 	/** Factory for {@link Blob} values. */
-	var blob = Layout$1.blob = ((length, property) => new Blob(length, property));
+	var blob = Layout$3.blob = ((length, property) => new Blob$1(length, property));
 	/** Factory for {@link CString} values. */
-	Layout$1.cstr = ((property) => new CString(property));
+	Layout$3.cstr = ((property) => new CString$1(property));
 	/** Factory for {@link UTF8} values. */
-	Layout$1.utf8 = ((maxSpan, property) => new UTF8(maxSpan, property));
+	Layout$3.utf8 = ((maxSpan, property) => new UTF8$1(maxSpan, property));
 	/** Factory for {@link Constant} values. */
-	Layout$1.constant = ((value, property) => new Constant(value, property));
+	Layout$3.constant = ((value, property) => new Constant$1(value, property));
 
-	var browser = {};
+	var browser$1 = {};
 
-	Object.defineProperty(browser, "__esModule", { value: true });
+	Object.defineProperty(browser$1, "__esModule", { value: true });
 	/**
 	 * Convert a little-endian buffer into a BigInt.
 	 * @param buf The little-endian buffer to convert
@@ -11790,7 +11261,7 @@ var solanaStakePool = (function (exports) {
 	        return BigInt(`0x${hex}`);
 	    }
 	}
-	var toBigIntLE_1 = browser.toBigIntLE = toBigIntLE;
+	var toBigIntLE_1 = browser$1.toBigIntLE = toBigIntLE;
 	/**
 	 * Convert a big-endian buffer into a BigInt
 	 * @param buf The big-endian buffer to convert.
@@ -11805,7 +11276,7 @@ var solanaStakePool = (function (exports) {
 	        return BigInt(`0x${hex}`);
 	    }
 	}
-	browser.toBigIntBE = toBigIntBE;
+	browser$1.toBigIntBE = toBigIntBE;
 	/**
 	 * Convert a BigInt to a little-endian buffer.
 	 * @param num   The BigInt to convert.
@@ -11820,7 +11291,7 @@ var solanaStakePool = (function (exports) {
 	        return buffer;
 	    }
 	}
-	var toBufferLE_1 = browser.toBufferLE = toBufferLE;
+	var toBufferLE_1 = browser$1.toBufferLE = toBufferLE;
 	/**
 	 * Convert a BigInt to a big-endian buffer.
 	 * @param num   The BigInt to convert.
@@ -11833,7 +11304,7 @@ var solanaStakePool = (function (exports) {
 	        return Buffer.from(hex.padStart(width * 2, '0').slice(0, width * 2), 'hex');
 	    }
 	}
-	browser.toBufferBE = toBufferBE;
+	browser$1.toBufferBE = toBufferBE;
 
 	/**
 	 * A `StructFailure` represents a single specific failure in validation.
@@ -11847,7 +11318,7 @@ var solanaStakePool = (function (exports) {
 	 * the `error.failures` property is a generator function that can be run to
 	 * continue validation and receive all the failures in the data.
 	 */
-	class StructError extends TypeError {
+	let StructError$1 = class StructError extends TypeError {
 	  constructor(failure, failures) {
 	    let cached;
 	    const {
@@ -11869,27 +11340,27 @@ var solanaStakePool = (function (exports) {
 	    };
 	  }
 
-	}
+	};
 
 	/**
 	 * Check if a value is an iterator.
 	 */
-	function isIterable(x) {
-	  return isObject(x) && typeof x[Symbol.iterator] === 'function';
+	function isIterable$1(x) {
+	  return isObject$1(x) && typeof x[Symbol.iterator] === 'function';
 	}
 	/**
 	 * Check if a value is a plain object.
 	 */
 
 
-	function isObject(x) {
+	function isObject$1(x) {
 	  return typeof x === 'object' && x != null;
 	}
 	/**
 	 * Return a value as a printable string.
 	 */
 
-	function print(value) {
+	function print$1(value) {
 	  return typeof value === 'string' ? JSON.stringify(value) : "" + value;
 	}
 	/**
@@ -11897,7 +11368,7 @@ var solanaStakePool = (function (exports) {
 	 * Like `Array.prototype.shift()` but for an `Iterator`.
 	 */
 
-	function shiftIterator(input) {
+	function shiftIterator$1(input) {
 	  const {
 	    done,
 	    value
@@ -11908,7 +11379,7 @@ var solanaStakePool = (function (exports) {
 	 * Convert a single validation result to a failure.
 	 */
 
-	function toFailure(result, context, struct, value) {
+	function toFailure$1(result, context, struct, value) {
 	  if (result === true) {
 	    return;
 	  } else if (result === false) {
@@ -11928,7 +11399,7 @@ var solanaStakePool = (function (exports) {
 	  } = struct;
 	  const {
 	    refinement,
-	    message = "Expected a value of type `" + type + "`" + (refinement ? " with refinement `" + refinement + "`" : '') + ", but received: `" + print(value) + "`"
+	    message = "Expected a value of type `" + type + "`" + (refinement ? " with refinement `" + refinement + "`" : '') + ", but received: `" + print$1(value) + "`"
 	  } = result;
 	  return {
 	    value,
@@ -11945,13 +11416,13 @@ var solanaStakePool = (function (exports) {
 	 * Convert a validation result to an iterable of failures.
 	 */
 
-	function* toFailures(result, context, struct, value) {
-	  if (!isIterable(result)) {
+	function* toFailures$1(result, context, struct, value) {
+	  if (!isIterable$1(result)) {
 	    result = [result];
 	  }
 
 	  for (const r of result) {
-	    const failure = toFailure(r, context, struct, value);
+	    const failure = toFailure$1(r, context, struct, value);
 
 	    if (failure) {
 	      yield failure;
@@ -11963,7 +11434,7 @@ var solanaStakePool = (function (exports) {
 	 * returning an iterator of failures or success.
 	 */
 
-	function* run(value, struct, options = {}) {
+	function* run$1(value, struct, options = {}) {
 	  const {
 	    path = [],
 	    branch = [value],
@@ -11978,7 +11449,7 @@ var solanaStakePool = (function (exports) {
 	  if (coerce) {
 	    value = struct.coercer(value, ctx);
 
-	    if (mask && struct.type !== 'type' && isObject(struct.schema) && isObject(value) && !Array.isArray(value)) {
+	    if (mask && struct.type !== 'type' && isObject$1(struct.schema) && isObject$1(value) && !Array.isArray(value)) {
 	      for (const key in value) {
 	        if (struct.schema[key] === undefined) {
 	          delete value[key];
@@ -11995,7 +11466,7 @@ var solanaStakePool = (function (exports) {
 	  }
 
 	  for (let [k, v, s] of struct.entries(value, ctx)) {
-	    const ts = run(v, s, {
+	    const ts = run$1(v, s, {
 	      path: k === undefined ? path : [...path, k],
 	      branch: k === undefined ? branch : [...branch, v],
 	      coerce,
@@ -12015,7 +11486,7 @@ var solanaStakePool = (function (exports) {
 	          value.set(k, v);
 	        } else if (value instanceof Set) {
 	          value.add(v);
-	        } else if (isObject(value)) {
+	        } else if (isObject$1(value)) {
 	          value[k] = v;
 	        }
 	      }
@@ -12040,7 +11511,7 @@ var solanaStakePool = (function (exports) {
 	 * validate unknown input data against the struct.
 	 */
 
-	class Struct$1 {
+	let Struct$2 = class Struct {
 	  constructor(props) {
 	    const {
 	      type,
@@ -12058,7 +11529,7 @@ var solanaStakePool = (function (exports) {
 	    if (validator) {
 	      this.validator = (value, context) => {
 	        const result = validator(value, context);
-	        return toFailures(result, context, this, value);
+	        return toFailures$1(result, context, this, value);
 	      };
 	    } else {
 	      this.validator = () => [];
@@ -12067,7 +11538,7 @@ var solanaStakePool = (function (exports) {
 	    if (refiner) {
 	      this.refiner = (value, context) => {
 	        const result = refiner(value, context);
-	        return toFailures(result, context, this, value);
+	        return toFailures$1(result, context, this, value);
 	      };
 	    } else {
 	      this.refiner = () => [];
@@ -12079,7 +11550,7 @@ var solanaStakePool = (function (exports) {
 
 
 	  assert(value) {
-	    return assert$1(value, this);
+	    return assert$2(value, this);
 	  }
 	  /**
 	   * Create a value with the struct's coercion logic, then validate it.
@@ -12087,7 +11558,7 @@ var solanaStakePool = (function (exports) {
 
 
 	  create(value) {
-	    return create(value, this);
+	    return create$1(value, this);
 	  }
 	  /**
 	   * Check if a value passes the struct's validation.
@@ -12095,7 +11566,7 @@ var solanaStakePool = (function (exports) {
 
 
 	  is(value) {
-	    return is(value, this);
+	    return is$1(value, this);
 	  }
 	  /**
 	   * Mask a value, coercing and validating it, but returning only the subset of
@@ -12104,7 +11575,7 @@ var solanaStakePool = (function (exports) {
 
 
 	  mask(value) {
-	    return mask(value, this);
+	    return mask$1(value, this);
 	  }
 	  /**
 	   * Validate a value with the struct's validation logic, returning a tuple
@@ -12117,16 +11588,16 @@ var solanaStakePool = (function (exports) {
 
 
 	  validate(value, options = {}) {
-	    return validate(value, this, options);
+	    return validate$2(value, this, options);
 	  }
 
-	}
+	};
 	/**
 	 * Assert that a value passes a struct, throwing if it doesn't.
 	 */
 
-	function assert$1(value, struct) {
-	  const result = validate(value, struct);
+	function assert$2(value, struct) {
+	  const result = validate$2(value, struct);
 
 	  if (result[0]) {
 	    throw result[0];
@@ -12136,8 +11607,8 @@ var solanaStakePool = (function (exports) {
 	 * Create a value with the coercion logic of struct and validate it.
 	 */
 
-	function create(value, struct) {
-	  const result = validate(value, struct, {
+	function create$1(value, struct) {
+	  const result = validate$2(value, struct, {
 	    coerce: true
 	  });
 
@@ -12151,8 +11622,8 @@ var solanaStakePool = (function (exports) {
 	 * Mask a value, returning only the subset of properties defined by a struct.
 	 */
 
-	function mask(value, struct) {
-	  const result = validate(value, struct, {
+	function mask$1(value, struct) {
+	  const result = validate$2(value, struct, {
 	    coerce: true,
 	    mask: true
 	  });
@@ -12167,8 +11638,8 @@ var solanaStakePool = (function (exports) {
 	 * Check if a value passes a struct.
 	 */
 
-	function is(value, struct) {
-	  const result = validate(value, struct);
+	function is$1(value, struct) {
+	  const result = validate$2(value, struct);
 	  return !result[0];
 	}
 	/**
@@ -12176,12 +11647,12 @@ var solanaStakePool = (function (exports) {
 	 * value (with potential coercion) if valid.
 	 */
 
-	function validate(value, struct, options = {}) {
-	  const tuples = run(value, struct, options);
-	  const tuple = shiftIterator(tuples);
+	function validate$2(value, struct, options = {}) {
+	  const tuples = run$1(value, struct, options);
+	  const tuple = shiftIterator$1(tuples);
 
 	  if (tuple[0]) {
-	    const error = new StructError(tuple[0], function* () {
+	    const error = new StructError$1(tuple[0], function* () {
 	      for (const t of tuples) {
 	        if (t[0]) {
 	          yield t[0];
@@ -12198,8 +11669,8 @@ var solanaStakePool = (function (exports) {
 	 * Define a new struct type with a custom validation function.
 	 */
 
-	function define(name, validator) {
-	  return new Struct$1({
+	function define$1(name, validator) {
+	  return new Struct$2({
 	    type: name,
 	    schema: null,
 	    validator
@@ -12211,10 +11682,10 @@ var solanaStakePool = (function (exports) {
 	 */
 
 	function any() {
-	  return define('any', () => true);
+	  return define$1('any', () => true);
 	}
 	function array(Element) {
-	  return new Struct$1({
+	  return new Struct$2({
 	    type: 'array',
 	    schema: Element,
 
@@ -12231,7 +11702,7 @@ var solanaStakePool = (function (exports) {
 	    },
 
 	    validator(value) {
-	      return Array.isArray(value) || "Expected an array value, but received: " + print(value);
+	      return Array.isArray(value) || "Expected an array value, but received: " + print$1(value);
 	    }
 
 	  });
@@ -12241,46 +11712,28 @@ var solanaStakePool = (function (exports) {
 	 */
 
 	function boolean() {
-	  return define('boolean', value => {
+	  return define$1('boolean', value => {
 	    return typeof value === 'boolean';
-	  });
-	}
-	function enums(values) {
-	  const schema = {};
-	  const description = values.map(v => print(v)).join();
-
-	  for (const key of values) {
-	    schema[key] = key;
-	  }
-
-	  return new Struct$1({
-	    type: 'enums',
-	    schema,
-
-	    validator(value) {
-	      return values.includes(value) || "Expected one of `" + description + "`, but received: " + print(value);
-	    }
-
 	  });
 	}
 	/**
 	 * Ensure that a value is an instance of a specific class.
 	 */
 
-	function instance(Class) {
-	  return define('instance', value => {
-	    return value instanceof Class || "Expected a `" + Class.name + "` instance, but received: " + print(value);
+	function instance$1(Class) {
+	  return define$1('instance', value => {
+	    return value instanceof Class || "Expected a `" + Class.name + "` instance, but received: " + print$1(value);
 	  });
 	}
 	function literal(constant) {
-	  const description = print(constant);
+	  const description = print$1(constant);
 	  const t = typeof constant;
-	  return new Struct$1({
+	  return new Struct$2({
 	    type: 'literal',
 	    schema: t === 'string' || t === 'number' || t === 'boolean' ? constant : null,
 
 	    validator(value) {
-	      return value === constant || "Expected the literal `" + description + "`, but received: " + print(value);
+	      return value === constant || "Expected the literal `" + description + "`, but received: " + print$1(value);
 	    }
 
 	  });
@@ -12290,14 +11743,14 @@ var solanaStakePool = (function (exports) {
 	 */
 
 	function never() {
-	  return define('never', () => false);
+	  return define$1('never', () => false);
 	}
 	/**
 	 * Augment an existing struct to allow `null` values.
 	 */
 
-	function nullable(struct) {
-	  return new Struct$1({ ...struct,
+	function nullable$1(struct) {
+	  return new Struct$2({ ...struct,
 	    validator: (value, ctx) => value === null || struct.validator(value, ctx),
 	    refiner: (value, ctx) => value === null || struct.refiner(value, ctx)
 	  });
@@ -12306,17 +11759,17 @@ var solanaStakePool = (function (exports) {
 	 * Ensure that a value is a number.
 	 */
 
-	function number() {
-	  return define('number', value => {
-	    return typeof value === 'number' && !isNaN(value) || "Expected a number, but received: " + print(value);
+	function number$1() {
+	  return define$1('number', value => {
+	    return typeof value === 'number' && !isNaN(value) || "Expected a number, but received: " + print$1(value);
 	  });
 	}
 	/**
 	 * Augment a struct to allow `undefined` values.
 	 */
 
-	function optional(struct) {
-	  return new Struct$1({ ...struct,
+	function optional$1(struct) {
+	  return new Struct$2({ ...struct,
 	    validator: (value, ctx) => value === undefined || struct.validator(value, ctx),
 	    refiner: (value, ctx) => value === undefined || struct.refiner(value, ctx)
 	  });
@@ -12329,12 +11782,12 @@ var solanaStakePool = (function (exports) {
 	 */
 
 	function record(Key, Value) {
-	  return new Struct$1({
+	  return new Struct$2({
 	    type: 'record',
 	    schema: null,
 
 	    *entries(value) {
-	      if (isObject(value)) {
+	      if (isObject$1(value)) {
 	        for (const k in value) {
 	          const v = value[k];
 	          yield [k, k, Key];
@@ -12344,7 +11797,7 @@ var solanaStakePool = (function (exports) {
 	    },
 
 	    validator(value) {
-	      return isObject(value) || "Expected an object, but received: " + print(value);
+	      return isObject$1(value) || "Expected an object, but received: " + print$1(value);
 	    }
 
 	  });
@@ -12353,14 +11806,14 @@ var solanaStakePool = (function (exports) {
 	 * Ensure that a value is a string.
 	 */
 
-	function string() {
-	  return define('string', value => {
-	    return typeof value === 'string' || "Expected a string, but received: " + print(value);
+	function string$1() {
+	  return define$1('string', value => {
+	    return typeof value === 'string' || "Expected a string, but received: " + print$1(value);
 	  });
 	}
 	function tuple(Elements) {
 	  const Never = never();
-	  return new Struct$1({
+	  return new Struct$2({
 	    type: 'tuple',
 	    schema: null,
 
@@ -12375,7 +11828,7 @@ var solanaStakePool = (function (exports) {
 	    },
 
 	    validator(value) {
-	      return Array.isArray(value) || "Expected an array, but received: " + print(value);
+	      return Array.isArray(value) || "Expected an array, but received: " + print$1(value);
 	    }
 
 	  });
@@ -12387,14 +11840,14 @@ var solanaStakePool = (function (exports) {
 	 * how TypeScript's structural typing works.
 	 */
 
-	function type(schema) {
+	function type$1(schema) {
 	  const keys = Object.keys(schema);
-	  return new Struct$1({
+	  return new Struct$2({
 	    type: 'type',
 	    schema,
 
 	    *entries(value) {
-	      if (isObject(value)) {
+	      if (isObject$1(value)) {
 	        for (const k of keys) {
 	          yield [k, value[k], schema[k]];
 	        }
@@ -12402,14 +11855,14 @@ var solanaStakePool = (function (exports) {
 	    },
 
 	    validator(value) {
-	      return isObject(value) || "Expected an object, but received: " + print(value);
+	      return isObject$1(value) || "Expected an object, but received: " + print$1(value);
 	    }
 
 	  });
 	}
 	function union(Structs) {
 	  const description = Structs.map(s => s.type).join(' | ');
-	  return new Struct$1({
+	  return new Struct$2({
 	    type: 'union',
 	    schema: null,
 
@@ -12417,7 +11870,7 @@ var solanaStakePool = (function (exports) {
 	      const failures = [];
 
 	      for (const S of Structs) {
-	        const [...tuples] = run(value, S, ctx);
+	        const [...tuples] = run$1(value, S, ctx);
 	        const [first] = tuples;
 
 	        if (!first[0]) {
@@ -12431,7 +11884,7 @@ var solanaStakePool = (function (exports) {
 	        }
 	      }
 
-	      return ["Expected the value to satisfy a union of `" + description + "`, but received: " + print(value), ...failures];
+	      return ["Expected the value to satisfy a union of `" + description + "`, but received: " + print$1(value), ...failures];
 	    }
 
 	  });
@@ -12441,7 +11894,7 @@ var solanaStakePool = (function (exports) {
 	 */
 
 	function unknown() {
-	  return define('unknown', () => true);
+	  return define$1('unknown', () => true);
 	}
 
 	/**
@@ -12455,15 +11908,2574 @@ var solanaStakePool = (function (exports) {
 	 * take effect! Using simply `assert()` or `is()` will not use coercion.
 	 */
 
-	function coerce(struct, condition, coercer) {
-	  return new Struct$1({ ...struct,
+	function coerce$1(struct, condition, coercer) {
+	  return new Struct$2({ ...struct,
 	    coercer: (value, ctx) => {
-	      return is(value, condition) ? struct.coercer(coercer(value, ctx), ctx) : struct.coercer(value, ctx);
+	      return is$1(value, condition) ? struct.coercer(coercer(value, ctx), ctx) : struct.coercer(value, ctx);
 	    }
 	  });
 	}
 
+	// Unique ID creation requires a high quality random # generator. In the browser we therefore
+	// require the crypto API and do not support built-in fallback to lower quality random number
+	// generators (like Math.random()).
+	var getRandomValues;
+	var rnds8 = new Uint8Array(16);
+	function rng() {
+	  // lazy load so that environments that need to polyfill have a chance to do so
+	  if (!getRandomValues) {
+	    // getRandomValues needs to be invoked in a context where "this" is a Crypto implementation. Also,
+	    // find the complete implementation of crypto (msCrypto) on IE11.
+	    getRandomValues = typeof crypto !== 'undefined' && crypto.getRandomValues && crypto.getRandomValues.bind(crypto) || typeof msCrypto !== 'undefined' && typeof msCrypto.getRandomValues === 'function' && msCrypto.getRandomValues.bind(msCrypto);
+
+	    if (!getRandomValues) {
+	      throw new Error('crypto.getRandomValues() not supported. See https://github.com/uuidjs/uuid#getrandomvalues-not-supported');
+	    }
+	  }
+
+	  return getRandomValues(rnds8);
+	}
+
+	var REGEX = /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}|00000000-0000-0000-0000-000000000000)$/i;
+
+	function validate$1(uuid) {
+	  return typeof uuid === 'string' && REGEX.test(uuid);
+	}
+
+	/**
+	 * Convert array of 16 byte values to UUID string format of the form:
+	 * XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX
+	 */
+
+	var byteToHex = [];
+
+	for (var i = 0; i < 256; ++i) {
+	  byteToHex.push((i + 0x100).toString(16).substr(1));
+	}
+
+	function stringify$1(arr) {
+	  var offset = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : 0;
+	  // Note: Be careful editing this code!  It's been tuned for performance
+	  // and works in ways you may not expect. See https://github.com/uuidjs/uuid/pull/434
+	  var uuid = (byteToHex[arr[offset + 0]] + byteToHex[arr[offset + 1]] + byteToHex[arr[offset + 2]] + byteToHex[arr[offset + 3]] + '-' + byteToHex[arr[offset + 4]] + byteToHex[arr[offset + 5]] + '-' + byteToHex[arr[offset + 6]] + byteToHex[arr[offset + 7]] + '-' + byteToHex[arr[offset + 8]] + byteToHex[arr[offset + 9]] + '-' + byteToHex[arr[offset + 10]] + byteToHex[arr[offset + 11]] + byteToHex[arr[offset + 12]] + byteToHex[arr[offset + 13]] + byteToHex[arr[offset + 14]] + byteToHex[arr[offset + 15]]).toLowerCase(); // Consistency check for valid UUID.  If this throws, it's likely due to one
+	  // of the following:
+	  // - One or more input array values don't map to a hex octet (leading to
+	  // "undefined" in the uuid)
+	  // - Invalid input values for the RFC `version` or `variant` fields
+
+	  if (!validate$1(uuid)) {
+	    throw TypeError('Stringified UUID is invalid');
+	  }
+
+	  return uuid;
+	}
+
+	//
+	// Inspired by https://github.com/LiosK/UUID.js
+	// and http://docs.python.org/library/uuid.html
+
+	var _nodeId;
+
+	var _clockseq; // Previous uuid creation time
+
+
+	var _lastMSecs = 0;
+	var _lastNSecs = 0; // See https://github.com/uuidjs/uuid for API details
+
+	function v1(options, buf, offset) {
+	  var i = buf && offset || 0;
+	  var b = buf || new Array(16);
+	  options = options || {};
+	  var node = options.node || _nodeId;
+	  var clockseq = options.clockseq !== undefined ? options.clockseq : _clockseq; // node and clockseq need to be initialized to random values if they're not
+	  // specified.  We do this lazily to minimize issues related to insufficient
+	  // system entropy.  See #189
+
+	  if (node == null || clockseq == null) {
+	    var seedBytes = options.random || (options.rng || rng)();
+
+	    if (node == null) {
+	      // Per 4.5, create and 48-bit node id, (47 random bits + multicast bit = 1)
+	      node = _nodeId = [seedBytes[0] | 0x01, seedBytes[1], seedBytes[2], seedBytes[3], seedBytes[4], seedBytes[5]];
+	    }
+
+	    if (clockseq == null) {
+	      // Per 4.2.2, randomize (14 bit) clockseq
+	      clockseq = _clockseq = (seedBytes[6] << 8 | seedBytes[7]) & 0x3fff;
+	    }
+	  } // UUID timestamps are 100 nano-second units since the Gregorian epoch,
+	  // (1582-10-15 00:00).  JSNumbers aren't precise enough for this, so
+	  // time is handled internally as 'msecs' (integer milliseconds) and 'nsecs'
+	  // (100-nanoseconds offset from msecs) since unix epoch, 1970-01-01 00:00.
+
+
+	  var msecs = options.msecs !== undefined ? options.msecs : Date.now(); // Per 4.2.1.2, use count of uuid's generated during the current clock
+	  // cycle to simulate higher resolution clock
+
+	  var nsecs = options.nsecs !== undefined ? options.nsecs : _lastNSecs + 1; // Time since last uuid creation (in msecs)
+
+	  var dt = msecs - _lastMSecs + (nsecs - _lastNSecs) / 10000; // Per 4.2.1.2, Bump clockseq on clock regression
+
+	  if (dt < 0 && options.clockseq === undefined) {
+	    clockseq = clockseq + 1 & 0x3fff;
+	  } // Reset nsecs if clock regresses (new clockseq) or we've moved onto a new
+	  // time interval
+
+
+	  if ((dt < 0 || msecs > _lastMSecs) && options.nsecs === undefined) {
+	    nsecs = 0;
+	  } // Per 4.2.1.2 Throw error if too many uuids are requested
+
+
+	  if (nsecs >= 10000) {
+	    throw new Error("uuid.v1(): Can't create more than 10M uuids/sec");
+	  }
+
+	  _lastMSecs = msecs;
+	  _lastNSecs = nsecs;
+	  _clockseq = clockseq; // Per 4.1.4 - Convert from unix epoch to Gregorian epoch
+
+	  msecs += 12219292800000; // `time_low`
+
+	  var tl = ((msecs & 0xfffffff) * 10000 + nsecs) % 0x100000000;
+	  b[i++] = tl >>> 24 & 0xff;
+	  b[i++] = tl >>> 16 & 0xff;
+	  b[i++] = tl >>> 8 & 0xff;
+	  b[i++] = tl & 0xff; // `time_mid`
+
+	  var tmh = msecs / 0x100000000 * 10000 & 0xfffffff;
+	  b[i++] = tmh >>> 8 & 0xff;
+	  b[i++] = tmh & 0xff; // `time_high_and_version`
+
+	  b[i++] = tmh >>> 24 & 0xf | 0x10; // include version
+
+	  b[i++] = tmh >>> 16 & 0xff; // `clock_seq_hi_and_reserved` (Per 4.2.2 - include variant)
+
+	  b[i++] = clockseq >>> 8 | 0x80; // `clock_seq_low`
+
+	  b[i++] = clockseq & 0xff; // `node`
+
+	  for (var n = 0; n < 6; ++n) {
+	    b[i + n] = node[n];
+	  }
+
+	  return buf || stringify$1(b);
+	}
+
+	function parse(uuid) {
+	  if (!validate$1(uuid)) {
+	    throw TypeError('Invalid UUID');
+	  }
+
+	  var v;
+	  var arr = new Uint8Array(16); // Parse ########-....-....-....-............
+
+	  arr[0] = (v = parseInt(uuid.slice(0, 8), 16)) >>> 24;
+	  arr[1] = v >>> 16 & 0xff;
+	  arr[2] = v >>> 8 & 0xff;
+	  arr[3] = v & 0xff; // Parse ........-####-....-....-............
+
+	  arr[4] = (v = parseInt(uuid.slice(9, 13), 16)) >>> 8;
+	  arr[5] = v & 0xff; // Parse ........-....-####-....-............
+
+	  arr[6] = (v = parseInt(uuid.slice(14, 18), 16)) >>> 8;
+	  arr[7] = v & 0xff; // Parse ........-....-....-####-............
+
+	  arr[8] = (v = parseInt(uuid.slice(19, 23), 16)) >>> 8;
+	  arr[9] = v & 0xff; // Parse ........-....-....-....-############
+	  // (Use "/" to avoid 32-bit truncation when bit-shifting high-order bytes)
+
+	  arr[10] = (v = parseInt(uuid.slice(24, 36), 16)) / 0x10000000000 & 0xff;
+	  arr[11] = v / 0x100000000 & 0xff;
+	  arr[12] = v >>> 24 & 0xff;
+	  arr[13] = v >>> 16 & 0xff;
+	  arr[14] = v >>> 8 & 0xff;
+	  arr[15] = v & 0xff;
+	  return arr;
+	}
+
+	function stringToBytes(str) {
+	  str = unescape(encodeURIComponent(str)); // UTF8 escape
+
+	  var bytes = [];
+
+	  for (var i = 0; i < str.length; ++i) {
+	    bytes.push(str.charCodeAt(i));
+	  }
+
+	  return bytes;
+	}
+
+	var DNS = '6ba7b810-9dad-11d1-80b4-00c04fd430c8';
+	var URL = '6ba7b811-9dad-11d1-80b4-00c04fd430c8';
+	function v35 (name, version, hashfunc) {
+	  function generateUUID(value, namespace, buf, offset) {
+	    if (typeof value === 'string') {
+	      value = stringToBytes(value);
+	    }
+
+	    if (typeof namespace === 'string') {
+	      namespace = parse(namespace);
+	    }
+
+	    if (namespace.length !== 16) {
+	      throw TypeError('Namespace must be array-like (16 iterable integer values, 0-255)');
+	    } // Compute hash of namespace and value, Per 4.3
+	    // Future: Use spread syntax when supported on all platforms, e.g. `bytes =
+	    // hashfunc([...namespace, ... value])`
+
+
+	    var bytes = new Uint8Array(16 + value.length);
+	    bytes.set(namespace);
+	    bytes.set(value, namespace.length);
+	    bytes = hashfunc(bytes);
+	    bytes[6] = bytes[6] & 0x0f | version;
+	    bytes[8] = bytes[8] & 0x3f | 0x80;
+
+	    if (buf) {
+	      offset = offset || 0;
+
+	      for (var i = 0; i < 16; ++i) {
+	        buf[offset + i] = bytes[i];
+	      }
+
+	      return buf;
+	    }
+
+	    return stringify$1(bytes);
+	  } // Function#name is not settable on some platforms (#270)
+
+
+	  try {
+	    generateUUID.name = name; // eslint-disable-next-line no-empty
+	  } catch (err) {} // For CommonJS default export support
+
+
+	  generateUUID.DNS = DNS;
+	  generateUUID.URL = URL;
+	  return generateUUID;
+	}
+
+	/*
+	 * Browser-compatible JavaScript MD5
+	 *
+	 * Modification of JavaScript MD5
+	 * https://github.com/blueimp/JavaScript-MD5
+	 *
+	 * Copyright 2011, Sebastian Tschan
+	 * https://blueimp.net
+	 *
+	 * Licensed under the MIT license:
+	 * https://opensource.org/licenses/MIT
+	 *
+	 * Based on
+	 * A JavaScript implementation of the RSA Data Security, Inc. MD5 Message
+	 * Digest Algorithm, as defined in RFC 1321.
+	 * Version 2.2 Copyright (C) Paul Johnston 1999 - 2009
+	 * Other contributors: Greg Holt, Andrew Kepert, Ydnar, Lostinet
+	 * Distributed under the BSD License
+	 * See http://pajhome.org.uk/crypt/md5 for more info.
+	 */
+	function md5(bytes) {
+	  if (typeof bytes === 'string') {
+	    var msg = unescape(encodeURIComponent(bytes)); // UTF8 escape
+
+	    bytes = new Uint8Array(msg.length);
+
+	    for (var i = 0; i < msg.length; ++i) {
+	      bytes[i] = msg.charCodeAt(i);
+	    }
+	  }
+
+	  return md5ToHexEncodedArray(wordsToMd5(bytesToWords(bytes), bytes.length * 8));
+	}
+	/*
+	 * Convert an array of little-endian words to an array of bytes
+	 */
+
+
+	function md5ToHexEncodedArray(input) {
+	  var output = [];
+	  var length32 = input.length * 32;
+	  var hexTab = '0123456789abcdef';
+
+	  for (var i = 0; i < length32; i += 8) {
+	    var x = input[i >> 5] >>> i % 32 & 0xff;
+	    var hex = parseInt(hexTab.charAt(x >>> 4 & 0x0f) + hexTab.charAt(x & 0x0f), 16);
+	    output.push(hex);
+	  }
+
+	  return output;
+	}
+	/**
+	 * Calculate output length with padding and bit length
+	 */
+
+
+	function getOutputLength(inputLength8) {
+	  return (inputLength8 + 64 >>> 9 << 4) + 14 + 1;
+	}
+	/*
+	 * Calculate the MD5 of an array of little-endian words, and a bit length.
+	 */
+
+
+	function wordsToMd5(x, len) {
+	  /* append padding */
+	  x[len >> 5] |= 0x80 << len % 32;
+	  x[getOutputLength(len) - 1] = len;
+	  var a = 1732584193;
+	  var b = -271733879;
+	  var c = -1732584194;
+	  var d = 271733878;
+
+	  for (var i = 0; i < x.length; i += 16) {
+	    var olda = a;
+	    var oldb = b;
+	    var oldc = c;
+	    var oldd = d;
+	    a = md5ff(a, b, c, d, x[i], 7, -680876936);
+	    d = md5ff(d, a, b, c, x[i + 1], 12, -389564586);
+	    c = md5ff(c, d, a, b, x[i + 2], 17, 606105819);
+	    b = md5ff(b, c, d, a, x[i + 3], 22, -1044525330);
+	    a = md5ff(a, b, c, d, x[i + 4], 7, -176418897);
+	    d = md5ff(d, a, b, c, x[i + 5], 12, 1200080426);
+	    c = md5ff(c, d, a, b, x[i + 6], 17, -1473231341);
+	    b = md5ff(b, c, d, a, x[i + 7], 22, -45705983);
+	    a = md5ff(a, b, c, d, x[i + 8], 7, 1770035416);
+	    d = md5ff(d, a, b, c, x[i + 9], 12, -1958414417);
+	    c = md5ff(c, d, a, b, x[i + 10], 17, -42063);
+	    b = md5ff(b, c, d, a, x[i + 11], 22, -1990404162);
+	    a = md5ff(a, b, c, d, x[i + 12], 7, 1804603682);
+	    d = md5ff(d, a, b, c, x[i + 13], 12, -40341101);
+	    c = md5ff(c, d, a, b, x[i + 14], 17, -1502002290);
+	    b = md5ff(b, c, d, a, x[i + 15], 22, 1236535329);
+	    a = md5gg(a, b, c, d, x[i + 1], 5, -165796510);
+	    d = md5gg(d, a, b, c, x[i + 6], 9, -1069501632);
+	    c = md5gg(c, d, a, b, x[i + 11], 14, 643717713);
+	    b = md5gg(b, c, d, a, x[i], 20, -373897302);
+	    a = md5gg(a, b, c, d, x[i + 5], 5, -701558691);
+	    d = md5gg(d, a, b, c, x[i + 10], 9, 38016083);
+	    c = md5gg(c, d, a, b, x[i + 15], 14, -660478335);
+	    b = md5gg(b, c, d, a, x[i + 4], 20, -405537848);
+	    a = md5gg(a, b, c, d, x[i + 9], 5, 568446438);
+	    d = md5gg(d, a, b, c, x[i + 14], 9, -1019803690);
+	    c = md5gg(c, d, a, b, x[i + 3], 14, -187363961);
+	    b = md5gg(b, c, d, a, x[i + 8], 20, 1163531501);
+	    a = md5gg(a, b, c, d, x[i + 13], 5, -1444681467);
+	    d = md5gg(d, a, b, c, x[i + 2], 9, -51403784);
+	    c = md5gg(c, d, a, b, x[i + 7], 14, 1735328473);
+	    b = md5gg(b, c, d, a, x[i + 12], 20, -1926607734);
+	    a = md5hh(a, b, c, d, x[i + 5], 4, -378558);
+	    d = md5hh(d, a, b, c, x[i + 8], 11, -2022574463);
+	    c = md5hh(c, d, a, b, x[i + 11], 16, 1839030562);
+	    b = md5hh(b, c, d, a, x[i + 14], 23, -35309556);
+	    a = md5hh(a, b, c, d, x[i + 1], 4, -1530992060);
+	    d = md5hh(d, a, b, c, x[i + 4], 11, 1272893353);
+	    c = md5hh(c, d, a, b, x[i + 7], 16, -155497632);
+	    b = md5hh(b, c, d, a, x[i + 10], 23, -1094730640);
+	    a = md5hh(a, b, c, d, x[i + 13], 4, 681279174);
+	    d = md5hh(d, a, b, c, x[i], 11, -358537222);
+	    c = md5hh(c, d, a, b, x[i + 3], 16, -722521979);
+	    b = md5hh(b, c, d, a, x[i + 6], 23, 76029189);
+	    a = md5hh(a, b, c, d, x[i + 9], 4, -640364487);
+	    d = md5hh(d, a, b, c, x[i + 12], 11, -421815835);
+	    c = md5hh(c, d, a, b, x[i + 15], 16, 530742520);
+	    b = md5hh(b, c, d, a, x[i + 2], 23, -995338651);
+	    a = md5ii(a, b, c, d, x[i], 6, -198630844);
+	    d = md5ii(d, a, b, c, x[i + 7], 10, 1126891415);
+	    c = md5ii(c, d, a, b, x[i + 14], 15, -1416354905);
+	    b = md5ii(b, c, d, a, x[i + 5], 21, -57434055);
+	    a = md5ii(a, b, c, d, x[i + 12], 6, 1700485571);
+	    d = md5ii(d, a, b, c, x[i + 3], 10, -1894986606);
+	    c = md5ii(c, d, a, b, x[i + 10], 15, -1051523);
+	    b = md5ii(b, c, d, a, x[i + 1], 21, -2054922799);
+	    a = md5ii(a, b, c, d, x[i + 8], 6, 1873313359);
+	    d = md5ii(d, a, b, c, x[i + 15], 10, -30611744);
+	    c = md5ii(c, d, a, b, x[i + 6], 15, -1560198380);
+	    b = md5ii(b, c, d, a, x[i + 13], 21, 1309151649);
+	    a = md5ii(a, b, c, d, x[i + 4], 6, -145523070);
+	    d = md5ii(d, a, b, c, x[i + 11], 10, -1120210379);
+	    c = md5ii(c, d, a, b, x[i + 2], 15, 718787259);
+	    b = md5ii(b, c, d, a, x[i + 9], 21, -343485551);
+	    a = safeAdd(a, olda);
+	    b = safeAdd(b, oldb);
+	    c = safeAdd(c, oldc);
+	    d = safeAdd(d, oldd);
+	  }
+
+	  return [a, b, c, d];
+	}
+	/*
+	 * Convert an array bytes to an array of little-endian words
+	 * Characters >255 have their high-byte silently ignored.
+	 */
+
+
+	function bytesToWords(input) {
+	  if (input.length === 0) {
+	    return [];
+	  }
+
+	  var length8 = input.length * 8;
+	  var output = new Uint32Array(getOutputLength(length8));
+
+	  for (var i = 0; i < length8; i += 8) {
+	    output[i >> 5] |= (input[i / 8] & 0xff) << i % 32;
+	  }
+
+	  return output;
+	}
+	/*
+	 * Add integers, wrapping at 2^32. This uses 16-bit operations internally
+	 * to work around bugs in some JS interpreters.
+	 */
+
+
+	function safeAdd(x, y) {
+	  var lsw = (x & 0xffff) + (y & 0xffff);
+	  var msw = (x >> 16) + (y >> 16) + (lsw >> 16);
+	  return msw << 16 | lsw & 0xffff;
+	}
+	/*
+	 * Bitwise rotate a 32-bit number to the left.
+	 */
+
+
+	function bitRotateLeft(num, cnt) {
+	  return num << cnt | num >>> 32 - cnt;
+	}
+	/*
+	 * These functions implement the four basic operations the algorithm uses.
+	 */
+
+
+	function md5cmn(q, a, b, x, s, t) {
+	  return safeAdd(bitRotateLeft(safeAdd(safeAdd(a, q), safeAdd(x, t)), s), b);
+	}
+
+	function md5ff(a, b, c, d, x, s, t) {
+	  return md5cmn(b & c | ~b & d, a, b, x, s, t);
+	}
+
+	function md5gg(a, b, c, d, x, s, t) {
+	  return md5cmn(b & d | c & ~d, a, b, x, s, t);
+	}
+
+	function md5hh(a, b, c, d, x, s, t) {
+	  return md5cmn(b ^ c ^ d, a, b, x, s, t);
+	}
+
+	function md5ii(a, b, c, d, x, s, t) {
+	  return md5cmn(c ^ (b | ~d), a, b, x, s, t);
+	}
+
+	var v3 = v35('v3', 0x30, md5);
+	var v3$1 = v3;
+
+	function v4(options, buf, offset) {
+	  options = options || {};
+	  var rnds = options.random || (options.rng || rng)(); // Per 4.4, set bits for version and `clock_seq_hi_and_reserved`
+
+	  rnds[6] = rnds[6] & 0x0f | 0x40;
+	  rnds[8] = rnds[8] & 0x3f | 0x80; // Copy bytes to buffer, if provided
+
+	  if (buf) {
+	    offset = offset || 0;
+
+	    for (var i = 0; i < 16; ++i) {
+	      buf[offset + i] = rnds[i];
+	    }
+
+	    return buf;
+	  }
+
+	  return stringify$1(rnds);
+	}
+
+	// Adapted from Chris Veness' SHA1 code at
+	// http://www.movable-type.co.uk/scripts/sha1.html
+	function f(s, x, y, z) {
+	  switch (s) {
+	    case 0:
+	      return x & y ^ ~x & z;
+
+	    case 1:
+	      return x ^ y ^ z;
+
+	    case 2:
+	      return x & y ^ x & z ^ y & z;
+
+	    case 3:
+	      return x ^ y ^ z;
+	  }
+	}
+
+	function ROTL(x, n) {
+	  return x << n | x >>> 32 - n;
+	}
+
+	function sha1(bytes) {
+	  var K = [0x5a827999, 0x6ed9eba1, 0x8f1bbcdc, 0xca62c1d6];
+	  var H = [0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476, 0xc3d2e1f0];
+
+	  if (typeof bytes === 'string') {
+	    var msg = unescape(encodeURIComponent(bytes)); // UTF8 escape
+
+	    bytes = [];
+
+	    for (var i = 0; i < msg.length; ++i) {
+	      bytes.push(msg.charCodeAt(i));
+	    }
+	  } else if (!Array.isArray(bytes)) {
+	    // Convert Array-like to Array
+	    bytes = Array.prototype.slice.call(bytes);
+	  }
+
+	  bytes.push(0x80);
+	  var l = bytes.length / 4 + 2;
+	  var N = Math.ceil(l / 16);
+	  var M = new Array(N);
+
+	  for (var _i = 0; _i < N; ++_i) {
+	    var arr = new Uint32Array(16);
+
+	    for (var j = 0; j < 16; ++j) {
+	      arr[j] = bytes[_i * 64 + j * 4] << 24 | bytes[_i * 64 + j * 4 + 1] << 16 | bytes[_i * 64 + j * 4 + 2] << 8 | bytes[_i * 64 + j * 4 + 3];
+	    }
+
+	    M[_i] = arr;
+	  }
+
+	  M[N - 1][14] = (bytes.length - 1) * 8 / Math.pow(2, 32);
+	  M[N - 1][14] = Math.floor(M[N - 1][14]);
+	  M[N - 1][15] = (bytes.length - 1) * 8 & 0xffffffff;
+
+	  for (var _i2 = 0; _i2 < N; ++_i2) {
+	    var W = new Uint32Array(80);
+
+	    for (var t = 0; t < 16; ++t) {
+	      W[t] = M[_i2][t];
+	    }
+
+	    for (var _t = 16; _t < 80; ++_t) {
+	      W[_t] = ROTL(W[_t - 3] ^ W[_t - 8] ^ W[_t - 14] ^ W[_t - 16], 1);
+	    }
+
+	    var a = H[0];
+	    var b = H[1];
+	    var c = H[2];
+	    var d = H[3];
+	    var e = H[4];
+
+	    for (var _t2 = 0; _t2 < 80; ++_t2) {
+	      var s = Math.floor(_t2 / 20);
+	      var T = ROTL(a, 5) + f(s, b, c, d) + e + K[s] + W[_t2] >>> 0;
+	      e = d;
+	      d = c;
+	      c = ROTL(b, 30) >>> 0;
+	      b = a;
+	      a = T;
+	    }
+
+	    H[0] = H[0] + a >>> 0;
+	    H[1] = H[1] + b >>> 0;
+	    H[2] = H[2] + c >>> 0;
+	    H[3] = H[3] + d >>> 0;
+	    H[4] = H[4] + e >>> 0;
+	  }
+
+	  return [H[0] >> 24 & 0xff, H[0] >> 16 & 0xff, H[0] >> 8 & 0xff, H[0] & 0xff, H[1] >> 24 & 0xff, H[1] >> 16 & 0xff, H[1] >> 8 & 0xff, H[1] & 0xff, H[2] >> 24 & 0xff, H[2] >> 16 & 0xff, H[2] >> 8 & 0xff, H[2] & 0xff, H[3] >> 24 & 0xff, H[3] >> 16 & 0xff, H[3] >> 8 & 0xff, H[3] & 0xff, H[4] >> 24 & 0xff, H[4] >> 16 & 0xff, H[4] >> 8 & 0xff, H[4] & 0xff];
+	}
+
+	var v5 = v35('v5', 0x50, sha1);
+	var v5$1 = v5;
+
+	var nil = '00000000-0000-0000-0000-000000000000';
+
+	function version(uuid) {
+	  if (!validate$1(uuid)) {
+	    throw TypeError('Invalid UUID');
+	  }
+
+	  return parseInt(uuid.substr(14, 1), 16);
+	}
+
+	var esmBrowser = /*#__PURE__*/Object.freeze({
+		__proto__: null,
+		NIL: nil,
+		parse: parse,
+		stringify: stringify$1,
+		v1: v1,
+		v3: v3$1,
+		v4: v4,
+		v5: v5$1,
+		validate: validate$1,
+		version: version
+	});
+
+	var require$$0 = /*@__PURE__*/getAugmentedNamespace(esmBrowser);
+
+	const uuid$1 = require$$0.v4;
+
+	/**
+	 *  Generates a JSON-RPC 1.0 or 2.0 request
+	 *  @param {String} method Name of method to call
+	 *  @param {Array|Object} params Array of parameters passed to the method as specified, or an object of parameter names and corresponding value
+	 *  @param {String|Number|null} [id] Request ID can be a string, number, null for explicit notification or left out for automatic generation
+	 *  @param {Object} [options]
+	 *  @param {Number} [options.version=2] JSON-RPC version to use (1 or 2)
+	 *  @param {Boolean} [options.notificationIdNull=false] When true, version 2 requests will set id to null instead of omitting it
+	 *  @param {Function} [options.generator] Passed the request, and the options object and is expected to return a request ID
+	 *  @throws {TypeError} If any of the parameters are invalid
+	 *  @return {Object} A JSON-RPC 1.0 or 2.0 request
+	 *  @memberOf Utils
+	 */
+	const generateRequest$1 = function(method, params, id, options) {
+	  if(typeof method !== 'string') {
+	    throw new TypeError(method + ' must be a string');
+	  }
+
+	  options = options || {};
+
+	  // check valid version provided
+	  const version = typeof options.version === 'number' ? options.version : 2;
+	  if (version !== 1 && version !== 2) {
+	    throw new TypeError(version + ' must be 1 or 2');
+	  }
+
+	  const request = {
+	    method: method
+	  };
+
+	  if(version === 2) {
+	    request.jsonrpc = '2.0';
+	  }
+
+	  if(params) {
+	    // params given, but invalid?
+	    if(typeof params !== 'object' && !Array.isArray(params)) {
+	      throw new TypeError(params + ' must be an object, array or omitted');
+	    }
+	    request.params = params;
+	  }
+
+	  // if id was left out, generate one (null means explicit notification)
+	  if(typeof(id) === 'undefined') {
+	    const generator = typeof options.generator === 'function' ? options.generator : function() { return uuid$1(); };
+	    request.id = generator(request, options);
+	  } else if (version === 2 && id === null) {
+	    // we have a version 2 notification
+	    if (options.notificationIdNull) {
+	      request.id = null; // id will not be set at all unless option provided
+	    }
+	  } else {
+	    request.id = id;
+	  }
+
+	  return request;
+	};
+
+	var generateRequest_1 = generateRequest$1;
+
+	const uuid = require$$0.v4;
+	const generateRequest = generateRequest_1;
+
+	/**
+	 * Constructor for a Jayson Browser Client that does not depend any node.js core libraries
+	 * @class ClientBrowser
+	 * @param {Function} callServer Method that calls the server, receives the stringified request and a regular node-style callback
+	 * @param {Object} [options]
+	 * @param {Function} [options.reviver] Reviver function for JSON
+	 * @param {Function} [options.replacer] Replacer function for JSON
+	 * @param {Number} [options.version=2] JSON-RPC version to use (1|2)
+	 * @param {Function} [options.generator] Function to use for generating request IDs
+	 *  @param {Boolean} [options.notificationIdNull=false] When true, version 2 requests will set id to null instead of omitting it
+	 * @return {ClientBrowser}
+	 */
+	const ClientBrowser = function(callServer, options) {
+	  if(!(this instanceof ClientBrowser)) {
+	    return new ClientBrowser(callServer, options);
+	  }
+
+	  if (!options) {
+	    options = {};
+	  }
+
+	  this.options = {
+	    reviver: typeof options.reviver !== 'undefined' ? options.reviver : null,
+	    replacer: typeof options.replacer !== 'undefined' ? options.replacer : null,
+	    generator: typeof options.generator !== 'undefined' ? options.generator : function() { return uuid(); },
+	    version: typeof options.version !== 'undefined' ? options.version : 2,
+	    notificationIdNull: typeof options.notificationIdNull === 'boolean' ? options.notificationIdNull : false,
+	  };
+
+	  this.callServer = callServer;
+	};
+
+	var browser = ClientBrowser;
+
+	/**
+	 *  Creates a request and dispatches it if given a callback.
+	 *  @param {String|Array} method A batch request if passed an Array, or a method name if passed a String
+	 *  @param {Array|Object} [params] Parameters for the method
+	 *  @param {String|Number} [id] Optional id. If undefined an id will be generated. If null it creates a notification request
+	 *  @param {Function} [callback] Request callback. If specified, executes the request rather than only returning it.
+	 *  @throws {TypeError} Invalid parameters
+	 *  @return {Object} JSON-RPC 1.0 or 2.0 compatible request
+	 */
+	ClientBrowser.prototype.request = function(method, params, id, callback) {
+	  const self = this;
+	  let request = null;
+
+	  // is this a batch request?
+	  const isBatch = Array.isArray(method) && typeof params === 'function';
+
+	  if (this.options.version === 1 && isBatch) {
+	    throw new TypeError('JSON-RPC 1.0 does not support batching');
+	  }
+
+	  // is this a raw request?
+	  const isRaw = !isBatch && method && typeof method === 'object' && typeof params === 'function';
+
+	  if(isBatch || isRaw) {
+	    callback = params;
+	    request = method;
+	  } else {
+	    if(typeof id === 'function') {
+	      callback = id;
+	      // specifically undefined because "null" is a notification request
+	      id = undefined;
+	    }
+
+	    const hasCallback = typeof callback === 'function';
+
+	    try {
+	      request = generateRequest(method, params, id, {
+	        generator: this.options.generator,
+	        version: this.options.version,
+	        notificationIdNull: this.options.notificationIdNull,
+	      });
+	    } catch(err) {
+	      if(hasCallback) {
+	        return callback(err);
+	      }
+	      throw err;
+	    }
+
+	    // no callback means we should just return a raw request
+	    if(!hasCallback) {
+	      return request;
+	    }
+
+	  }
+
+	  let message;
+	  try {
+	    message = JSON.stringify(request, this.options.replacer);
+	  } catch(err) {
+	    return callback(err);
+	  }
+
+	  this.callServer(message, function(err, response) {
+	    self._parseResponse(err, response, callback);
+	  });
+
+	  // always return the raw request
+	  return request;
+	};
+
+	/**
+	 * Parses a response from a server
+	 * @param {Object} err Error to pass on that is unrelated to the actual response
+	 * @param {String} responseText JSON-RPC 1.0 or 2.0 response
+	 * @param {Function} callback Callback that will receive different arguments depending on the amount of parameters
+	 * @private
+	 */
+	ClientBrowser.prototype._parseResponse = function(err, responseText, callback) {
+	  if(err) {
+	    callback(err);
+	    return;
+	  }
+
+	  if(!responseText) {
+	    // empty response text, assume that is correct because it could be a
+	    // notification which jayson does not give any body for
+	    return callback();
+	  }
+
+	  let response;
+	  try {
+	    response = JSON.parse(responseText, this.options.reviver);
+	  } catch(err) {
+	    return callback(err);
+	  }
+
+	  if(callback.length === 3) {
+	    // if callback length is 3, we split callback arguments on error and response
+
+	    // is batch response?
+	    if(Array.isArray(response)) {
+
+	      // neccesary to split strictly on validity according to spec here
+	      const isError = function(res) {
+	        return typeof res.error !== 'undefined';
+	      };
+
+	      const isNotError = function (res) {
+	        return !isError(res);
+	      };
+
+	      return callback(null, response.filter(isError), response.filter(isNotError));
+	    
+	    } else {
+
+	      // split regardless of validity
+	      return callback(null, response.error, response.result);
+	    
+	    }
+	  
+	  }
+
+	  callback(null, response);
+	};
+
+	var RpcClient = /*@__PURE__*/getDefaultExportFromCjs$1(browser);
+
+	var client = {};
+
+	var interopRequireDefault = {exports: {}};
+
+	(function (module) {
+		function _interopRequireDefault(obj) {
+		  return obj && obj.__esModule ? obj : {
+		    "default": obj
+		  };
+		}
+		module.exports = _interopRequireDefault, module.exports.__esModule = true, module.exports["default"] = module.exports; 
+	} (interopRequireDefault));
+
+	var interopRequireDefaultExports = interopRequireDefault.exports;
+
+	var regeneratorRuntime$1 = {exports: {}};
+
+	var _typeof = {exports: {}};
+
+	var hasRequired_typeof;
+
+	function require_typeof () {
+		if (hasRequired_typeof) return _typeof.exports;
+		hasRequired_typeof = 1;
+		(function (module) {
+			function _typeof(o) {
+			  "@babel/helpers - typeof";
+
+			  return (module.exports = _typeof = "function" == typeof Symbol && "symbol" == typeof Symbol.iterator ? function (o) {
+			    return typeof o;
+			  } : function (o) {
+			    return o && "function" == typeof Symbol && o.constructor === Symbol && o !== Symbol.prototype ? "symbol" : typeof o;
+			  }, module.exports.__esModule = true, module.exports["default"] = module.exports), _typeof(o);
+			}
+			module.exports = _typeof, module.exports.__esModule = true, module.exports["default"] = module.exports; 
+		} (_typeof));
+		return _typeof.exports;
+	}
+
+	var hasRequiredRegeneratorRuntime;
+
+	function requireRegeneratorRuntime () {
+		if (hasRequiredRegeneratorRuntime) return regeneratorRuntime$1.exports;
+		hasRequiredRegeneratorRuntime = 1;
+		(function (module) {
+			var _typeof = require_typeof()["default"];
+			function _regeneratorRuntime() {
+			  module.exports = _regeneratorRuntime = function _regeneratorRuntime() {
+			    return e;
+			  }, module.exports.__esModule = true, module.exports["default"] = module.exports;
+			  var t,
+			    e = {},
+			    r = Object.prototype,
+			    n = r.hasOwnProperty,
+			    o = Object.defineProperty || function (t, e, r) {
+			      t[e] = r.value;
+			    },
+			    i = "function" == typeof Symbol ? Symbol : {},
+			    a = i.iterator || "@@iterator",
+			    c = i.asyncIterator || "@@asyncIterator",
+			    u = i.toStringTag || "@@toStringTag";
+			  function define(t, e, r) {
+			    return Object.defineProperty(t, e, {
+			      value: r,
+			      enumerable: !0,
+			      configurable: !0,
+			      writable: !0
+			    }), t[e];
+			  }
+			  try {
+			    define({}, "");
+			  } catch (t) {
+			    define = function define(t, e, r) {
+			      return t[e] = r;
+			    };
+			  }
+			  function wrap(t, e, r, n) {
+			    var i = e && e.prototype instanceof Generator ? e : Generator,
+			      a = Object.create(i.prototype),
+			      c = new Context(n || []);
+			    return o(a, "_invoke", {
+			      value: makeInvokeMethod(t, r, c)
+			    }), a;
+			  }
+			  function tryCatch(t, e, r) {
+			    try {
+			      return {
+			        type: "normal",
+			        arg: t.call(e, r)
+			      };
+			    } catch (t) {
+			      return {
+			        type: "throw",
+			        arg: t
+			      };
+			    }
+			  }
+			  e.wrap = wrap;
+			  var h = "suspendedStart",
+			    l = "suspendedYield",
+			    f = "executing",
+			    s = "completed",
+			    y = {};
+			  function Generator() {}
+			  function GeneratorFunction() {}
+			  function GeneratorFunctionPrototype() {}
+			  var p = {};
+			  define(p, a, function () {
+			    return this;
+			  });
+			  var d = Object.getPrototypeOf,
+			    v = d && d(d(values([])));
+			  v && v !== r && n.call(v, a) && (p = v);
+			  var g = GeneratorFunctionPrototype.prototype = Generator.prototype = Object.create(p);
+			  function defineIteratorMethods(t) {
+			    ["next", "throw", "return"].forEach(function (e) {
+			      define(t, e, function (t) {
+			        return this._invoke(e, t);
+			      });
+			    });
+			  }
+			  function AsyncIterator(t, e) {
+			    function invoke(r, o, i, a) {
+			      var c = tryCatch(t[r], t, o);
+			      if ("throw" !== c.type) {
+			        var u = c.arg,
+			          h = u.value;
+			        return h && "object" == _typeof(h) && n.call(h, "__await") ? e.resolve(h.__await).then(function (t) {
+			          invoke("next", t, i, a);
+			        }, function (t) {
+			          invoke("throw", t, i, a);
+			        }) : e.resolve(h).then(function (t) {
+			          u.value = t, i(u);
+			        }, function (t) {
+			          return invoke("throw", t, i, a);
+			        });
+			      }
+			      a(c.arg);
+			    }
+			    var r;
+			    o(this, "_invoke", {
+			      value: function value(t, n) {
+			        function callInvokeWithMethodAndArg() {
+			          return new e(function (e, r) {
+			            invoke(t, n, e, r);
+			          });
+			        }
+			        return r = r ? r.then(callInvokeWithMethodAndArg, callInvokeWithMethodAndArg) : callInvokeWithMethodAndArg();
+			      }
+			    });
+			  }
+			  function makeInvokeMethod(e, r, n) {
+			    var o = h;
+			    return function (i, a) {
+			      if (o === f) throw new Error("Generator is already running");
+			      if (o === s) {
+			        if ("throw" === i) throw a;
+			        return {
+			          value: t,
+			          done: !0
+			        };
+			      }
+			      for (n.method = i, n.arg = a;;) {
+			        var c = n.delegate;
+			        if (c) {
+			          var u = maybeInvokeDelegate(c, n);
+			          if (u) {
+			            if (u === y) continue;
+			            return u;
+			          }
+			        }
+			        if ("next" === n.method) n.sent = n._sent = n.arg;else if ("throw" === n.method) {
+			          if (o === h) throw o = s, n.arg;
+			          n.dispatchException(n.arg);
+			        } else "return" === n.method && n.abrupt("return", n.arg);
+			        o = f;
+			        var p = tryCatch(e, r, n);
+			        if ("normal" === p.type) {
+			          if (o = n.done ? s : l, p.arg === y) continue;
+			          return {
+			            value: p.arg,
+			            done: n.done
+			          };
+			        }
+			        "throw" === p.type && (o = s, n.method = "throw", n.arg = p.arg);
+			      }
+			    };
+			  }
+			  function maybeInvokeDelegate(e, r) {
+			    var n = r.method,
+			      o = e.iterator[n];
+			    if (o === t) return r.delegate = null, "throw" === n && e.iterator["return"] && (r.method = "return", r.arg = t, maybeInvokeDelegate(e, r), "throw" === r.method) || "return" !== n && (r.method = "throw", r.arg = new TypeError("The iterator does not provide a '" + n + "' method")), y;
+			    var i = tryCatch(o, e.iterator, r.arg);
+			    if ("throw" === i.type) return r.method = "throw", r.arg = i.arg, r.delegate = null, y;
+			    var a = i.arg;
+			    return a ? a.done ? (r[e.resultName] = a.value, r.next = e.nextLoc, "return" !== r.method && (r.method = "next", r.arg = t), r.delegate = null, y) : a : (r.method = "throw", r.arg = new TypeError("iterator result is not an object"), r.delegate = null, y);
+			  }
+			  function pushTryEntry(t) {
+			    var e = {
+			      tryLoc: t[0]
+			    };
+			    1 in t && (e.catchLoc = t[1]), 2 in t && (e.finallyLoc = t[2], e.afterLoc = t[3]), this.tryEntries.push(e);
+			  }
+			  function resetTryEntry(t) {
+			    var e = t.completion || {};
+			    e.type = "normal", delete e.arg, t.completion = e;
+			  }
+			  function Context(t) {
+			    this.tryEntries = [{
+			      tryLoc: "root"
+			    }], t.forEach(pushTryEntry, this), this.reset(!0);
+			  }
+			  function values(e) {
+			    if (e || "" === e) {
+			      var r = e[a];
+			      if (r) return r.call(e);
+			      if ("function" == typeof e.next) return e;
+			      if (!isNaN(e.length)) {
+			        var o = -1,
+			          i = function next() {
+			            for (; ++o < e.length;) if (n.call(e, o)) return next.value = e[o], next.done = !1, next;
+			            return next.value = t, next.done = !0, next;
+			          };
+			        return i.next = i;
+			      }
+			    }
+			    throw new TypeError(_typeof(e) + " is not iterable");
+			  }
+			  return GeneratorFunction.prototype = GeneratorFunctionPrototype, o(g, "constructor", {
+			    value: GeneratorFunctionPrototype,
+			    configurable: !0
+			  }), o(GeneratorFunctionPrototype, "constructor", {
+			    value: GeneratorFunction,
+			    configurable: !0
+			  }), GeneratorFunction.displayName = define(GeneratorFunctionPrototype, u, "GeneratorFunction"), e.isGeneratorFunction = function (t) {
+			    var e = "function" == typeof t && t.constructor;
+			    return !!e && (e === GeneratorFunction || "GeneratorFunction" === (e.displayName || e.name));
+			  }, e.mark = function (t) {
+			    return Object.setPrototypeOf ? Object.setPrototypeOf(t, GeneratorFunctionPrototype) : (t.__proto__ = GeneratorFunctionPrototype, define(t, u, "GeneratorFunction")), t.prototype = Object.create(g), t;
+			  }, e.awrap = function (t) {
+			    return {
+			      __await: t
+			    };
+			  }, defineIteratorMethods(AsyncIterator.prototype), define(AsyncIterator.prototype, c, function () {
+			    return this;
+			  }), e.AsyncIterator = AsyncIterator, e.async = function (t, r, n, o, i) {
+			    void 0 === i && (i = Promise);
+			    var a = new AsyncIterator(wrap(t, r, n, o), i);
+			    return e.isGeneratorFunction(r) ? a : a.next().then(function (t) {
+			      return t.done ? t.value : a.next();
+			    });
+			  }, defineIteratorMethods(g), define(g, u, "Generator"), define(g, a, function () {
+			    return this;
+			  }), define(g, "toString", function () {
+			    return "[object Generator]";
+			  }), e.keys = function (t) {
+			    var e = Object(t),
+			      r = [];
+			    for (var n in e) r.push(n);
+			    return r.reverse(), function next() {
+			      for (; r.length;) {
+			        var t = r.pop();
+			        if (t in e) return next.value = t, next.done = !1, next;
+			      }
+			      return next.done = !0, next;
+			    };
+			  }, e.values = values, Context.prototype = {
+			    constructor: Context,
+			    reset: function reset(e) {
+			      if (this.prev = 0, this.next = 0, this.sent = this._sent = t, this.done = !1, this.delegate = null, this.method = "next", this.arg = t, this.tryEntries.forEach(resetTryEntry), !e) for (var r in this) "t" === r.charAt(0) && n.call(this, r) && !isNaN(+r.slice(1)) && (this[r] = t);
+			    },
+			    stop: function stop() {
+			      this.done = !0;
+			      var t = this.tryEntries[0].completion;
+			      if ("throw" === t.type) throw t.arg;
+			      return this.rval;
+			    },
+			    dispatchException: function dispatchException(e) {
+			      if (this.done) throw e;
+			      var r = this;
+			      function handle(n, o) {
+			        return a.type = "throw", a.arg = e, r.next = n, o && (r.method = "next", r.arg = t), !!o;
+			      }
+			      for (var o = this.tryEntries.length - 1; o >= 0; --o) {
+			        var i = this.tryEntries[o],
+			          a = i.completion;
+			        if ("root" === i.tryLoc) return handle("end");
+			        if (i.tryLoc <= this.prev) {
+			          var c = n.call(i, "catchLoc"),
+			            u = n.call(i, "finallyLoc");
+			          if (c && u) {
+			            if (this.prev < i.catchLoc) return handle(i.catchLoc, !0);
+			            if (this.prev < i.finallyLoc) return handle(i.finallyLoc);
+			          } else if (c) {
+			            if (this.prev < i.catchLoc) return handle(i.catchLoc, !0);
+			          } else {
+			            if (!u) throw new Error("try statement without catch or finally");
+			            if (this.prev < i.finallyLoc) return handle(i.finallyLoc);
+			          }
+			        }
+			      }
+			    },
+			    abrupt: function abrupt(t, e) {
+			      for (var r = this.tryEntries.length - 1; r >= 0; --r) {
+			        var o = this.tryEntries[r];
+			        if (o.tryLoc <= this.prev && n.call(o, "finallyLoc") && this.prev < o.finallyLoc) {
+			          var i = o;
+			          break;
+			        }
+			      }
+			      i && ("break" === t || "continue" === t) && i.tryLoc <= e && e <= i.finallyLoc && (i = null);
+			      var a = i ? i.completion : {};
+			      return a.type = t, a.arg = e, i ? (this.method = "next", this.next = i.finallyLoc, y) : this.complete(a);
+			    },
+			    complete: function complete(t, e) {
+			      if ("throw" === t.type) throw t.arg;
+			      return "break" === t.type || "continue" === t.type ? this.next = t.arg : "return" === t.type ? (this.rval = this.arg = t.arg, this.method = "return", this.next = "end") : "normal" === t.type && e && (this.next = e), y;
+			    },
+			    finish: function finish(t) {
+			      for (var e = this.tryEntries.length - 1; e >= 0; --e) {
+			        var r = this.tryEntries[e];
+			        if (r.finallyLoc === t) return this.complete(r.completion, r.afterLoc), resetTryEntry(r), y;
+			      }
+			    },
+			    "catch": function _catch(t) {
+			      for (var e = this.tryEntries.length - 1; e >= 0; --e) {
+			        var r = this.tryEntries[e];
+			        if (r.tryLoc === t) {
+			          var n = r.completion;
+			          if ("throw" === n.type) {
+			            var o = n.arg;
+			            resetTryEntry(r);
+			          }
+			          return o;
+			        }
+			      }
+			      throw new Error("illegal catch attempt");
+			    },
+			    delegateYield: function delegateYield(e, r, n) {
+			      return this.delegate = {
+			        iterator: values(e),
+			        resultName: r,
+			        nextLoc: n
+			      }, "next" === this.method && (this.arg = t), y;
+			    }
+			  }, e;
+			}
+			module.exports = _regeneratorRuntime, module.exports.__esModule = true, module.exports["default"] = module.exports; 
+		} (regeneratorRuntime$1));
+		return regeneratorRuntime$1.exports;
+	}
+
+	var regenerator;
+	var hasRequiredRegenerator;
+
+	function requireRegenerator () {
+		if (hasRequiredRegenerator) return regenerator;
+		hasRequiredRegenerator = 1;
+		// TODO(Babel 8): Remove this file.
+
+		var runtime = requireRegeneratorRuntime()();
+		regenerator = runtime;
+
+		// Copied from https://github.com/facebook/regenerator/blob/main/packages/runtime/runtime.js#L736=
+		try {
+		  regeneratorRuntime = runtime;
+		} catch (accidentalStrictMode) {
+		  if (typeof globalThis === "object") {
+		    globalThis.regeneratorRuntime = runtime;
+		  } else {
+		    Function("r", "regeneratorRuntime = r")(runtime);
+		  }
+		}
+		return regenerator;
+	}
+
+	var asyncToGenerator = {exports: {}};
+
+	var hasRequiredAsyncToGenerator;
+
+	function requireAsyncToGenerator () {
+		if (hasRequiredAsyncToGenerator) return asyncToGenerator.exports;
+		hasRequiredAsyncToGenerator = 1;
+		(function (module) {
+			function asyncGeneratorStep(gen, resolve, reject, _next, _throw, key, arg) {
+			  try {
+			    var info = gen[key](arg);
+			    var value = info.value;
+			  } catch (error) {
+			    reject(error);
+			    return;
+			  }
+			  if (info.done) {
+			    resolve(value);
+			  } else {
+			    Promise.resolve(value).then(_next, _throw);
+			  }
+			}
+			function _asyncToGenerator(fn) {
+			  return function () {
+			    var self = this,
+			      args = arguments;
+			    return new Promise(function (resolve, reject) {
+			      var gen = fn.apply(self, args);
+			      function _next(value) {
+			        asyncGeneratorStep(gen, resolve, reject, _next, _throw, "next", value);
+			      }
+			      function _throw(err) {
+			        asyncGeneratorStep(gen, resolve, reject, _next, _throw, "throw", err);
+			      }
+			      _next(undefined);
+			    });
+			  };
+			}
+			module.exports = _asyncToGenerator, module.exports.__esModule = true, module.exports["default"] = module.exports; 
+		} (asyncToGenerator));
+		return asyncToGenerator.exports;
+	}
+
+	var classCallCheck = {exports: {}};
+
+	var hasRequiredClassCallCheck;
+
+	function requireClassCallCheck () {
+		if (hasRequiredClassCallCheck) return classCallCheck.exports;
+		hasRequiredClassCallCheck = 1;
+		(function (module) {
+			function _classCallCheck(instance, Constructor) {
+			  if (!(instance instanceof Constructor)) {
+			    throw new TypeError("Cannot call a class as a function");
+			  }
+			}
+			module.exports = _classCallCheck, module.exports.__esModule = true, module.exports["default"] = module.exports; 
+		} (classCallCheck));
+		return classCallCheck.exports;
+	}
+
+	var createClass = {exports: {}};
+
+	var toPropertyKey = {exports: {}};
+
+	var toPrimitive = {exports: {}};
+
+	var hasRequiredToPrimitive;
+
+	function requireToPrimitive () {
+		if (hasRequiredToPrimitive) return toPrimitive.exports;
+		hasRequiredToPrimitive = 1;
+		(function (module) {
+			var _typeof = require_typeof()["default"];
+			function toPrimitive(t, r) {
+			  if ("object" != _typeof(t) || !t) return t;
+			  var e = t[Symbol.toPrimitive];
+			  if (void 0 !== e) {
+			    var i = e.call(t, r || "default");
+			    if ("object" != _typeof(i)) return i;
+			    throw new TypeError("@@toPrimitive must return a primitive value.");
+			  }
+			  return ("string" === r ? String : Number)(t);
+			}
+			module.exports = toPrimitive, module.exports.__esModule = true, module.exports["default"] = module.exports; 
+		} (toPrimitive));
+		return toPrimitive.exports;
+	}
+
+	var hasRequiredToPropertyKey;
+
+	function requireToPropertyKey () {
+		if (hasRequiredToPropertyKey) return toPropertyKey.exports;
+		hasRequiredToPropertyKey = 1;
+		(function (module) {
+			var _typeof = require_typeof()["default"];
+			var toPrimitive = requireToPrimitive();
+			function toPropertyKey(t) {
+			  var i = toPrimitive(t, "string");
+			  return "symbol" == _typeof(i) ? i : String(i);
+			}
+			module.exports = toPropertyKey, module.exports.__esModule = true, module.exports["default"] = module.exports; 
+		} (toPropertyKey));
+		return toPropertyKey.exports;
+	}
+
+	var hasRequiredCreateClass;
+
+	function requireCreateClass () {
+		if (hasRequiredCreateClass) return createClass.exports;
+		hasRequiredCreateClass = 1;
+		(function (module) {
+			var toPropertyKey = requireToPropertyKey();
+			function _defineProperties(target, props) {
+			  for (var i = 0; i < props.length; i++) {
+			    var descriptor = props[i];
+			    descriptor.enumerable = descriptor.enumerable || false;
+			    descriptor.configurable = true;
+			    if ("value" in descriptor) descriptor.writable = true;
+			    Object.defineProperty(target, toPropertyKey(descriptor.key), descriptor);
+			  }
+			}
+			function _createClass(Constructor, protoProps, staticProps) {
+			  if (protoProps) _defineProperties(Constructor.prototype, protoProps);
+			  if (staticProps) _defineProperties(Constructor, staticProps);
+			  Object.defineProperty(Constructor, "prototype", {
+			    writable: false
+			  });
+			  return Constructor;
+			}
+			module.exports = _createClass, module.exports.__esModule = true, module.exports["default"] = module.exports; 
+		} (createClass));
+		return createClass.exports;
+	}
+
+	var inherits = {exports: {}};
+
+	var setPrototypeOf = {exports: {}};
+
+	var hasRequiredSetPrototypeOf;
+
+	function requireSetPrototypeOf () {
+		if (hasRequiredSetPrototypeOf) return setPrototypeOf.exports;
+		hasRequiredSetPrototypeOf = 1;
+		(function (module) {
+			function _setPrototypeOf(o, p) {
+			  module.exports = _setPrototypeOf = Object.setPrototypeOf ? Object.setPrototypeOf.bind() : function _setPrototypeOf(o, p) {
+			    o.__proto__ = p;
+			    return o;
+			  }, module.exports.__esModule = true, module.exports["default"] = module.exports;
+			  return _setPrototypeOf(o, p);
+			}
+			module.exports = _setPrototypeOf, module.exports.__esModule = true, module.exports["default"] = module.exports; 
+		} (setPrototypeOf));
+		return setPrototypeOf.exports;
+	}
+
+	var hasRequiredInherits;
+
+	function requireInherits () {
+		if (hasRequiredInherits) return inherits.exports;
+		hasRequiredInherits = 1;
+		(function (module) {
+			var setPrototypeOf = requireSetPrototypeOf();
+			function _inherits(subClass, superClass) {
+			  if (typeof superClass !== "function" && superClass !== null) {
+			    throw new TypeError("Super expression must either be null or a function");
+			  }
+			  subClass.prototype = Object.create(superClass && superClass.prototype, {
+			    constructor: {
+			      value: subClass,
+			      writable: true,
+			      configurable: true
+			    }
+			  });
+			  Object.defineProperty(subClass, "prototype", {
+			    writable: false
+			  });
+			  if (superClass) setPrototypeOf(subClass, superClass);
+			}
+			module.exports = _inherits, module.exports.__esModule = true, module.exports["default"] = module.exports; 
+		} (inherits));
+		return inherits.exports;
+	}
+
+	var possibleConstructorReturn = {exports: {}};
+
+	var assertThisInitialized = {exports: {}};
+
+	var hasRequiredAssertThisInitialized;
+
+	function requireAssertThisInitialized () {
+		if (hasRequiredAssertThisInitialized) return assertThisInitialized.exports;
+		hasRequiredAssertThisInitialized = 1;
+		(function (module) {
+			function _assertThisInitialized(self) {
+			  if (self === void 0) {
+			    throw new ReferenceError("this hasn't been initialised - super() hasn't been called");
+			  }
+			  return self;
+			}
+			module.exports = _assertThisInitialized, module.exports.__esModule = true, module.exports["default"] = module.exports; 
+		} (assertThisInitialized));
+		return assertThisInitialized.exports;
+	}
+
+	var hasRequiredPossibleConstructorReturn;
+
+	function requirePossibleConstructorReturn () {
+		if (hasRequiredPossibleConstructorReturn) return possibleConstructorReturn.exports;
+		hasRequiredPossibleConstructorReturn = 1;
+		(function (module) {
+			var _typeof = require_typeof()["default"];
+			var assertThisInitialized = requireAssertThisInitialized();
+			function _possibleConstructorReturn(self, call) {
+			  if (call && (_typeof(call) === "object" || typeof call === "function")) {
+			    return call;
+			  } else if (call !== void 0) {
+			    throw new TypeError("Derived constructors may only return object or undefined");
+			  }
+			  return assertThisInitialized(self);
+			}
+			module.exports = _possibleConstructorReturn, module.exports.__esModule = true, module.exports["default"] = module.exports; 
+		} (possibleConstructorReturn));
+		return possibleConstructorReturn.exports;
+	}
+
+	var getPrototypeOf = {exports: {}};
+
+	var hasRequiredGetPrototypeOf;
+
+	function requireGetPrototypeOf () {
+		if (hasRequiredGetPrototypeOf) return getPrototypeOf.exports;
+		hasRequiredGetPrototypeOf = 1;
+		(function (module) {
+			function _getPrototypeOf(o) {
+			  module.exports = _getPrototypeOf = Object.setPrototypeOf ? Object.getPrototypeOf.bind() : function _getPrototypeOf(o) {
+			    return o.__proto__ || Object.getPrototypeOf(o);
+			  }, module.exports.__esModule = true, module.exports["default"] = module.exports;
+			  return _getPrototypeOf(o);
+			}
+			module.exports = _getPrototypeOf, module.exports.__esModule = true, module.exports["default"] = module.exports; 
+		} (getPrototypeOf));
+		return getPrototypeOf.exports;
+	}
+
+	var eventemitter3 = {exports: {}};
+
+	var hasRequiredEventemitter3;
+
+	function requireEventemitter3 () {
+		if (hasRequiredEventemitter3) return eventemitter3.exports;
+		hasRequiredEventemitter3 = 1;
+		(function (module) {
+
+			var has = Object.prototype.hasOwnProperty
+			  , prefix = '~';
+
+			/**
+			 * Constructor to create a storage for our `EE` objects.
+			 * An `Events` instance is a plain object whose properties are event names.
+			 *
+			 * @constructor
+			 * @private
+			 */
+			function Events() {}
+
+			//
+			// We try to not inherit from `Object.prototype`. In some engines creating an
+			// instance in this way is faster than calling `Object.create(null)` directly.
+			// If `Object.create(null)` is not supported we prefix the event names with a
+			// character to make sure that the built-in object properties are not
+			// overridden or used as an attack vector.
+			//
+			if (Object.create) {
+			  Events.prototype = Object.create(null);
+
+			  //
+			  // This hack is needed because the `__proto__` property is still inherited in
+			  // some old browsers like Android 4, iPhone 5.1, Opera 11 and Safari 5.
+			  //
+			  if (!new Events().__proto__) prefix = false;
+			}
+
+			/**
+			 * Representation of a single event listener.
+			 *
+			 * @param {Function} fn The listener function.
+			 * @param {*} context The context to invoke the listener with.
+			 * @param {Boolean} [once=false] Specify if the listener is a one-time listener.
+			 * @constructor
+			 * @private
+			 */
+			function EE(fn, context, once) {
+			  this.fn = fn;
+			  this.context = context;
+			  this.once = once || false;
+			}
+
+			/**
+			 * Add a listener for a given event.
+			 *
+			 * @param {EventEmitter} emitter Reference to the `EventEmitter` instance.
+			 * @param {(String|Symbol)} event The event name.
+			 * @param {Function} fn The listener function.
+			 * @param {*} context The context to invoke the listener with.
+			 * @param {Boolean} once Specify if the listener is a one-time listener.
+			 * @returns {EventEmitter}
+			 * @private
+			 */
+			function addListener(emitter, event, fn, context, once) {
+			  if (typeof fn !== 'function') {
+			    throw new TypeError('The listener must be a function');
+			  }
+
+			  var listener = new EE(fn, context || emitter, once)
+			    , evt = prefix ? prefix + event : event;
+
+			  if (!emitter._events[evt]) emitter._events[evt] = listener, emitter._eventsCount++;
+			  else if (!emitter._events[evt].fn) emitter._events[evt].push(listener);
+			  else emitter._events[evt] = [emitter._events[evt], listener];
+
+			  return emitter;
+			}
+
+			/**
+			 * Clear event by name.
+			 *
+			 * @param {EventEmitter} emitter Reference to the `EventEmitter` instance.
+			 * @param {(String|Symbol)} evt The Event name.
+			 * @private
+			 */
+			function clearEvent(emitter, evt) {
+			  if (--emitter._eventsCount === 0) emitter._events = new Events();
+			  else delete emitter._events[evt];
+			}
+
+			/**
+			 * Minimal `EventEmitter` interface that is molded against the Node.js
+			 * `EventEmitter` interface.
+			 *
+			 * @constructor
+			 * @public
+			 */
+			function EventEmitter() {
+			  this._events = new Events();
+			  this._eventsCount = 0;
+			}
+
+			/**
+			 * Return an array listing the events for which the emitter has registered
+			 * listeners.
+			 *
+			 * @returns {Array}
+			 * @public
+			 */
+			EventEmitter.prototype.eventNames = function eventNames() {
+			  var names = []
+			    , events
+			    , name;
+
+			  if (this._eventsCount === 0) return names;
+
+			  for (name in (events = this._events)) {
+			    if (has.call(events, name)) names.push(prefix ? name.slice(1) : name);
+			  }
+
+			  if (Object.getOwnPropertySymbols) {
+			    return names.concat(Object.getOwnPropertySymbols(events));
+			  }
+
+			  return names;
+			};
+
+			/**
+			 * Return the listeners registered for a given event.
+			 *
+			 * @param {(String|Symbol)} event The event name.
+			 * @returns {Array} The registered listeners.
+			 * @public
+			 */
+			EventEmitter.prototype.listeners = function listeners(event) {
+			  var evt = prefix ? prefix + event : event
+			    , handlers = this._events[evt];
+
+			  if (!handlers) return [];
+			  if (handlers.fn) return [handlers.fn];
+
+			  for (var i = 0, l = handlers.length, ee = new Array(l); i < l; i++) {
+			    ee[i] = handlers[i].fn;
+			  }
+
+			  return ee;
+			};
+
+			/**
+			 * Return the number of listeners listening to a given event.
+			 *
+			 * @param {(String|Symbol)} event The event name.
+			 * @returns {Number} The number of listeners.
+			 * @public
+			 */
+			EventEmitter.prototype.listenerCount = function listenerCount(event) {
+			  var evt = prefix ? prefix + event : event
+			    , listeners = this._events[evt];
+
+			  if (!listeners) return 0;
+			  if (listeners.fn) return 1;
+			  return listeners.length;
+			};
+
+			/**
+			 * Calls each of the listeners registered for a given event.
+			 *
+			 * @param {(String|Symbol)} event The event name.
+			 * @returns {Boolean} `true` if the event had listeners, else `false`.
+			 * @public
+			 */
+			EventEmitter.prototype.emit = function emit(event, a1, a2, a3, a4, a5) {
+			  var evt = prefix ? prefix + event : event;
+
+			  if (!this._events[evt]) return false;
+
+			  var listeners = this._events[evt]
+			    , len = arguments.length
+			    , args
+			    , i;
+
+			  if (listeners.fn) {
+			    if (listeners.once) this.removeListener(event, listeners.fn, undefined, true);
+
+			    switch (len) {
+			      case 1: return listeners.fn.call(listeners.context), true;
+			      case 2: return listeners.fn.call(listeners.context, a1), true;
+			      case 3: return listeners.fn.call(listeners.context, a1, a2), true;
+			      case 4: return listeners.fn.call(listeners.context, a1, a2, a3), true;
+			      case 5: return listeners.fn.call(listeners.context, a1, a2, a3, a4), true;
+			      case 6: return listeners.fn.call(listeners.context, a1, a2, a3, a4, a5), true;
+			    }
+
+			    for (i = 1, args = new Array(len -1); i < len; i++) {
+			      args[i - 1] = arguments[i];
+			    }
+
+			    listeners.fn.apply(listeners.context, args);
+			  } else {
+			    var length = listeners.length
+			      , j;
+
+			    for (i = 0; i < length; i++) {
+			      if (listeners[i].once) this.removeListener(event, listeners[i].fn, undefined, true);
+
+			      switch (len) {
+			        case 1: listeners[i].fn.call(listeners[i].context); break;
+			        case 2: listeners[i].fn.call(listeners[i].context, a1); break;
+			        case 3: listeners[i].fn.call(listeners[i].context, a1, a2); break;
+			        case 4: listeners[i].fn.call(listeners[i].context, a1, a2, a3); break;
+			        default:
+			          if (!args) for (j = 1, args = new Array(len -1); j < len; j++) {
+			            args[j - 1] = arguments[j];
+			          }
+
+			          listeners[i].fn.apply(listeners[i].context, args);
+			      }
+			    }
+			  }
+
+			  return true;
+			};
+
+			/**
+			 * Add a listener for a given event.
+			 *
+			 * @param {(String|Symbol)} event The event name.
+			 * @param {Function} fn The listener function.
+			 * @param {*} [context=this] The context to invoke the listener with.
+			 * @returns {EventEmitter} `this`.
+			 * @public
+			 */
+			EventEmitter.prototype.on = function on(event, fn, context) {
+			  return addListener(this, event, fn, context, false);
+			};
+
+			/**
+			 * Add a one-time listener for a given event.
+			 *
+			 * @param {(String|Symbol)} event The event name.
+			 * @param {Function} fn The listener function.
+			 * @param {*} [context=this] The context to invoke the listener with.
+			 * @returns {EventEmitter} `this`.
+			 * @public
+			 */
+			EventEmitter.prototype.once = function once(event, fn, context) {
+			  return addListener(this, event, fn, context, true);
+			};
+
+			/**
+			 * Remove the listeners of a given event.
+			 *
+			 * @param {(String|Symbol)} event The event name.
+			 * @param {Function} fn Only remove the listeners that match this function.
+			 * @param {*} context Only remove the listeners that have this context.
+			 * @param {Boolean} once Only remove one-time listeners.
+			 * @returns {EventEmitter} `this`.
+			 * @public
+			 */
+			EventEmitter.prototype.removeListener = function removeListener(event, fn, context, once) {
+			  var evt = prefix ? prefix + event : event;
+
+			  if (!this._events[evt]) return this;
+			  if (!fn) {
+			    clearEvent(this, evt);
+			    return this;
+			  }
+
+			  var listeners = this._events[evt];
+
+			  if (listeners.fn) {
+			    if (
+			      listeners.fn === fn &&
+			      (!once || listeners.once) &&
+			      (!context || listeners.context === context)
+			    ) {
+			      clearEvent(this, evt);
+			    }
+			  } else {
+			    for (var i = 0, events = [], length = listeners.length; i < length; i++) {
+			      if (
+			        listeners[i].fn !== fn ||
+			        (once && !listeners[i].once) ||
+			        (context && listeners[i].context !== context)
+			      ) {
+			        events.push(listeners[i]);
+			      }
+			    }
+
+			    //
+			    // Reset the array, or remove it completely if we have no more listeners.
+			    //
+			    if (events.length) this._events[evt] = events.length === 1 ? events[0] : events;
+			    else clearEvent(this, evt);
+			  }
+
+			  return this;
+			};
+
+			/**
+			 * Remove all listeners, or those of the specified event.
+			 *
+			 * @param {(String|Symbol)} [event] The event name.
+			 * @returns {EventEmitter} `this`.
+			 * @public
+			 */
+			EventEmitter.prototype.removeAllListeners = function removeAllListeners(event) {
+			  var evt;
+
+			  if (event) {
+			    evt = prefix ? prefix + event : event;
+			    if (this._events[evt]) clearEvent(this, evt);
+			  } else {
+			    this._events = new Events();
+			    this._eventsCount = 0;
+			  }
+
+			  return this;
+			};
+
+			//
+			// Alias methods names because people roll like that.
+			//
+			EventEmitter.prototype.off = EventEmitter.prototype.removeListener;
+			EventEmitter.prototype.addListener = EventEmitter.prototype.on;
+
+			//
+			// Expose the prefix.
+			//
+			EventEmitter.prefixed = prefix;
+
+			//
+			// Allow `EventEmitter` to be imported as module namespace.
+			//
+			EventEmitter.EventEmitter = EventEmitter;
+
+			//
+			// Expose the module.
+			//
+			{
+			  module.exports = EventEmitter;
+			} 
+		} (eventemitter3));
+		return eventemitter3.exports;
+	}
+
+	var utils = {};
+
+	var hasRequiredUtils;
+
+	function requireUtils () {
+		if (hasRequiredUtils) return utils;
+		hasRequiredUtils = 1;
+
+		var _interopRequireDefault = interopRequireDefaultExports;
+		Object.defineProperty(utils, "__esModule", {
+		  value: true
+		});
+		utils.DefaultDataPack = void 0;
+		utils.createError = createError;
+		var _classCallCheck2 = _interopRequireDefault(requireClassCallCheck());
+		var _createClass2 = _interopRequireDefault(requireCreateClass());
+		var errors = new Map([[-32000, "Event not provided"], [-32600, "Invalid Request"], [-32601, "Method not found"], [-32602, "Invalid params"], [-32603, "Internal error"], [-32604, "Params not found"], [-32605, "Method forbidden"], [-32606, "Event forbidden"], [-32700, "Parse error"]]);
+		var DefaultDataPack = /*#__PURE__*/function () {
+		  function DefaultDataPack() {
+		    (0, _classCallCheck2["default"])(this, DefaultDataPack);
+		  }
+		  (0, _createClass2["default"])(DefaultDataPack, [{
+		    key: "encode",
+		    value: function encode(value) {
+		      return JSON.stringify(value);
+		    }
+		  }, {
+		    key: "decode",
+		    value: function decode(value) {
+		      return JSON.parse(value);
+		    }
+		  }]);
+		  return DefaultDataPack;
+		}();
+		/**
+		 * Creates a JSON-RPC 2.0-compliant error.
+		 * @param {Number} code - error code
+		 * @param {String} details - error details
+		 * @return {Object}
+		 */
+		utils.DefaultDataPack = DefaultDataPack;
+		function createError(code, details) {
+		  var error = {
+		    code: code,
+		    message: errors.get(code) || "Internal Server Error"
+		  };
+		  if (details) error["data"] = details;
+		  return error;
+		}
+		return utils;
+	}
+
+	/**
+	 * "Client" wraps "ws" or a browser-implemented "WebSocket" library
+	 * according to the environment providing JSON RPC 2.0 support on top.
+	 * @module Client
+	 */
+
+	(function (exports) {
+
+		var _interopRequireDefault = interopRequireDefaultExports;
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports["default"] = void 0;
+		var _regenerator = _interopRequireDefault(requireRegenerator());
+		var _asyncToGenerator2 = _interopRequireDefault(requireAsyncToGenerator());
+		var _typeof2 = _interopRequireDefault(require_typeof());
+		var _classCallCheck2 = _interopRequireDefault(requireClassCallCheck());
+		var _createClass2 = _interopRequireDefault(requireCreateClass());
+		var _inherits2 = _interopRequireDefault(requireInherits());
+		var _possibleConstructorReturn2 = _interopRequireDefault(requirePossibleConstructorReturn());
+		var _getPrototypeOf2 = _interopRequireDefault(requireGetPrototypeOf());
+		var _eventemitter = requireEventemitter3();
+		var _utils = requireUtils();
+		function _createSuper(Derived) { var hasNativeReflectConstruct = _isNativeReflectConstruct(); return function _createSuperInternal() { var Super = (0, _getPrototypeOf2["default"])(Derived), result; if (hasNativeReflectConstruct) { var NewTarget = (0, _getPrototypeOf2["default"])(this).constructor; result = Reflect.construct(Super, arguments, NewTarget); } else { result = Super.apply(this, arguments); } return (0, _possibleConstructorReturn2["default"])(this, result); }; }
+		function _isNativeReflectConstruct() { if (typeof Reflect === "undefined" || !Reflect.construct) return false; if (Reflect.construct.sham) return false; if (typeof Proxy === "function") return true; try { Boolean.prototype.valueOf.call(Reflect.construct(Boolean, [], function () {})); return true; } catch (e) { return false; } }
+		var __rest = function (s, e) {
+		  var t = {};
+		  for (var p in s) {
+		    if (Object.prototype.hasOwnProperty.call(s, p) && e.indexOf(p) < 0) t[p] = s[p];
+		  }
+		  if (s != null && typeof Object.getOwnPropertySymbols === "function") for (var i = 0, p = Object.getOwnPropertySymbols(s); i < p.length; i++) {
+		    if (e.indexOf(p[i]) < 0 && Object.prototype.propertyIsEnumerable.call(s, p[i])) t[p[i]] = s[p[i]];
+		  }
+		  return t;
+		};
+		// @ts-ignore
+		var CommonClient = /*#__PURE__*/function (_EventEmitter) {
+		  (0, _inherits2["default"])(CommonClient, _EventEmitter);
+		  var _super = _createSuper(CommonClient);
+		  /**
+		   * Instantiate a Client class.
+		   * @constructor
+		   * @param {webSocketFactory} webSocketFactory - factory method for WebSocket
+		   * @param {String} address - url to a websocket server
+		   * @param {Object} options - ws options object with reconnect parameters
+		   * @param {Function} generate_request_id - custom generation request Id
+		   * @param {DataPack} dataPack - data pack contains encoder and decoder
+		   * @return {CommonClient}
+		   */
+		  function CommonClient(webSocketFactory) {
+		    var _this;
+		    var address = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : "ws://localhost:8080";
+		    var _a = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : {};
+		    var generate_request_id = arguments.length > 3 ? arguments[3] : undefined;
+		    var dataPack = arguments.length > 4 ? arguments[4] : undefined;
+		    (0, _classCallCheck2["default"])(this, CommonClient);
+		    var _a$autoconnect = _a.autoconnect,
+		      autoconnect = _a$autoconnect === void 0 ? true : _a$autoconnect,
+		      _a$reconnect = _a.reconnect,
+		      reconnect = _a$reconnect === void 0 ? true : _a$reconnect,
+		      _a$reconnect_interval = _a.reconnect_interval,
+		      reconnect_interval = _a$reconnect_interval === void 0 ? 1000 : _a$reconnect_interval,
+		      _a$max_reconnects = _a.max_reconnects,
+		      max_reconnects = _a$max_reconnects === void 0 ? 5 : _a$max_reconnects,
+		      rest_options = __rest(_a, ["autoconnect", "reconnect", "reconnect_interval", "max_reconnects"]);
+		    _this = _super.call(this);
+		    _this.webSocketFactory = webSocketFactory;
+		    _this.queue = {};
+		    _this.rpc_id = 0;
+		    _this.address = address;
+		    _this.autoconnect = autoconnect;
+		    _this.ready = false;
+		    _this.reconnect = reconnect;
+		    _this.reconnect_timer_id = undefined;
+		    _this.reconnect_interval = reconnect_interval;
+		    _this.max_reconnects = max_reconnects;
+		    _this.rest_options = rest_options;
+		    _this.current_reconnects = 0;
+		    _this.generate_request_id = generate_request_id || function () {
+		      return ++_this.rpc_id;
+		    };
+		    if (!dataPack) _this.dataPack = new _utils.DefaultDataPack();else _this.dataPack = dataPack;
+		    if (_this.autoconnect) _this._connect(_this.address, Object.assign({
+		      autoconnect: _this.autoconnect,
+		      reconnect: _this.reconnect,
+		      reconnect_interval: _this.reconnect_interval,
+		      max_reconnects: _this.max_reconnects
+		    }, _this.rest_options));
+		    return _this;
+		  }
+		  /**
+		   * Connects to a defined server if not connected already.
+		   * @method
+		   * @return {Undefined}
+		   */
+		  (0, _createClass2["default"])(CommonClient, [{
+		    key: "connect",
+		    value: function connect() {
+		      if (this.socket) return;
+		      this._connect(this.address, Object.assign({
+		        autoconnect: this.autoconnect,
+		        reconnect: this.reconnect,
+		        reconnect_interval: this.reconnect_interval,
+		        max_reconnects: this.max_reconnects
+		      }, this.rest_options));
+		    }
+		    /**
+		     * Calls a registered RPC method on server.
+		     * @method
+		     * @param {String} method - RPC method name
+		     * @param {Object|Array} params - optional method parameters
+		     * @param {Number} timeout - RPC reply timeout value
+		     * @param {Object} ws_opts - options passed to ws
+		     * @return {Promise}
+		     */
+		  }, {
+		    key: "call",
+		    value: function call(method, params, timeout, ws_opts) {
+		      var _this2 = this;
+		      if (!ws_opts && "object" === (0, _typeof2["default"])(timeout)) {
+		        ws_opts = timeout;
+		        timeout = null;
+		      }
+		      return new Promise(function (resolve, reject) {
+		        if (!_this2.ready) return reject(new Error("socket not ready"));
+		        var rpc_id = _this2.generate_request_id(method, params);
+		        var message = {
+		          jsonrpc: "2.0",
+		          method: method,
+		          params: params || undefined,
+		          id: rpc_id
+		        };
+		        _this2.socket.send(_this2.dataPack.encode(message), ws_opts, function (error) {
+		          if (error) return reject(error);
+		          _this2.queue[rpc_id] = {
+		            promise: [resolve, reject]
+		          };
+		          if (timeout) {
+		            _this2.queue[rpc_id].timeout = setTimeout(function () {
+		              delete _this2.queue[rpc_id];
+		              reject(new Error("reply timeout"));
+		            }, timeout);
+		          }
+		        });
+		      });
+		    }
+		    /**
+		     * Logins with the other side of the connection.
+		     * @method
+		     * @param {Object} params - Login credentials object
+		     * @return {Promise}
+		     */
+		  }, {
+		    key: "login",
+		    value: function () {
+		      var _login = (0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee(params) {
+		        var resp;
+		        return _regenerator["default"].wrap(function _callee$(_context) {
+		          while (1) {
+		            switch (_context.prev = _context.next) {
+		              case 0:
+		                _context.next = 2;
+		                return this.call("rpc.login", params);
+		              case 2:
+		                resp = _context.sent;
+		                if (resp) {
+		                  _context.next = 5;
+		                  break;
+		                }
+		                throw new Error("authentication failed");
+		              case 5:
+		                return _context.abrupt("return", resp);
+		              case 6:
+		              case "end":
+		                return _context.stop();
+		            }
+		          }
+		        }, _callee, this);
+		      }));
+		      function login(_x) {
+		        return _login.apply(this, arguments);
+		      }
+		      return login;
+		    }()
+		    /**
+		     * Fetches a list of client's methods registered on server.
+		     * @method
+		     * @return {Array}
+		     */
+		  }, {
+		    key: "listMethods",
+		    value: function () {
+		      var _listMethods = (0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee2() {
+		        return _regenerator["default"].wrap(function _callee2$(_context2) {
+		          while (1) {
+		            switch (_context2.prev = _context2.next) {
+		              case 0:
+		                _context2.next = 2;
+		                return this.call("__listMethods");
+		              case 2:
+		                return _context2.abrupt("return", _context2.sent);
+		              case 3:
+		              case "end":
+		                return _context2.stop();
+		            }
+		          }
+		        }, _callee2, this);
+		      }));
+		      function listMethods() {
+		        return _listMethods.apply(this, arguments);
+		      }
+		      return listMethods;
+		    }()
+		    /**
+		     * Sends a JSON-RPC 2.0 notification to server.
+		     * @method
+		     * @param {String} method - RPC method name
+		     * @param {Object} params - optional method parameters
+		     * @return {Promise}
+		     */
+		  }, {
+		    key: "notify",
+		    value: function notify(method, params) {
+		      var _this3 = this;
+		      return new Promise(function (resolve, reject) {
+		        if (!_this3.ready) return reject(new Error("socket not ready"));
+		        var message = {
+		          jsonrpc: "2.0",
+		          method: method,
+		          params: params
+		        };
+		        _this3.socket.send(_this3.dataPack.encode(message), function (error) {
+		          if (error) return reject(error);
+		          resolve();
+		        });
+		      });
+		    }
+		    /**
+		     * Subscribes for a defined event.
+		     * @method
+		     * @param {String|Array} event - event name
+		     * @return {Undefined}
+		     * @throws {Error}
+		     */
+		  }, {
+		    key: "subscribe",
+		    value: function () {
+		      var _subscribe = (0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee3(event) {
+		        var result;
+		        return _regenerator["default"].wrap(function _callee3$(_context3) {
+		          while (1) {
+		            switch (_context3.prev = _context3.next) {
+		              case 0:
+		                if (typeof event === "string") event = [event];
+		                _context3.next = 3;
+		                return this.call("rpc.on", event);
+		              case 3:
+		                result = _context3.sent;
+		                if (!(typeof event === "string" && result[event] !== "ok")) {
+		                  _context3.next = 6;
+		                  break;
+		                }
+		                throw new Error("Failed subscribing to an event '" + event + "' with: " + result[event]);
+		              case 6:
+		                return _context3.abrupt("return", result);
+		              case 7:
+		              case "end":
+		                return _context3.stop();
+		            }
+		          }
+		        }, _callee3, this);
+		      }));
+		      function subscribe(_x2) {
+		        return _subscribe.apply(this, arguments);
+		      }
+		      return subscribe;
+		    }()
+		    /**
+		     * Unsubscribes from a defined event.
+		     * @method
+		     * @param {String|Array} event - event name
+		     * @return {Undefined}
+		     * @throws {Error}
+		     */
+		  }, {
+		    key: "unsubscribe",
+		    value: function () {
+		      var _unsubscribe = (0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee4(event) {
+		        var result;
+		        return _regenerator["default"].wrap(function _callee4$(_context4) {
+		          while (1) {
+		            switch (_context4.prev = _context4.next) {
+		              case 0:
+		                if (typeof event === "string") event = [event];
+		                _context4.next = 3;
+		                return this.call("rpc.off", event);
+		              case 3:
+		                result = _context4.sent;
+		                if (!(typeof event === "string" && result[event] !== "ok")) {
+		                  _context4.next = 6;
+		                  break;
+		                }
+		                throw new Error("Failed unsubscribing from an event with: " + result);
+		              case 6:
+		                return _context4.abrupt("return", result);
+		              case 7:
+		              case "end":
+		                return _context4.stop();
+		            }
+		          }
+		        }, _callee4, this);
+		      }));
+		      function unsubscribe(_x3) {
+		        return _unsubscribe.apply(this, arguments);
+		      }
+		      return unsubscribe;
+		    }()
+		    /**
+		     * Closes a WebSocket connection gracefully.
+		     * @method
+		     * @param {Number} code - socket close code
+		     * @param {String} data - optional data to be sent before closing
+		     * @return {Undefined}
+		     */
+		  }, {
+		    key: "close",
+		    value: function close(code, data) {
+		      this.socket.close(code || 1000, data);
+		    }
+		    /**
+		     * Connection/Message handler.
+		     * @method
+		     * @private
+		     * @param {String} address - WebSocket API address
+		     * @param {Object} options - ws options object
+		     * @return {Undefined}
+		     */
+		  }, {
+		    key: "_connect",
+		    value: function _connect(address, options) {
+		      var _this4 = this;
+		      clearTimeout(this.reconnect_timer_id);
+		      this.socket = this.webSocketFactory(address, options);
+		      this.socket.addEventListener("open", function () {
+		        _this4.ready = true;
+		        _this4.emit("open");
+		        _this4.current_reconnects = 0;
+		      });
+		      this.socket.addEventListener("message", function (_ref) {
+		        var message = _ref.data;
+		        if (message instanceof ArrayBuffer) message = Buffer.from(message).toString();
+		        try {
+		          message = _this4.dataPack.decode(message);
+		        } catch (error) {
+		          return;
+		        }
+		        // check if any listeners are attached and forward event
+		        if (message.notification && _this4.listeners(message.notification).length) {
+		          if (!Object.keys(message.params).length) return _this4.emit(message.notification);
+		          var args = [message.notification];
+		          if (message.params.constructor === Object) args.push(message.params);else
+		            // using for-loop instead of unshift/spread because performance is better
+		            for (var i = 0; i < message.params.length; i++) {
+		              args.push(message.params[i]);
+		            }
+		          // run as microtask so that pending queue messages are resolved first
+		          // eslint-disable-next-line prefer-spread
+		          return Promise.resolve().then(function () {
+		            _this4.emit.apply(_this4, args);
+		          });
+		        }
+		        if (!_this4.queue[message.id]) {
+		          // general JSON RPC 2.0 events
+		          if (message.method) {
+		            // run as microtask so that pending queue messages are resolved first
+		            return Promise.resolve().then(function () {
+		              _this4.emit(message.method, message === null || message === void 0 ? void 0 : message.params);
+		            });
+		          }
+		          return;
+		        }
+		        // reject early since server's response is invalid
+		        if ("error" in message === "result" in message) _this4.queue[message.id].promise[1](new Error("Server response malformed. Response must include either \"result\"" + " or \"error\", but not both."));
+		        if (_this4.queue[message.id].timeout) clearTimeout(_this4.queue[message.id].timeout);
+		        if (message.error) _this4.queue[message.id].promise[1](message.error);else _this4.queue[message.id].promise[0](message.result);
+		        delete _this4.queue[message.id];
+		      });
+		      this.socket.addEventListener("error", function (error) {
+		        return _this4.emit("error", error);
+		      });
+		      this.socket.addEventListener("close", function (_ref2) {
+		        var code = _ref2.code,
+		          reason = _ref2.reason;
+		        if (_this4.ready)
+		          // Delay close event until internal state is updated
+		          setTimeout(function () {
+		            return _this4.emit("close", code, reason);
+		          }, 0);
+		        _this4.ready = false;
+		        _this4.socket = undefined;
+		        if (code === 1000) return;
+		        _this4.current_reconnects++;
+		        if (_this4.reconnect && (_this4.max_reconnects > _this4.current_reconnects || _this4.max_reconnects === 0)) _this4.reconnect_timer_id = setTimeout(function () {
+		          return _this4._connect(address, options);
+		        }, _this4.reconnect_interval);
+		      });
+		    }
+		  }]);
+		  return CommonClient;
+		}(_eventemitter.EventEmitter);
+		exports["default"] = CommonClient; 
+	} (client));
+
+	var RpcWebSocketCommonClient = /*@__PURE__*/getDefaultExportFromCjs$1(client);
+
+	var websocket_browser = {};
+
+	/**
+	 * WebSocket implements a browser-side WebSocket specification.
+	 * @module Client
+	 */
+
+	(function (exports) {
+
+		var _interopRequireDefault = interopRequireDefaultExports;
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports["default"] = _default;
+		var _classCallCheck2 = _interopRequireDefault(requireClassCallCheck());
+		var _createClass2 = _interopRequireDefault(requireCreateClass());
+		var _inherits2 = _interopRequireDefault(requireInherits());
+		var _possibleConstructorReturn2 = _interopRequireDefault(requirePossibleConstructorReturn());
+		var _getPrototypeOf2 = _interopRequireDefault(requireGetPrototypeOf());
+		var _eventemitter = requireEventemitter3();
+		function _createSuper(Derived) { var hasNativeReflectConstruct = _isNativeReflectConstruct(); return function _createSuperInternal() { var Super = (0, _getPrototypeOf2["default"])(Derived), result; if (hasNativeReflectConstruct) { var NewTarget = (0, _getPrototypeOf2["default"])(this).constructor; result = Reflect.construct(Super, arguments, NewTarget); } else { result = Super.apply(this, arguments); } return (0, _possibleConstructorReturn2["default"])(this, result); }; }
+		function _isNativeReflectConstruct() { if (typeof Reflect === "undefined" || !Reflect.construct) return false; if (Reflect.construct.sham) return false; if (typeof Proxy === "function") return true; try { Boolean.prototype.valueOf.call(Reflect.construct(Boolean, [], function () {})); return true; } catch (e) { return false; } }
+		var WebSocketBrowserImpl = /*#__PURE__*/function (_EventEmitter) {
+		  (0, _inherits2["default"])(WebSocketBrowserImpl, _EventEmitter);
+		  var _super = _createSuper(WebSocketBrowserImpl);
+		  /** Instantiate a WebSocket class
+		   * @constructor
+		   * @param {String} address - url to a websocket server
+		   * @param {(Object)} options - websocket options
+		   * @param {(String|Array)} protocols - a list of protocols
+		   * @return {WebSocketBrowserImpl} - returns a WebSocket instance
+		   */
+		  function WebSocketBrowserImpl(address, options, protocols) {
+		    var _this;
+		    (0, _classCallCheck2["default"])(this, WebSocketBrowserImpl);
+		    _this = _super.call(this);
+		    _this.socket = new window.WebSocket(address, protocols);
+		    _this.socket.onopen = function () {
+		      return _this.emit("open");
+		    };
+		    _this.socket.onmessage = function (event) {
+		      return _this.emit("message", event.data);
+		    };
+		    _this.socket.onerror = function (error) {
+		      return _this.emit("error", error);
+		    };
+		    _this.socket.onclose = function (event) {
+		      _this.emit("close", event.code, event.reason);
+		    };
+		    return _this;
+		  }
+		  /**
+		   * Sends data through a websocket connection
+		   * @method
+		   * @param {(String|Object)} data - data to be sent via websocket
+		   * @param {Object} optionsOrCallback - ws options
+		   * @param {Function} callback - a callback called once the data is sent
+		   * @return {Undefined}
+		   */
+		  (0, _createClass2["default"])(WebSocketBrowserImpl, [{
+		    key: "send",
+		    value: function send(data, optionsOrCallback, callback) {
+		      var cb = callback || optionsOrCallback;
+		      try {
+		        this.socket.send(data);
+		        cb();
+		      } catch (error) {
+		        cb(error);
+		      }
+		    }
+		    /**
+		     * Closes an underlying socket
+		     * @method
+		     * @param {Number} code - status code explaining why the connection is being closed
+		     * @param {String} reason - a description why the connection is closing
+		     * @return {Undefined}
+		     * @throws {Error}
+		     */
+		  }, {
+		    key: "close",
+		    value: function close(code, reason) {
+		      this.socket.close(code, reason);
+		    }
+		  }, {
+		    key: "addEventListener",
+		    value: function addEventListener(type, listener, options) {
+		      this.socket.addEventListener(type, listener, options);
+		    }
+		  }]);
+		  return WebSocketBrowserImpl;
+		}(_eventemitter.EventEmitter);
+		/**
+		 * factory method for common WebSocket instance
+		 * @method
+		 * @param {String} address - url to a websocket server
+		 * @param {(Object)} options - websocket options
+		 * @return {Undefined}
+		 */
+		function _default(address, options) {
+		  return new WebSocketBrowserImpl(address, options);
+		} 
+	} (websocket_browser));
+
+	var createRpc = /*@__PURE__*/getDefaultExportFromCjs$1(websocket_browser);
+
+	// SHA3 (keccak) is based on a new design: basically, the internal state is bigger than output size.
+	// It's called a sponge function.
+	// Various per round constants calculations
+	const [SHA3_PI, SHA3_ROTL, _SHA3_IOTA] = [[], [], []];
+	const _0n$1 = /* @__PURE__ */ BigInt(0);
+	const _1n$2 = /* @__PURE__ */ BigInt(1);
+	const _2n$1 = /* @__PURE__ */ BigInt(2);
+	const _7n = /* @__PURE__ */ BigInt(7);
+	const _256n = /* @__PURE__ */ BigInt(256);
+	const _0x71n = /* @__PURE__ */ BigInt(0x71);
+	for (let round = 0, R = _1n$2, x = 1, y = 0; round < 24; round++) {
+	    // Pi
+	    [x, y] = [y, (2 * x + 3 * y) % 5];
+	    SHA3_PI.push(2 * (5 * y + x));
+	    // Rotational
+	    SHA3_ROTL.push((((round + 1) * (round + 2)) / 2) % 64);
+	    // Iota
+	    let t = _0n$1;
+	    for (let j = 0; j < 7; j++) {
+	        R = ((R << _1n$2) ^ ((R >> _7n) * _0x71n)) % _256n;
+	        if (R & _2n$1)
+	            t ^= _1n$2 << ((_1n$2 << /* @__PURE__ */ BigInt(j)) - _1n$2);
+	    }
+	    _SHA3_IOTA.push(t);
+	}
+	const [SHA3_IOTA_H, SHA3_IOTA_L] = /* @__PURE__ */ split(_SHA3_IOTA, true);
+	// Left rotation (without 0, 32, 64)
+	const rotlH = (h, l, s) => (s > 32 ? rotlBH(h, l, s) : rotlSH(h, l, s));
+	const rotlL = (h, l, s) => (s > 32 ? rotlBL(h, l, s) : rotlSL(h, l, s));
+	// Same as keccakf1600, but allows to skip some rounds
+	function keccakP(s, rounds = 24) {
+	    const B = new Uint32Array(5 * 2);
+	    // NOTE: all indices are x2 since we store state as u32 instead of u64 (bigints to slow in js)
+	    for (let round = 24 - rounds; round < 24; round++) {
+	        // Theta θ
+	        for (let x = 0; x < 10; x++)
+	            B[x] = s[x] ^ s[x + 10] ^ s[x + 20] ^ s[x + 30] ^ s[x + 40];
+	        for (let x = 0; x < 10; x += 2) {
+	            const idx1 = (x + 8) % 10;
+	            const idx0 = (x + 2) % 10;
+	            const B0 = B[idx0];
+	            const B1 = B[idx0 + 1];
+	            const Th = rotlH(B0, B1, 1) ^ B[idx1];
+	            const Tl = rotlL(B0, B1, 1) ^ B[idx1 + 1];
+	            for (let y = 0; y < 50; y += 10) {
+	                s[x + y] ^= Th;
+	                s[x + y + 1] ^= Tl;
+	            }
+	        }
+	        // Rho (ρ) and Pi (π)
+	        let curH = s[2];
+	        let curL = s[3];
+	        for (let t = 0; t < 24; t++) {
+	            const shift = SHA3_ROTL[t];
+	            const Th = rotlH(curH, curL, shift);
+	            const Tl = rotlL(curH, curL, shift);
+	            const PI = SHA3_PI[t];
+	            curH = s[PI];
+	            curL = s[PI + 1];
+	            s[PI] = Th;
+	            s[PI + 1] = Tl;
+	        }
+	        // Chi (χ)
+	        for (let y = 0; y < 50; y += 10) {
+	            for (let x = 0; x < 10; x++)
+	                B[x] = s[y + x];
+	            for (let x = 0; x < 10; x++)
+	                s[y + x] ^= ~B[(x + 2) % 10] & B[(x + 4) % 10];
+	        }
+	        // Iota (ι)
+	        s[0] ^= SHA3_IOTA_H[round];
+	        s[1] ^= SHA3_IOTA_L[round];
+	    }
+	    B.fill(0);
+	}
+	class Keccak extends Hash {
+	    // NOTE: we accept arguments in bytes instead of bits here.
+	    constructor(blockLen, suffix, outputLen, enableXOF = false, rounds = 24) {
+	        super();
+	        this.blockLen = blockLen;
+	        this.suffix = suffix;
+	        this.outputLen = outputLen;
+	        this.enableXOF = enableXOF;
+	        this.rounds = rounds;
+	        this.pos = 0;
+	        this.posOut = 0;
+	        this.finished = false;
+	        this.destroyed = false;
+	        // Can be passed from user as dkLen
+	        number$2(outputLen);
+	        // 1600 = 5x5 matrix of 64bit.  1600 bits === 200 bytes
+	        if (0 >= this.blockLen || this.blockLen >= 200)
+	            throw new Error('Sha3 supports only keccak-f1600 function');
+	        this.state = new Uint8Array(200);
+	        this.state32 = u32$1(this.state);
+	    }
+	    keccak() {
+	        keccakP(this.state32, this.rounds);
+	        this.posOut = 0;
+	        this.pos = 0;
+	    }
+	    update(data) {
+	        exists(this);
+	        const { blockLen, state } = this;
+	        data = toBytes(data);
+	        const len = data.length;
+	        for (let pos = 0; pos < len;) {
+	            const take = Math.min(blockLen - this.pos, len - pos);
+	            for (let i = 0; i < take; i++)
+	                state[this.pos++] ^= data[pos++];
+	            if (this.pos === blockLen)
+	                this.keccak();
+	        }
+	        return this;
+	    }
+	    finish() {
+	        if (this.finished)
+	            return;
+	        this.finished = true;
+	        const { state, suffix, pos, blockLen } = this;
+	        // Do the padding
+	        state[pos] ^= suffix;
+	        if ((suffix & 0x80) !== 0 && pos === blockLen - 1)
+	            this.keccak();
+	        state[blockLen - 1] ^= 0x80;
+	        this.keccak();
+	    }
+	    writeInto(out) {
+	        exists(this, false);
+	        bytes(out);
+	        this.finish();
+	        const bufferOut = this.state;
+	        const { blockLen } = this;
+	        for (let pos = 0, len = out.length; pos < len;) {
+	            if (this.posOut >= blockLen)
+	                this.keccak();
+	            const take = Math.min(blockLen - this.posOut, len - pos);
+	            out.set(bufferOut.subarray(this.posOut, this.posOut + take), pos);
+	            this.posOut += take;
+	            pos += take;
+	        }
+	        return out;
+	    }
+	    xofInto(out) {
+	        // Sha3/Keccak usage with XOF is probably mistake, only SHAKE instances can do XOF
+	        if (!this.enableXOF)
+	            throw new Error('XOF is not possible for this instance');
+	        return this.writeInto(out);
+	    }
+	    xof(bytes) {
+	        number$2(bytes);
+	        return this.xofInto(new Uint8Array(bytes));
+	    }
+	    digestInto(out) {
+	        output(out, this);
+	        if (this.finished)
+	            throw new Error('digest() was already called');
+	        this.writeInto(out);
+	        this.destroy();
+	        return out;
+	    }
+	    digest() {
+	        return this.digestInto(new Uint8Array(this.outputLen));
+	    }
+	    destroy() {
+	        this.destroyed = true;
+	        this.state.fill(0);
+	    }
+	    _cloneInto(to) {
+	        const { blockLen, suffix, outputLen, rounds, enableXOF } = this;
+	        to || (to = new Keccak(blockLen, suffix, outputLen, enableXOF, rounds));
+	        to.state32.set(this.state32);
+	        to.pos = this.pos;
+	        to.posOut = this.posOut;
+	        to.finished = this.finished;
+	        to.rounds = rounds;
+	        // Suffix can change in cSHAKE
+	        to.suffix = suffix;
+	        to.outputLen = outputLen;
+	        to.enableXOF = enableXOF;
+	        to.destroyed = this.destroyed;
+	        return to;
+	    }
+	}
+	const gen = (suffix, blockLen, outputLen) => wrapConstructor(() => new Keccak(blockLen, suffix, outputLen));
+	/**
+	 * keccak-256 hash function. Different from SHA3-256.
+	 * @param message - that would be hashed
+	 */
+	const keccak_256 = /* @__PURE__ */ gen(0x01, 136, 256 / 8);
+
 	/*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
+	// Short Weierstrass curve. The formula is: y² = x³ + ax + b
 	function validatePointOpts(curve) {
 	    const opts = validateBasic(curve);
 	    validateObject(opts, {
@@ -12522,7 +14534,7 @@ var solanaStakePool = (function (exports) {
 	        // parse DER signature
 	        const { Err: E } = DER;
 	        const data = typeof hex === 'string' ? h2b(hex) : hex;
-	        if (!(data instanceof Uint8Array))
+	        if (!isBytes(data))
 	            throw new Error('ui8a expected');
 	        let l = data.length;
 	        if (l < 2 || data[0] != 0x30)
@@ -12553,12 +14565,12 @@ var solanaStakePool = (function (exports) {
 	};
 	// Be friendly to bad ECMAScript parsers by not using bigint literals
 	// prettier-ignore
-	const _0n$1 = BigInt(0), _1n$1 = BigInt(1), _2n$1 = BigInt(2), _3n = BigInt(3), _4n = BigInt(4);
+	const _0n = BigInt(0), _1n$1 = BigInt(1); BigInt(2); const _3n = BigInt(3); BigInt(4);
 	function weierstrassPoints(opts) {
 	    const CURVE = validatePointOpts(opts);
 	    const { Fp } = CURVE; // All curves has same field / group length as for now, but they can differ
 	    const toBytes = CURVE.toBytes ||
-	        ((c, point, isCompressed) => {
+	        ((_c, point, _isCompressed) => {
 	            const a = point.toAffine();
 	            return concatBytes(Uint8Array.from([0x04]), Fp.toBytes(a.x), Fp.toBytes(a.y));
 	        });
@@ -12589,7 +14601,7 @@ var solanaStakePool = (function (exports) {
 	        throw new Error('bad generator point: equation left != right');
 	    // Valid group elements reside in range 1..n-1
 	    function isWithinCurveOrder(num) {
-	        return typeof num === 'bigint' && _0n$1 < num && num < CURVE.n;
+	        return typeof num === 'bigint' && _0n < num && num < CURVE.n;
 	    }
 	    function assertGE(num) {
 	        if (!isWithinCurveOrder(num))
@@ -12600,7 +14612,7 @@ var solanaStakePool = (function (exports) {
 	    function normPrivateKeyToScalar(key) {
 	        const { allowedPrivateKeyLengths: lengths, nByteLength, wrapPrivateKey, n } = CURVE;
 	        if (lengths && typeof key !== 'bigint') {
-	            if (key instanceof Uint8Array)
+	            if (isBytes(key))
 	                key = bytesToHex(key);
 	            // Normalize to hex string, pad. E.g. P521 would norm 130-132 char hex to 132-char bytes
 	            if (typeof key !== 'string' || !lengths.includes(key.length))
@@ -12694,9 +14706,11 @@ var solanaStakePool = (function (exports) {
 	        }
 	        // A point on curve is valid if it conforms to equation.
 	        assertValidity() {
-	            // Zero is valid point too!
 	            if (this.is0()) {
-	                if (CURVE.allowInfinityPoint)
+	                // (0, 1, 0) aka ZERO is invalid in most contexts.
+	                // In BLS, ZERO can be serialized, so we allow it.
+	                // (0, 0, 0) is wrong representation of ZERO and is always invalid.
+	                if (CURVE.allowInfinityPoint && !Fp.is0(this.py))
 	                    return;
 	                throw new Error('bad point: ZERO');
 	            }
@@ -12849,7 +14863,7 @@ var solanaStakePool = (function (exports) {
 	         */
 	        multiplyUnsafe(n) {
 	            const I = Point.ZERO;
-	            if (n === _0n$1)
+	            if (n === _0n)
 	                return I;
 	            assertGE(n); // Will throw on 0
 	            if (n === _1n$1)
@@ -12862,7 +14876,7 @@ var solanaStakePool = (function (exports) {
 	            let k1p = I;
 	            let k2p = I;
 	            let d = this;
-	            while (k1 > _0n$1 || k2 > _0n$1) {
+	            while (k1 > _0n || k2 > _0n) {
 	                if (k1 & _1n$1)
 	                    k1p = k1p.add(d);
 	                if (k2 & _1n$1)
@@ -12919,7 +14933,7 @@ var solanaStakePool = (function (exports) {
 	        multiplyAndAddUnsafe(Q, a, b) {
 	            const G = Point.BASE; // No Strauss-Shamir trick: we have 10% faster G precomputes
 	            const mul = (P, a // Select faster multiply() method
-	            ) => (a === _0n$1 || a === _1n$1 || !P.equals(G) ? P.multiplyUnsafe(a) : P.multiply(a));
+	            ) => (a === _0n || a === _1n$1 || !P.equals(G) ? P.multiplyUnsafe(a) : P.multiply(a));
 	            const sum = mul(this, a).add(mul(Q, b));
 	            return sum.is0() ? undefined : sum;
 	        }
@@ -12998,7 +15012,7 @@ var solanaStakePool = (function (exports) {
 	    const compressedLen = Fp.BYTES + 1; // e.g. 33 for 32
 	    const uncompressedLen = 2 * Fp.BYTES + 1; // e.g. 65 for 32
 	    function isValidFieldElement(num) {
-	        return _0n$1 < num && num < Fp.ORDER; // 0 is banned since it's not invertible FE
+	        return _0n < num && num < Fp.ORDER; // 0 is banned since it's not invertible FE
 	    }
 	    function modN(a) {
 	        return mod(a, CURVE_ORDER);
@@ -13008,7 +15022,7 @@ var solanaStakePool = (function (exports) {
 	    }
 	    const { ProjectivePoint: Point, normPrivateKeyToScalar, weierstrassEquation, isWithinCurveOrder, } = weierstrassPoints({
 	        ...CURVE,
-	        toBytes(c, point, isCompressed) {
+	        toBytes(_c, point, isCompressed) {
 	            const a = point.toAffine();
 	            const x = Fp.toBytes(a.x);
 	            const cat = concatBytes;
@@ -13142,13 +15156,12 @@ var solanaStakePool = (function (exports) {
 	        },
 	        normPrivateKeyToScalar: normPrivateKeyToScalar,
 	        /**
-	         * Produces cryptographically secure private key from random of size (nBitLength+64)
-	         * as per FIPS 186 B.4.1 with modulo bias being neglible.
+	         * Produces cryptographically secure private key from random of size
+	         * (groupLen + ceil(groupLen / 2)) with modulo bias being negligible.
 	         */
 	        randomPrivateKey: () => {
-	            const rand = CURVE.randomBytes(Fp.BYTES + 8);
-	            const num = hashToPrivateScalar(rand, CURVE_ORDER);
-	            return numberToBytesBE(num, CURVE.nByteLength);
+	            const length = getMinHashLength(CURVE.n);
+	            return mapHashToField(CURVE.randomBytes(length), CURVE.n);
 	        },
 	        /**
 	         * Creates precompute table for an arbitrary EC point. Makes point "cached".
@@ -13177,7 +15190,7 @@ var solanaStakePool = (function (exports) {
 	     * Quick and dirty check for item being public key. Does not validate hex, or being on-curve.
 	     */
 	    function isProbPub(item) {
-	        const arr = item instanceof Uint8Array;
+	        const arr = isBytes(item);
 	        const str = typeof item === 'string';
 	        const len = (arr || str) && item.length;
 	        if (arr)
@@ -13230,7 +15243,7 @@ var solanaStakePool = (function (exports) {
 	    function int2octets(num) {
 	        if (typeof num !== 'bigint')
 	            throw new Error('bigint expected');
-	        if (!(_0n$1 <= num && num < ORDER_MASK))
+	        if (!(_0n <= num && num < ORDER_MASK))
 	            throw new Error(`bigint expected < 2^${CURVE.nBitLength}`);
 	        // works with order, can have different size than numToField!
 	        return numberToBytesBE(num, CURVE.nByteLength);
@@ -13260,7 +15273,7 @@ var solanaStakePool = (function (exports) {
 	        if (ent != null) {
 	            // K = HMAC_K(V || 0x00 || int2octets(x) || bits2octets(h1) || k')
 	            const e = ent === true ? randomBytes(Fp.BYTES) : ent; // generate random bytes OR pass as-is
-	            seedArgs.push(ensureBytes('extraEntropy', e, Fp.BYTES)); // check for being of size BYTES
+	            seedArgs.push(ensureBytes('extraEntropy', e)); // check for being bytes
 	        }
 	        const seed = concatBytes(...seedArgs); // Step D of RFC6979 3.2
 	        const m = h1int; // NOTE: no need to call bits2int second time here, it is inside truncateHash!
@@ -13273,13 +15286,13 @@ var solanaStakePool = (function (exports) {
 	            const ik = invN(k); // k^-1 mod n
 	            const q = Point.BASE.multiply(k).toAffine(); // q = Gk
 	            const r = modN(q.x); // r = q.x mod n
-	            if (r === _0n$1)
+	            if (r === _0n)
 	                return;
 	            // Can use scalar blinding b^-1(bm + bdr) where b ∈ [1,q−1] according to
 	            // https://tches.iacr.org/index.php/TCHES/article/view/7337/6509. We've decided against it:
 	            // a) dependency on CSPRNG b) 15% slowdown c) doesn't really help since bigints are not CT
 	            const s = modN(ik * modN(m + r * d)); // Not using blinding here
-	            if (s === _0n$1)
+	            if (s === _0n)
 	                return;
 	            let recovery = (q.x === r ? 0 : 2) | Number(q.y & _1n$1); // recovery bit (2 or 3, when q.x > n)
 	            let normS = s;
@@ -13294,18 +15307,22 @@ var solanaStakePool = (function (exports) {
 	    const defaultSigOpts = { lowS: CURVE.lowS, prehash: false };
 	    const defaultVerOpts = { lowS: CURVE.lowS, prehash: false };
 	    /**
-	     * Signs message hash (not message: you need to hash it by yourself).
+	     * Signs message hash with a private key.
 	     * ```
 	     * sign(m, d, k) where
 	     *   (x, y) = G × k
 	     *   r = x mod n
 	     *   s = (m + dr)/k mod n
 	     * ```
-	     * @param opts `lowS, extraEntropy, prehash`
+	     * @param msgHash NOT message. msg needs to be hashed to `msgHash`, or use `prehash`.
+	     * @param privKey private key
+	     * @param opts lowS for non-malleable sigs. extraEntropy for mixing randomness into k. prehash will hash first arg.
+	     * @returns signature with recovery param
 	     */
 	    function sign(msgHash, privKey, opts = defaultSigOpts) {
 	        const { seed, k2sig } = prepSig(msgHash, privKey, opts); // Steps A, D of RFC6979 3.2.
-	        const drbg = createHmacDrbg(CURVE.hash.outputLen, CURVE.nByteLength, CURVE.hmac);
+	        const C = CURVE;
+	        const drbg = createHmacDrbg(C.hash.outputLen, C.nByteLength, C.hmac);
 	        return drbg(seed, k2sig); // Steps B, C, D, E, F, G
 	    }
 	    // Enable precomputes. Slows down first publicKey computation by 20ms.
@@ -13334,7 +15351,7 @@ var solanaStakePool = (function (exports) {
 	        let _sig = undefined;
 	        let P;
 	        try {
-	            if (typeof sg === 'string' || sg instanceof Uint8Array) {
+	            if (typeof sg === 'string' || isBytes(sg)) {
 	                // Signature can be represented in 2 ways: compact (2*nByteLength) & DER (variable-length).
 	                // Since DER can also be 2*nByteLength bytes, we check for it first.
 	                try {
@@ -13386,138 +15403,29 @@ var solanaStakePool = (function (exports) {
 	        utils,
 	    };
 	}
-	// Implementation of the Shallue and van de Woestijne method for any Weierstrass curve
-	// TODO: check if there is a way to merge this with uvRatio in Edwards && move to modular?
-	// b = True and y = sqrt(u / v) if (u / v) is square in F, and
-	// b = False and y = sqrt(Z * (u / v)) otherwise.
-	function SWUFpSqrtRatio(Fp, Z) {
-	    // Generic implementation
-	    const q = Fp.ORDER;
-	    let l = _0n$1;
-	    for (let o = q - _1n$1; o % _2n$1 === _0n$1; o /= _2n$1)
-	        l += _1n$1;
-	    const c1 = l; // 1. c1, the largest integer such that 2^c1 divides q - 1.
-	    const c2 = (q - _1n$1) / _2n$1 ** c1; // 2. c2 = (q - 1) / (2^c1)        # Integer arithmetic
-	    const c3 = (c2 - _1n$1) / _2n$1; // 3. c3 = (c2 - 1) / 2            # Integer arithmetic
-	    const c4 = _2n$1 ** c1 - _1n$1; // 4. c4 = 2^c1 - 1                # Integer arithmetic
-	    const c5 = _2n$1 ** (c1 - _1n$1); // 5. c5 = 2^(c1 - 1)              # Integer arithmetic
-	    const c6 = Fp.pow(Z, c2); // 6. c6 = Z^c2
-	    const c7 = Fp.pow(Z, (c2 + _1n$1) / _2n$1); // 7. c7 = Z^((c2 + 1) / 2)
-	    let sqrtRatio = (u, v) => {
-	        let tv1 = c6; // 1. tv1 = c6
-	        let tv2 = Fp.pow(v, c4); // 2. tv2 = v^c4
-	        let tv3 = Fp.sqr(tv2); // 3. tv3 = tv2^2
-	        tv3 = Fp.mul(tv3, v); // 4. tv3 = tv3 * v
-	        let tv5 = Fp.mul(u, tv3); // 5. tv5 = u * tv3
-	        tv5 = Fp.pow(tv5, c3); // 6. tv5 = tv5^c3
-	        tv5 = Fp.mul(tv5, tv2); // 7. tv5 = tv5 * tv2
-	        tv2 = Fp.mul(tv5, v); // 8. tv2 = tv5 * v
-	        tv3 = Fp.mul(tv5, u); // 9. tv3 = tv5 * u
-	        let tv4 = Fp.mul(tv3, tv2); // 10. tv4 = tv3 * tv2
-	        tv5 = Fp.pow(tv4, c5); // 11. tv5 = tv4^c5
-	        let isQR = Fp.eql(tv5, Fp.ONE); // 12. isQR = tv5 == 1
-	        tv2 = Fp.mul(tv3, c7); // 13. tv2 = tv3 * c7
-	        tv5 = Fp.mul(tv4, tv1); // 14. tv5 = tv4 * tv1
-	        tv3 = Fp.cmov(tv2, tv3, isQR); // 15. tv3 = CMOV(tv2, tv3, isQR)
-	        tv4 = Fp.cmov(tv5, tv4, isQR); // 16. tv4 = CMOV(tv5, tv4, isQR)
-	        // 17. for i in (c1, c1 - 1, ..., 2):
-	        for (let i = c1; i > _1n$1; i--) {
-	            let tv5 = _2n$1 ** (i - _2n$1); // 18.    tv5 = i - 2;    19.    tv5 = 2^tv5
-	            let tvv5 = Fp.pow(tv4, tv5); // 20.    tv5 = tv4^tv5
-	            const e1 = Fp.eql(tvv5, Fp.ONE); // 21.    e1 = tv5 == 1
-	            tv2 = Fp.mul(tv3, tv1); // 22.    tv2 = tv3 * tv1
-	            tv1 = Fp.mul(tv1, tv1); // 23.    tv1 = tv1 * tv1
-	            tvv5 = Fp.mul(tv4, tv1); // 24.    tv5 = tv4 * tv1
-	            tv3 = Fp.cmov(tv2, tv3, e1); // 25.    tv3 = CMOV(tv2, tv3, e1)
-	            tv4 = Fp.cmov(tvv5, tv4, e1); // 26.    tv4 = CMOV(tv5, tv4, e1)
-	        }
-	        return { isValid: isQR, value: tv3 };
-	    };
-	    if (Fp.ORDER % _4n === _3n) {
-	        // sqrt_ratio_3mod4(u, v)
-	        const c1 = (Fp.ORDER - _3n) / _4n; // 1. c1 = (q - 3) / 4     # Integer arithmetic
-	        const c2 = Fp.sqrt(Fp.neg(Z)); // 2. c2 = sqrt(-Z)
-	        sqrtRatio = (u, v) => {
-	            let tv1 = Fp.sqr(v); // 1. tv1 = v^2
-	            const tv2 = Fp.mul(u, v); // 2. tv2 = u * v
-	            tv1 = Fp.mul(tv1, tv2); // 3. tv1 = tv1 * tv2
-	            let y1 = Fp.pow(tv1, c1); // 4. y1 = tv1^c1
-	            y1 = Fp.mul(y1, tv2); // 5. y1 = y1 * tv2
-	            const y2 = Fp.mul(y1, c2); // 6. y2 = y1 * c2
-	            const tv3 = Fp.mul(Fp.sqr(y1), v); // 7. tv3 = y1^2; 8. tv3 = tv3 * v
-	            const isQR = Fp.eql(tv3, u); // 9. isQR = tv3 == u
-	            let y = Fp.cmov(y2, y1, isQR); // 10. y = CMOV(y2, y1, isQR)
-	            return { isValid: isQR, value: y }; // 11. return (isQR, y) isQR ? y : y*c2
-	        };
-	    }
-	    // No curves uses that
-	    // if (Fp.ORDER % _8n === _5n) // sqrt_ratio_5mod8
-	    return sqrtRatio;
-	}
-	// From draft-irtf-cfrg-hash-to-curve-16
-	function mapToCurveSimpleSWU(Fp, opts) {
-	    validateField(Fp);
-	    if (!Fp.isValid(opts.A) || !Fp.isValid(opts.B) || !Fp.isValid(opts.Z))
-	        throw new Error('mapToCurveSimpleSWU: invalid opts');
-	    const sqrtRatio = SWUFpSqrtRatio(Fp, opts.Z);
-	    if (!Fp.isOdd)
-	        throw new Error('Fp.isOdd is not implemented!');
-	    // Input: u, an element of F.
-	    // Output: (x, y), a point on E.
-	    return (u) => {
-	        // prettier-ignore
-	        let tv1, tv2, tv3, tv4, tv5, tv6, x, y;
-	        tv1 = Fp.sqr(u); // 1.  tv1 = u^2
-	        tv1 = Fp.mul(tv1, opts.Z); // 2.  tv1 = Z * tv1
-	        tv2 = Fp.sqr(tv1); // 3.  tv2 = tv1^2
-	        tv2 = Fp.add(tv2, tv1); // 4.  tv2 = tv2 + tv1
-	        tv3 = Fp.add(tv2, Fp.ONE); // 5.  tv3 = tv2 + 1
-	        tv3 = Fp.mul(tv3, opts.B); // 6.  tv3 = B * tv3
-	        tv4 = Fp.cmov(opts.Z, Fp.neg(tv2), !Fp.eql(tv2, Fp.ZERO)); // 7.  tv4 = CMOV(Z, -tv2, tv2 != 0)
-	        tv4 = Fp.mul(tv4, opts.A); // 8.  tv4 = A * tv4
-	        tv2 = Fp.sqr(tv3); // 9.  tv2 = tv3^2
-	        tv6 = Fp.sqr(tv4); // 10. tv6 = tv4^2
-	        tv5 = Fp.mul(tv6, opts.A); // 11. tv5 = A * tv6
-	        tv2 = Fp.add(tv2, tv5); // 12. tv2 = tv2 + tv5
-	        tv2 = Fp.mul(tv2, tv3); // 13. tv2 = tv2 * tv3
-	        tv6 = Fp.mul(tv6, tv4); // 14. tv6 = tv6 * tv4
-	        tv5 = Fp.mul(tv6, opts.B); // 15. tv5 = B * tv6
-	        tv2 = Fp.add(tv2, tv5); // 16. tv2 = tv2 + tv5
-	        x = Fp.mul(tv1, tv3); // 17.   x = tv1 * tv3
-	        const { isValid, value } = sqrtRatio(tv2, tv6); // 18. (is_gx1_square, y1) = sqrt_ratio(tv2, tv6)
-	        y = Fp.mul(tv1, u); // 19.   y = tv1 * u  -> Z * u^3 * y1
-	        y = Fp.mul(y, value); // 20.   y = y * y1
-	        x = Fp.cmov(x, tv3, isValid); // 21.   x = CMOV(x, tv3, is_gx1_square)
-	        y = Fp.cmov(y, value, isValid); // 22.   y = CMOV(y, y1, is_gx1_square)
-	        const e1 = Fp.isOdd(u) === Fp.isOdd(y); // 23.  e1 = sgn0(u) == sgn0(y)
-	        y = Fp.cmov(Fp.neg(y), y, e1); // 24.   y = CMOV(-y, y, e1)
-	        x = Fp.div(x, tv4); // 25.   x = x / tv4
-	        return { x, y };
-	    };
-	}
 
 	// HMAC (RFC 2104)
 	class HMAC extends Hash {
-	    constructor(hash, _key) {
+	    constructor(hash$1, _key) {
 	        super();
 	        this.finished = false;
 	        this.destroyed = false;
-	        assert$3.hash(hash);
+	        hash(hash$1);
 	        const key = toBytes(_key);
-	        this.iHash = hash.create();
+	        this.iHash = hash$1.create();
 	        if (typeof this.iHash.update !== 'function')
-	            throw new TypeError('Expected instance of class which extends utils.Hash');
+	            throw new Error('Expected instance of class which extends utils.Hash');
 	        this.blockLen = this.iHash.blockLen;
 	        this.outputLen = this.iHash.outputLen;
 	        const blockLen = this.blockLen;
 	        const pad = new Uint8Array(blockLen);
 	        // blockLen can be bigger than outputLen
-	        pad.set(key.length > blockLen ? hash.create().update(key).digest() : key);
+	        pad.set(key.length > blockLen ? hash$1.create().update(key).digest() : key);
 	        for (let i = 0; i < pad.length; i++)
 	            pad[i] ^= 0x36;
 	        this.iHash.update(pad);
 	        // By doing update (processing of first block) of outer hash here we can re-use it between multiple calls via clone
-	        this.oHash = hash.create();
+	        this.oHash = hash$1.create();
 	        // Undo internal XOR && apply outer XOR
 	        for (let i = 0; i < pad.length; i++)
 	            pad[i] ^= 0x36 ^ 0x5c;
@@ -13525,13 +15433,13 @@ var solanaStakePool = (function (exports) {
 	        pad.fill(0);
 	    }
 	    update(buf) {
-	        assert$3.exists(this);
+	        exists(this);
 	        this.iHash.update(buf);
 	        return this;
 	    }
 	    digestInto(out) {
-	        assert$3.exists(this);
-	        assert$3.bytes(out, this.outputLen);
+	        exists(this);
+	        bytes(out, this.outputLen);
 	        this.finished = true;
 	        this.iHash.digestInto(out);
 	        this.oHash.update(out);
@@ -13621,15 +15529,15 @@ var solanaStakePool = (function (exports) {
 	}
 	const Fp = Field(secp256k1P, undefined, undefined, { sqrt: sqrtMod });
 	const secp256k1 = createCurve({
-	    a: BigInt(0),
-	    b: BigInt(7),
-	    Fp,
-	    n: secp256k1N,
+	    a: BigInt(0), // equation params: a, b
+	    b: BigInt(7), // Seem to be rigid: bitcointalk.org/index.php?topic=289795.msg3183975#msg3183975
+	    Fp, // Field's prime: 2n**256n - 2n**32n - 2n**9n - 2n**8n - 2n**7n - 2n**6n - 2n**4n - 1n
+	    n: secp256k1N, // Curve order, total count of valid points in the field
 	    // Base point (x, y) aka generator point
 	    Gx: BigInt('55066263022277343669578718895168534326250603453777594175500187360389116729240'),
 	    Gy: BigInt('32670510020758816978083085130507043184471273380659243275938904335757337482424'),
-	    h: BigInt(1),
-	    lowS: true,
+	    h: BigInt(1), // Cofactor
+	    lowS: true, // Allow only low-S signatures by default in sign() and verify()
 	    /**
 	     * secp256k1 belongs to Koblitz curves: it has efficiently computable endomorphism.
 	     * Endomorphism uses 2x less RAM, speeds up precomputation by 2x and ECDH / key recovery by 20%.
@@ -13664,171 +15572,8 @@ var solanaStakePool = (function (exports) {
 	}, sha256);
 	// Schnorr signatures are superior to ECDSA from above. Below is Schnorr-specific BIP0340 code.
 	// https://github.com/bitcoin/bips/blob/master/bip-0340.mediawiki
-	const _0n = BigInt(0);
-	const fe = (x) => typeof x === 'bigint' && _0n < x && x < secp256k1P;
-	const ge = (x) => typeof x === 'bigint' && _0n < x && x < secp256k1N;
-	/** An object mapping tags to their tagged hash prefix of [SHA256(tag) | SHA256(tag)] */
-	const TAGGED_HASH_PREFIXES = {};
-	function taggedHash(tag, ...messages) {
-	    let tagP = TAGGED_HASH_PREFIXES[tag];
-	    if (tagP === undefined) {
-	        const tagH = sha256(Uint8Array.from(tag, (c) => c.charCodeAt(0)));
-	        tagP = concatBytes(tagH, tagH);
-	        TAGGED_HASH_PREFIXES[tag] = tagP;
-	    }
-	    return sha256(concatBytes(tagP, ...messages));
-	}
-	// ECDSA compact points are 33-byte. Schnorr is 32: we strip first byte 0x02 or 0x03
-	const pointToBytes = (point) => point.toRawBytes(true).slice(1);
-	const numTo32b = (n) => numberToBytesBE(n, 32);
-	const modP = (x) => mod(x, secp256k1P);
-	const modN = (x) => mod(x, secp256k1N);
-	const Point = secp256k1.ProjectivePoint;
-	const GmulAdd = (Q, a, b) => Point.BASE.multiplyAndAddUnsafe(Q, a, b);
-	// Calculate point, scalar and bytes
-	function schnorrGetExtPubKey(priv) {
-	    let d_ = secp256k1.utils.normPrivateKeyToScalar(priv); // same method executed in fromPrivateKey
-	    let p = Point.fromPrivateKey(d_); // P = d'⋅G; 0 < d' < n check is done inside
-	    const scalar = p.hasEvenY() ? d_ : modN(-d_);
-	    return { scalar: scalar, bytes: pointToBytes(p) };
-	}
-	/**
-	 * lift_x from BIP340. Convert 32-byte x coordinate to elliptic curve point.
-	 * @returns valid point checked for being on-curve
-	 */
-	function lift_x(x) {
-	    if (!fe(x))
-	        throw new Error('bad x: need 0 < x < p'); // Fail if x ≥ p.
-	    const xx = modP(x * x);
-	    const c = modP(xx * x + BigInt(7)); // Let c = x³ + 7 mod p.
-	    let y = sqrtMod(c); // Let y = c^(p+1)/4 mod p.
-	    if (y % _2n !== _0n)
-	        y = modP(-y); // Return the unique point P such that x(P) = x and
-	    const p = new Point(x, y, _1n); // y(P) = y if y mod 2 = 0 or y(P) = p-y otherwise.
-	    p.assertValidity();
-	    return p;
-	}
-	/**
-	 * Create tagged hash, convert it to bigint, reduce modulo-n.
-	 */
-	function challenge(...args) {
-	    return modN(bytesToNumberBE(taggedHash('BIP0340/challenge', ...args)));
-	}
-	/**
-	 * Schnorr public key is just `x` coordinate of Point as per BIP340.
-	 */
-	function schnorrGetPublicKey(privateKey) {
-	    return schnorrGetExtPubKey(privateKey).bytes; // d'=int(sk). Fail if d'=0 or d'≥n. Ret bytes(d'⋅G)
-	}
-	/**
-	 * Creates Schnorr signature as per BIP340. Verifies itself before returning anything.
-	 * auxRand is optional and is not the sole source of k generation: bad CSPRNG won't be dangerous.
-	 */
-	function schnorrSign(message, privateKey, auxRand = randomBytes(32)) {
-	    const m = ensureBytes('message', message);
-	    const { bytes: px, scalar: d } = schnorrGetExtPubKey(privateKey); // checks for isWithinCurveOrder
-	    const a = ensureBytes('auxRand', auxRand, 32); // Auxiliary random data a: a 32-byte array
-	    const t = numTo32b(d ^ bytesToNumberBE(taggedHash('BIP0340/aux', a))); // Let t be the byte-wise xor of bytes(d) and hash/aux(a)
-	    const rand = taggedHash('BIP0340/nonce', t, px, m); // Let rand = hash/nonce(t || bytes(P) || m)
-	    const k_ = modN(bytesToNumberBE(rand)); // Let k' = int(rand) mod n
-	    if (k_ === _0n)
-	        throw new Error('sign failed: k is zero'); // Fail if k' = 0.
-	    const { bytes: rx, scalar: k } = schnorrGetExtPubKey(k_); // Let R = k'⋅G.
-	    const e = challenge(rx, px, m); // Let e = int(hash/challenge(bytes(R) || bytes(P) || m)) mod n.
-	    const sig = new Uint8Array(64); // Let sig = bytes(R) || bytes((k + ed) mod n).
-	    sig.set(rx, 0);
-	    sig.set(numTo32b(modN(k + e * d)), 32);
-	    // If Verify(bytes(P), m, sig) (see below) returns failure, abort
-	    if (!schnorrVerify(sig, m, px))
-	        throw new Error('sign: Invalid signature produced');
-	    return sig;
-	}
-	/**
-	 * Verifies Schnorr signature.
-	 * Will swallow errors & return false except for initial type validation of arguments.
-	 */
-	function schnorrVerify(signature, message, publicKey) {
-	    const sig = ensureBytes('signature', signature, 64);
-	    const m = ensureBytes('message', message);
-	    const pub = ensureBytes('publicKey', publicKey, 32);
-	    try {
-	        const P = lift_x(bytesToNumberBE(pub)); // P = lift_x(int(pk)); fail if that fails
-	        const r = bytesToNumberBE(sig.subarray(0, 32)); // Let r = int(sig[0:32]); fail if r ≥ p.
-	        if (!fe(r))
-	            return false;
-	        const s = bytesToNumberBE(sig.subarray(32, 64)); // Let s = int(sig[32:64]); fail if s ≥ n.
-	        if (!ge(s))
-	            return false;
-	        const e = challenge(numTo32b(r), pointToBytes(P), m); // int(challenge(bytes(r)||bytes(P)||m))%n
-	        const R = GmulAdd(P, s, modN(-e)); // R = s⋅G - e⋅P
-	        if (!R || !R.hasEvenY() || R.toAffine().x !== r)
-	            return false; // -eP == (n-e)P
-	        return true; // Fail if is_infinite(R) / not has_even_y(R) / x(R) ≠ r.
-	    }
-	    catch (error) {
-	        return false;
-	    }
-	}
-	({
-	    getPublicKey: schnorrGetPublicKey,
-	    sign: schnorrSign,
-	    verify: schnorrVerify,
-	    utils: {
-	        randomPrivateKey: secp256k1.utils.randomPrivateKey,
-	        lift_x,
-	        pointToBytes,
-	        numberToBytesBE,
-	        bytesToNumberBE,
-	        taggedHash,
-	        mod,
-	    },
-	});
-	const isoMap = isogenyMap(Fp, [
-	    // xNum
-	    [
-	        '0x8e38e38e38e38e38e38e38e38e38e38e38e38e38e38e38e38e38e38daaaaa8c7',
-	        '0x7d3d4c80bc321d5b9f315cea7fd44c5d595d2fc0bf63b92dfff1044f17c6581',
-	        '0x534c328d23f234e6e2a413deca25caece4506144037c40314ecbd0b53d9dd262',
-	        '0x8e38e38e38e38e38e38e38e38e38e38e38e38e38e38e38e38e38e38daaaaa88c',
-	    ],
-	    // xDen
-	    [
-	        '0xd35771193d94918a9ca34ccbb7b640dd86cd409542f8487d9fe6b745781eb49b',
-	        '0xedadc6f64383dc1df7c4b2d51b54225406d36b641f5e41bbc52a56612a8c6d14',
-	        '0x0000000000000000000000000000000000000000000000000000000000000001', // LAST 1
-	    ],
-	    // yNum
-	    [
-	        '0x4bda12f684bda12f684bda12f684bda12f684bda12f684bda12f684b8e38e23c',
-	        '0xc75e0c32d5cb7c0fa9d0a54b12a0a6d5647ab046d686da6fdffc90fc201d71a3',
-	        '0x29a6194691f91a73715209ef6512e576722830a201be2018a765e85a9ecee931',
-	        '0x2f684bda12f684bda12f684bda12f684bda12f684bda12f684bda12f38e38d84',
-	    ],
-	    // yDen
-	    [
-	        '0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffff93b',
-	        '0x7a06534bb8bdb49fd5e9e6632722c2989467c1bfc8e8d978dfb425d2685c2573',
-	        '0x6484aa716545ca2cf3a70c3fa8fe337e0a3d21162f0d6299a7bf8192bfd2a76f',
-	        '0x0000000000000000000000000000000000000000000000000000000000000001', // LAST 1
-	    ],
-	].map((i) => i.map((j) => BigInt(j))));
-	const mapSWU = mapToCurveSimpleSWU(Fp, {
-	    A: BigInt('0x3f8731abdd661adca08a5558f0f5d272e953d363cb6f0e5d405447c01a444533'),
-	    B: BigInt('1771'),
-	    Z: Fp.create(BigInt('-11')),
-	});
-	createHasher(secp256k1.ProjectivePoint, (scalars) => {
-	    const { x, y } = mapSWU(Fp.create(scalars[0]));
-	    return isoMap(x, y);
-	}, {
-	    DST: 'secp256k1_XMD:SHA-256_SSWU_RO_',
-	    encodeDST: 'secp256k1_XMD:SHA-256_SSWU_NU_',
-	    p: Fp.ORDER,
-	    m: 1,
-	    k: 128,
-	    expand: 'xmd',
-	    hash: sha256,
-	});
+	BigInt(0);
+	secp256k1.ProjectivePoint;
 
 	/**
 	 * A 64 byte secret key, the first 32 bytes of which is the
@@ -13836,7 +15581,11 @@ var solanaStakePool = (function (exports) {
 	 * Read more: https://blog.mozilla.org/warner/2011/11/29/ed25519-keys/
 	 */
 
-	ed25519.utils.randomPrivateKey;
+	/**
+	 * Ed25519 Keypair
+	 */
+
+	const generatePrivateKey = ed25519.utils.randomPrivateKey;
 	const generateKeypair = () => {
 	  const privateScalar = ed25519.utils.randomPrivateKey();
 	  const publicKey = getPublicKey(privateScalar);
@@ -13871,7 +15620,7 @@ var solanaStakePool = (function (exports) {
 	};
 
 	// Class wrapping a plain object
-	class Struct {
+	let Struct$1 = class Struct {
 	  constructor(properties) {
 	    Object.assign(this, properties);
 	  }
@@ -13884,9 +15633,25 @@ var solanaStakePool = (function (exports) {
 	  static decodeUnchecked(data) {
 	    return deserializeUnchecked_1(SOLANA_SCHEMA, this, data);
 	  }
+	};
+
+	// Class representing a Rust-compatible enum, since enums are only strings or
+	// numbers in pure JS
+	class Enum extends Struct$1 {
+	  constructor(properties) {
+	    super(properties);
+	    this.enum = '';
+	    if (Object.keys(properties).length !== 1) {
+	      throw new Error('Enum can only take single value');
+	    }
+	    Object.keys(properties).map(key => {
+	      this.enum = key;
+	    });
+	  }
 	}
 	const SOLANA_SCHEMA = new Map();
 
+	var _class;
 	let _Symbol$toStringTag;
 
 	/**
@@ -13903,6 +15668,10 @@ var solanaStakePool = (function (exports) {
 	 * Value to be converted into public key
 	 */
 
+	/**
+	 * JSON object representation of PublicKey class
+	 */
+
 	function isPublicKeyData(value) {
 	  return value._bn !== undefined;
 	}
@@ -13914,15 +15683,14 @@ var solanaStakePool = (function (exports) {
 	 * A public key
 	 */
 	_Symbol$toStringTag = Symbol.toStringTag;
-	class PublicKey extends Struct {
-	  /** @internal */
-
+	class PublicKey extends Struct$1 {
 	  /**
 	   * Create a new PublicKey object
 	   * @param value ed25519 public key as buffer or base-58 encoded string
 	   */
 	  constructor(value) {
 	    super({});
+	    /** @internal */
 	    this._bn = void 0;
 	    if (isPublicKeyData(value)) {
 	      this._bn = value._bn;
@@ -14092,13 +15860,63 @@ var solanaStakePool = (function (exports) {
 	    return isOnCurve(pubkey.toBytes());
 	  }
 	}
-	PublicKey.default = new PublicKey('11111111111111111111111111111111');
+	_class = PublicKey;
+	PublicKey.default = new _class('11111111111111111111111111111111');
 	SOLANA_SCHEMA.set(PublicKey, {
 	  kind: 'struct',
 	  fields: [['_bn', 'u256']]
 	});
 
-	new PublicKey('BPFLoader1111111111111111111111111111111111');
+	/**
+	 * An account key pair (public and secret keys).
+	 *
+	 * @deprecated since v1.10.0, please use {@link Keypair} instead.
+	 */
+	class Account {
+	  /**
+	   * Create a new Account object
+	   *
+	   * If the secretKey parameter is not provided a new key pair is randomly
+	   * created for the account
+	   *
+	   * @param secretKey Secret key for the account
+	   */
+	  constructor(secretKey) {
+	    /** @internal */
+	    this._publicKey = void 0;
+	    /** @internal */
+	    this._secretKey = void 0;
+	    if (secretKey) {
+	      const secretKeyBuffer = toBuffer(secretKey);
+	      if (secretKey.length !== 64) {
+	        throw new Error('bad secret key size');
+	      }
+	      this._publicKey = secretKeyBuffer.slice(32, 64);
+	      this._secretKey = secretKeyBuffer.slice(0, 32);
+	    } else {
+	      this._secretKey = toBuffer(generatePrivateKey());
+	      this._publicKey = toBuffer(getPublicKey(this._secretKey));
+	    }
+	  }
+
+	  /**
+	   * The public key for this account
+	   */
+	  get publicKey() {
+	    return new PublicKey(this._publicKey);
+	  }
+
+	  /**
+	   * The **unencrypted** secret key for this account. The first 32 bytes
+	   * is the private scalar and the last 32 bytes is the public key.
+	   * Read more: https://blog.mozilla.org/warner/2011/11/29/ed25519-keys/
+	   */
+	  get secretKey() {
+	    return buffer.Buffer.concat([this._secretKey, this._publicKey], 64);
+	  }
+	}
+
+	const BPF_LOADER_DEPRECATED_PROGRAM_ID = new PublicKey('BPFLoader1111111111111111111111111111111111');
 
 	/**
 	 * Maximum over-the-wire size of a Transaction
@@ -14110,6 +15928,37 @@ var solanaStakePool = (function (exports) {
 	const PACKET_DATA_SIZE = 1280 - 40 - 8;
 	const VERSION_PREFIX_MASK = 0x7f;
 	const SIGNATURE_LENGTH_IN_BYTES = 64;
+
+	class TransactionExpiredBlockheightExceededError extends Error {
+	  constructor(signature) {
+	    super(`Signature ${signature} has expired: block height exceeded.`);
+	    this.signature = void 0;
+	    this.signature = signature;
+	  }
+	}
+	Object.defineProperty(TransactionExpiredBlockheightExceededError.prototype, 'name', {
+	  value: 'TransactionExpiredBlockheightExceededError'
+	});
+	class TransactionExpiredTimeoutError extends Error {
+	  constructor(signature, timeoutSeconds) {
+	    super(`Transaction was not confirmed in ${timeoutSeconds.toFixed(2)} seconds. It is ` + 'unknown if it succeeded or failed. Check signature ' + `${signature} using the Solana Explorer or CLI tools.`);
+	    this.signature = void 0;
+	    this.signature = signature;
+	  }
+	}
+	Object.defineProperty(TransactionExpiredTimeoutError.prototype, 'name', {
+	  value: 'TransactionExpiredTimeoutError'
+	});
+	class TransactionExpiredNonceInvalidError extends Error {
+	  constructor(signature) {
+	    super(`Signature ${signature} has expired: the nonce is no longer valid.`);
+	    this.signature = void 0;
+	    this.signature = signature;
+	  }
+	}
+	Object.defineProperty(TransactionExpiredNonceInvalidError.prototype, 'name', {
+	  value: 'TransactionExpiredNonceInvalidError'
+	});
 
 	class MessageAccountKeys {
 	  constructor(staticAccountKeys, accountKeysFromLookups) {
@@ -14167,8 +16016,15 @@ var solanaStakePool = (function (exports) {
 	/**
 	 * Layout for a public key
 	 */
-	const publicKey$2 = (property = 'publicKey') => {
+	const publicKey$1 = (property = 'publicKey') => {
 	  return blob(32, property);
+	};
+
+	/**
+	 * Layout for a signature
+	 */
+	const signature = (property = 'signature') => {
+	  return blob(64, property);
 	};
 	/**
 	 * Layout for a Rust String type
@@ -14198,28 +16054,28 @@ var solanaStakePool = (function (exports) {
 	 * Layout for an Authorized object
 	 */
 	const authorized = (property = 'authorized') => {
-	  return struct([publicKey$2('staker'), publicKey$2('withdrawer')], property);
+	  return struct([publicKey$1('staker'), publicKey$1('withdrawer')], property);
 	};
 
 	/**
 	 * Layout for a Lockup object
 	 */
 	const lockup$1 = (property = 'lockup') => {
-	  return struct([ns64('unixTimestamp'), ns64('epoch'), publicKey$2('custodian')], property);
+	  return struct([ns64('unixTimestamp'), ns64('epoch'), publicKey$1('custodian')], property);
 	};
 
 	/**
 	 *  Layout for a VoteInit object
 	 */
 	const voteInit = (property = 'voteInit') => {
-	  return struct([publicKey$2('nodePubkey'), publicKey$2('authorizedVoter'), publicKey$2('authorizedWithdrawer'), u8('commission')], property);
+	  return struct([publicKey$1('nodePubkey'), publicKey$1('authorizedVoter'), publicKey$1('authorizedWithdrawer'), u8('commission')], property);
 	};
 
 	/**
 	 *  Layout for a VoteAuthorizeWithSeedArgs object
 	 */
 	const voteAuthorizeWithSeedArgs = (property = 'voteAuthorizeWithSeedArgs') => {
-	  return struct([u32('voteAuthorizationType'), publicKey$2('currentAuthorityDerivedKeyOwnerPubkey'), rustString('currentAuthorityDerivedKeySeed'), publicKey$2('newAuthorized')], property);
+	  return struct([u32('voteAuthorizationType'), publicKey$1('currentAuthorityDerivedKeyOwnerPubkey'), rustString('currentAuthorityDerivedKeySeed'), publicKey$1('newAuthorized')], property);
 	};
 	function getAlloc(type, fields) {
 	  const getItemAlloc = item => {
@@ -14276,7 +16132,7 @@ var solanaStakePool = (function (exports) {
 	  }
 	}
 
-	function assert (condition, message) {
+	function assert$1 (condition, message) {
 	  if (!condition) {
 	    throw new Error(message || 'Assertion failed');
 	  }
@@ -14319,7 +16175,7 @@ var solanaStakePool = (function (exports) {
 	  }
 	  getMessageComponents() {
 	    const mapEntries = [...this.keyMetaMap.entries()];
-	    assert(mapEntries.length <= 256, 'Max static account keys length exceeded');
+	    assert$1(mapEntries.length <= 256, 'Max static account keys length exceeded');
 	    const writableSigners = mapEntries.filter(([, meta]) => meta.isSigner && meta.isWritable);
 	    const readonlySigners = mapEntries.filter(([, meta]) => meta.isSigner && !meta.isWritable);
 	    const writableNonSigners = mapEntries.filter(([, meta]) => !meta.isSigner && meta.isWritable);
@@ -14332,9 +16188,9 @@ var solanaStakePool = (function (exports) {
 
 	    // sanity checks
 	    {
-	      assert(writableSigners.length > 0, 'Expected at least one writable signer key');
+	      assert$1(writableSigners.length > 0, 'Expected at least one writable signer key');
 	      const [payerAddress] = writableSigners[0];
-	      assert(payerAddress === this.payer.toBase58(), 'Expected first writable signer key to be the fee payer');
+	      assert$1(payerAddress === this.payer.toBase58(), 'Expected first writable signer key to be the fee payer');
 	    }
 	    const staticAccountKeys = [...writableSigners.map(([address]) => new PublicKey(address)), ...readonlySigners.map(([address]) => new PublicKey(address)), ...writableNonSigners.map(([address]) => new PublicKey(address)), ...readonlyNonSigners.map(([address]) => new PublicKey(address))];
 	    return [header, staticAccountKeys];
@@ -14366,7 +16222,7 @@ var solanaStakePool = (function (exports) {
 	        const key = new PublicKey(address);
 	        const lookupTableIndex = lookupTableEntries.findIndex(entry => entry.equals(key));
 	        if (lookupTableIndex >= 0) {
-	          assert(lookupTableIndex < 256, 'Max lookup table index exceeded');
+	          assert$1(lookupTableIndex < 256, 'Max lookup table index exceeded');
 	          lookupTableIndexes.push(lookupTableIndex);
 	          drainedKeys.push(key);
 	          this.keyMetaMap.delete(address);
@@ -14383,6 +16239,10 @@ var solanaStakePool = (function (exports) {
 	 * @property {number} programIdIndex
 	 * @property {number[]} accounts
 	 * @property {string} data
+	 */
+
+	/**
+	 * Message constructor arguments
 	 */
 
 	/**
@@ -14493,7 +16353,7 @@ var solanaStakePool = (function (exports) {
 	      instructionBufferLength += length;
 	    });
 	    instructionBuffer = instructionBuffer.slice(0, instructionBufferLength);
-	    const signDataLayout = struct([blob(1, 'numRequiredSignatures'), blob(1, 'numReadonlySignedAccounts'), blob(1, 'numReadonlyUnsignedAccounts'), blob(keyCount.length, 'keyCount'), seq(publicKey$2('key'), numKeys, 'keys'), publicKey$2('recentBlockhash')]);
+	    const signDataLayout = struct([blob(1, 'numRequiredSignatures'), blob(1, 'numReadonlySignedAccounts'), blob(1, 'numReadonlyUnsignedAccounts'), blob(keyCount.length, 'keyCount'), seq(publicKey$1('key'), numKeys, 'keys'), publicKey$1('recentBlockhash')]);
 	    const transaction = {
 	      numRequiredSignatures: buffer.Buffer.from([this.header.numRequiredSignatures]),
 	      numReadonlySignedAccounts: buffer.Buffer.from([this.header.numReadonlySignedAccounts]),
@@ -14561,20 +16421,285 @@ var solanaStakePool = (function (exports) {
 	}
 
 	/**
+	 * Message constructor arguments
+	 */
+
+	class MessageV0 {
+	  constructor(args) {
+	    this.header = void 0;
+	    this.staticAccountKeys = void 0;
+	    this.recentBlockhash = void 0;
+	    this.compiledInstructions = void 0;
+	    this.addressTableLookups = void 0;
+	    this.header = args.header;
+	    this.staticAccountKeys = args.staticAccountKeys;
+	    this.recentBlockhash = args.recentBlockhash;
+	    this.compiledInstructions = args.compiledInstructions;
+	    this.addressTableLookups = args.addressTableLookups;
+	  }
+	  get version() {
+	    return 0;
+	  }
+	  get numAccountKeysFromLookups() {
+	    let count = 0;
+	    for (const lookup of this.addressTableLookups) {
+	      count += lookup.readonlyIndexes.length + lookup.writableIndexes.length;
+	    }
+	    return count;
+	  }
+	  getAccountKeys(args) {
+	    let accountKeysFromLookups;
+	    if (args && 'accountKeysFromLookups' in args && args.accountKeysFromLookups) {
+	      if (this.numAccountKeysFromLookups != args.accountKeysFromLookups.writable.length + args.accountKeysFromLookups.readonly.length) {
+	        throw new Error('Failed to get account keys because of a mismatch in the number of account keys from lookups');
+	      }
+	      accountKeysFromLookups = args.accountKeysFromLookups;
+	    } else if (args && 'addressLookupTableAccounts' in args && args.addressLookupTableAccounts) {
+	      accountKeysFromLookups = this.resolveAddressTableLookups(args.addressLookupTableAccounts);
+	    } else if (this.addressTableLookups.length > 0) {
+	      throw new Error('Failed to get account keys because address table lookups were not resolved');
+	    }
+	    return new MessageAccountKeys(this.staticAccountKeys, accountKeysFromLookups);
+	  }
+	  isAccountSigner(index) {
+	    return index < this.header.numRequiredSignatures;
+	  }
+	  isAccountWritable(index) {
+	    const numSignedAccounts = this.header.numRequiredSignatures;
+	    const numStaticAccountKeys = this.staticAccountKeys.length;
+	    if (index >= numStaticAccountKeys) {
+	      const lookupAccountKeysIndex = index - numStaticAccountKeys;
+	      const numWritableLookupAccountKeys = this.addressTableLookups.reduce((count, lookup) => count + lookup.writableIndexes.length, 0);
+	      return lookupAccountKeysIndex < numWritableLookupAccountKeys;
+	    } else if (index >= this.header.numRequiredSignatures) {
+	      const unsignedAccountIndex = index - numSignedAccounts;
+	      const numUnsignedAccounts = numStaticAccountKeys - numSignedAccounts;
+	      const numWritableUnsignedAccounts = numUnsignedAccounts - this.header.numReadonlyUnsignedAccounts;
+	      return unsignedAccountIndex < numWritableUnsignedAccounts;
+	    } else {
+	      const numWritableSignedAccounts = numSignedAccounts - this.header.numReadonlySignedAccounts;
+	      return index < numWritableSignedAccounts;
+	    }
+	  }
+	  resolveAddressTableLookups(addressLookupTableAccounts) {
+	    const accountKeysFromLookups = {
+	      writable: [],
+	      readonly: []
+	    };
+	    for (const tableLookup of this.addressTableLookups) {
+	      const tableAccount = addressLookupTableAccounts.find(account => account.key.equals(tableLookup.accountKey));
+	      if (!tableAccount) {
+	        throw new Error(`Failed to find address lookup table account for table key ${tableLookup.accountKey.toBase58()}`);
+	      }
+	      for (const index of tableLookup.writableIndexes) {
+	        if (index < tableAccount.state.addresses.length) {
+	          accountKeysFromLookups.writable.push(tableAccount.state.addresses[index]);
+	        } else {
+	          throw new Error(`Failed to find address for index ${index} in address lookup table ${tableLookup.accountKey.toBase58()}`);
+	        }
+	      }
+	      for (const index of tableLookup.readonlyIndexes) {
+	        if (index < tableAccount.state.addresses.length) {
+	          accountKeysFromLookups.readonly.push(tableAccount.state.addresses[index]);
+	        } else {
+	          throw new Error(`Failed to find address for index ${index} in address lookup table ${tableLookup.accountKey.toBase58()}`);
+	        }
+	      }
+	    }
+	    return accountKeysFromLookups;
+	  }
+	  static compile(args) {
+	    const compiledKeys = CompiledKeys.compile(args.instructions, args.payerKey);
+	    const addressTableLookups = new Array();
+	    const accountKeysFromLookups = {
+	      writable: new Array(),
+	      readonly: new Array()
+	    };
+	    const lookupTableAccounts = args.addressLookupTableAccounts || [];
+	    for (const lookupTable of lookupTableAccounts) {
+	      const extractResult = compiledKeys.extractTableLookup(lookupTable);
+	      if (extractResult !== undefined) {
+	        const [addressTableLookup, {
+	          writable,
+	          readonly
+	        }] = extractResult;
+	        addressTableLookups.push(addressTableLookup);
+	        accountKeysFromLookups.writable.push(...writable);
+	        accountKeysFromLookups.readonly.push(...readonly);
+	      }
+	    }
+	    const [header, staticAccountKeys] = compiledKeys.getMessageComponents();
+	    const accountKeys = new MessageAccountKeys(staticAccountKeys, accountKeysFromLookups);
+	    const compiledInstructions = accountKeys.compileInstructions(args.instructions);
+	    return new MessageV0({
+	      header,
+	      staticAccountKeys,
+	      recentBlockhash: args.recentBlockhash,
+	      compiledInstructions,
+	      addressTableLookups
+	    });
+	  }
+	  serialize() {
+	    const encodedStaticAccountKeysLength = Array();
+	    encodeLength(encodedStaticAccountKeysLength, this.staticAccountKeys.length);
+	    const serializedInstructions = this.serializeInstructions();
+	    const encodedInstructionsLength = Array();
+	    encodeLength(encodedInstructionsLength, this.compiledInstructions.length);
+	    const serializedAddressTableLookups = this.serializeAddressTableLookups();
+	    const encodedAddressTableLookupsLength = Array();
+	    encodeLength(encodedAddressTableLookupsLength, this.addressTableLookups.length);
+	    const messageLayout = struct([u8('prefix'), struct([u8('numRequiredSignatures'), u8('numReadonlySignedAccounts'), u8('numReadonlyUnsignedAccounts')], 'header'), blob(encodedStaticAccountKeysLength.length, 'staticAccountKeysLength'), seq(publicKey$1(), this.staticAccountKeys.length, 'staticAccountKeys'), publicKey$1('recentBlockhash'), blob(encodedInstructionsLength.length, 'instructionsLength'), blob(serializedInstructions.length, 'serializedInstructions'), blob(encodedAddressTableLookupsLength.length, 'addressTableLookupsLength'), blob(serializedAddressTableLookups.length, 'serializedAddressTableLookups')]);
+	    const serializedMessage = new Uint8Array(PACKET_DATA_SIZE);
+	    const MESSAGE_VERSION_0_PREFIX = 1 << 7;
+	    const serializedMessageLength = messageLayout.encode({
+	      prefix: MESSAGE_VERSION_0_PREFIX,
+	      header: this.header,
+	      staticAccountKeysLength: new Uint8Array(encodedStaticAccountKeysLength),
+	      staticAccountKeys: this.staticAccountKeys.map(key => key.toBytes()),
+	      recentBlockhash: bs58$1.decode(this.recentBlockhash),
+	      instructionsLength: new Uint8Array(encodedInstructionsLength),
+	      serializedInstructions,
+	      addressTableLookupsLength: new Uint8Array(encodedAddressTableLookupsLength),
+	      serializedAddressTableLookups
+	    }, serializedMessage);
+	    return serializedMessage.slice(0, serializedMessageLength);
+	  }
+	  serializeInstructions() {
+	    let serializedLength = 0;
+	    const serializedInstructions = new Uint8Array(PACKET_DATA_SIZE);
+	    for (const instruction of this.compiledInstructions) {
+	      const encodedAccountKeyIndexesLength = Array();
+	      encodeLength(encodedAccountKeyIndexesLength, instruction.accountKeyIndexes.length);
+	      const encodedDataLength = Array();
+	      encodeLength(encodedDataLength, instruction.data.length);
+	      const instructionLayout = struct([u8('programIdIndex'), blob(encodedAccountKeyIndexesLength.length, 'encodedAccountKeyIndexesLength'), seq(u8(), instruction.accountKeyIndexes.length, 'accountKeyIndexes'), blob(encodedDataLength.length, 'encodedDataLength'), blob(instruction.data.length, 'data')]);
+	      serializedLength += instructionLayout.encode({
+	        programIdIndex: instruction.programIdIndex,
+	        encodedAccountKeyIndexesLength: new Uint8Array(encodedAccountKeyIndexesLength),
+	        accountKeyIndexes: instruction.accountKeyIndexes,
+	        encodedDataLength: new Uint8Array(encodedDataLength),
+	        data: instruction.data
+	      }, serializedInstructions, serializedLength);
+	    }
+	    return serializedInstructions.slice(0, serializedLength);
+	  }
+	  serializeAddressTableLookups() {
+	    let serializedLength = 0;
+	    const serializedAddressTableLookups = new Uint8Array(PACKET_DATA_SIZE);
+	    for (const lookup of this.addressTableLookups) {
+	      const encodedWritableIndexesLength = Array();
+	      encodeLength(encodedWritableIndexesLength, lookup.writableIndexes.length);
+	      const encodedReadonlyIndexesLength = Array();
+	      encodeLength(encodedReadonlyIndexesLength, lookup.readonlyIndexes.length);
+	      const addressTableLookupLayout = struct([publicKey$1('accountKey'), blob(encodedWritableIndexesLength.length, 'encodedWritableIndexesLength'), seq(u8(), lookup.writableIndexes.length, 'writableIndexes'), blob(encodedReadonlyIndexesLength.length, 'encodedReadonlyIndexesLength'), seq(u8(), lookup.readonlyIndexes.length, 'readonlyIndexes')]);
+	      serializedLength += addressTableLookupLayout.encode({
+	        accountKey: lookup.accountKey.toBytes(),
+	        encodedWritableIndexesLength: new Uint8Array(encodedWritableIndexesLength),
+	        writableIndexes: lookup.writableIndexes,
+	        encodedReadonlyIndexesLength: new Uint8Array(encodedReadonlyIndexesLength),
+	        readonlyIndexes: lookup.readonlyIndexes
+	      }, serializedAddressTableLookups, serializedLength);
+	    }
+	    return serializedAddressTableLookups.slice(0, serializedLength);
+	  }
+	  static deserialize(serializedMessage) {
+	    let byteArray = [...serializedMessage];
+	    const prefix = byteArray.shift();
+	    const maskedPrefix = prefix & VERSION_PREFIX_MASK;
+	    assert$1(prefix !== maskedPrefix, `Expected versioned message but received legacy message`);
+	    const version = maskedPrefix;
+	    assert$1(version === 0, `Expected versioned message with version 0 but found version ${version}`);
+	    const header = {
+	      numRequiredSignatures: byteArray.shift(),
+	      numReadonlySignedAccounts: byteArray.shift(),
+	      numReadonlyUnsignedAccounts: byteArray.shift()
+	    };
+	    const staticAccountKeys = [];
+	    const staticAccountKeysLength = decodeLength(byteArray);
+	    for (let i = 0; i < staticAccountKeysLength; i++) {
+	      staticAccountKeys.push(new PublicKey(byteArray.splice(0, PUBLIC_KEY_LENGTH)));
+	    }
+	    const recentBlockhash = bs58$1.encode(byteArray.splice(0, PUBLIC_KEY_LENGTH));
+	    const instructionCount = decodeLength(byteArray);
+	    const compiledInstructions = [];
+	    for (let i = 0; i < instructionCount; i++) {
+	      const programIdIndex = byteArray.shift();
+	      const accountKeyIndexesLength = decodeLength(byteArray);
+	      const accountKeyIndexes = byteArray.splice(0, accountKeyIndexesLength);
+	      const dataLength = decodeLength(byteArray);
+	      const data = new Uint8Array(byteArray.splice(0, dataLength));
+	      compiledInstructions.push({
+	        programIdIndex,
+	        accountKeyIndexes,
+	        data
+	      });
+	    }
+	    const addressTableLookupsCount = decodeLength(byteArray);
+	    const addressTableLookups = [];
+	    for (let i = 0; i < addressTableLookupsCount; i++) {
+	      const accountKey = new PublicKey(byteArray.splice(0, PUBLIC_KEY_LENGTH));
+	      const writableIndexesLength = decodeLength(byteArray);
+	      const writableIndexes = byteArray.splice(0, writableIndexesLength);
+	      const readonlyIndexesLength = decodeLength(byteArray);
+	      const readonlyIndexes = byteArray.splice(0, readonlyIndexesLength);
+	      addressTableLookups.push({
+	        accountKey,
+	        writableIndexes,
+	        readonlyIndexes
+	      });
+	    }
+	    return new MessageV0({
+	      header,
+	      staticAccountKeys,
+	      recentBlockhash,
+	      compiledInstructions,
+	      addressTableLookups
+	    });
+	  }
+	}
+
+	// eslint-disable-next-line no-redeclare
+	const VersionedMessage = {
+	  deserializeMessageVersion(serializedMessage) {
+	    const prefix = serializedMessage[0];
+	    const maskedPrefix = prefix & VERSION_PREFIX_MASK;
+
+	    // if the highest bit of the prefix is not set, the message is not versioned
+	    if (maskedPrefix === prefix) {
+	      return 'legacy';
+	    }
+
+	    // the lower 7 bits of the prefix indicate the message version
+	    return maskedPrefix;
+	  },
+	  deserialize: serializedMessage => {
+	    const version = VersionedMessage.deserializeMessageVersion(serializedMessage);
+	    if (version === 'legacy') {
+	      return Message.from(serializedMessage);
+	    }
+	    if (version === 0) {
+	      return MessageV0.deserialize(serializedMessage);
+	    } else {
+	      throw new Error(`Transaction message version ${version} deserialization is not supported`);
+	    }
+	  }
+	};
+
+	/**
 	 * Transaction signature as base-58 encoded string
 	 */
 
-	let TransactionStatus;
-
-	/**
-	 * Default (empty) signature
-	 */
-	(function (TransactionStatus) {
+	let TransactionStatus = /*#__PURE__*/function (TransactionStatus) {
 	  TransactionStatus[TransactionStatus["BLOCKHEIGHT_EXCEEDED"] = 0] = "BLOCKHEIGHT_EXCEEDED";
 	  TransactionStatus[TransactionStatus["PROCESSED"] = 1] = "PROCESSED";
 	  TransactionStatus[TransactionStatus["TIMED_OUT"] = 2] = "TIMED_OUT";
 	  TransactionStatus[TransactionStatus["NONCE_INVALID"] = 3] = "NONCE_INVALID";
-	})(TransactionStatus || (TransactionStatus = {}));
+	  return TransactionStatus;
+	}({});
+
+	/**
+	 * Default (empty) signature
+	 */
 	const DEFAULT_SIGNATURE = buffer.Buffer.alloc(SIGNATURE_LENGTH_IN_BYTES).fill(0);
 
 	/**
@@ -14582,25 +16707,34 @@ var solanaStakePool = (function (exports) {
 	 */
 
 	/**
+	 * List of TransactionInstruction object fields that may be initialized at construction
+	 */
+
+	/**
+	 * Configuration object for Transaction.serialize()
+	 */
+
+	/**
+	 * @internal
+	 */
+
+	/**
 	 * Transaction Instruction class
 	 */
 	class TransactionInstruction {
-	  /**
-	   * Public keys to include in this transaction
-	   * Boolean represents whether this pubkey needs to sign the transaction
-	   */
-
-	  /**
-	   * Program Id to execute
-	   */
-
-	  /**
-	   * Program input
-	   */
-
 	  constructor(opts) {
+	    /**
+	     * Public keys to include in this transaction
+	     * Boolean represents whether this pubkey needs to sign the transaction
+	     */
 	    this.keys = void 0;
+	    /**
+	     * Program Id to execute
+	     */
 	    this.programId = void 0;
+	    /**
+	     * Program input
+	     */
 	    this.data = buffer.Buffer.alloc(0);
 	    this.programId = opts.programId;
 	    this.keys = opts.keys;
@@ -14634,16 +16768,34 @@ var solanaStakePool = (function (exports) {
 	 */
 
 	/**
+	 * List of Transaction object fields that may be initialized at construction
+	 */
+
+	// For backward compatibility; an unfortunate consequence of being
+	// forced to over-export types by the documentation generator.
+	// See https://github.com/solana-labs/solana/pull/25820
+	/**
+	 * Blockhash-based transactions have a lifetime that are defined by
+	 * the blockhash they include. Any transaction whose blockhash is
+	 * too old will be rejected.
+	 */
+	/**
+	 * Use these options to construct a durable nonce transaction.
+	 */
+	/**
+	 * Nonce information to be used to build an offline Transaction.
+	 */
+	/**
+	 * @internal
+	 */
+	/**
 	 * Transaction class
 	 */
 	class Transaction {
 	  /**
-	   * Signatures for the transaction.  Typically created by invoking the
-	   * `sign()` method
-	   */
-
-	  /**
 	   * The first (payer) Transaction signature
+	   *
+	   * @returns {Buffer | null} Buffer of payer's signature
 	   */
 	  get signature() {
 	    if (this.signatures.length > 0) {
@@ -14656,18 +16808,57 @@ var solanaStakePool = (function (exports) {
 	   * The transaction fee payer
 	   */
 
+	  // Construct a transaction with a blockhash and lastValidBlockHeight
+
+	  // Construct a transaction using a durable nonce
+
+	  /**
+	   * @deprecated `TransactionCtorFields` has been deprecated and will be removed in a future version.
+	   * Please supply a `TransactionBlockhashCtor` instead.
+	   */
+
 	  /**
 	   * Construct an empty Transaction
 	   */
 	  constructor(opts) {
+	    /**
+	     * Signatures for the transaction.  Typically created by invoking the
+	     * `sign()` method
+	     */
 	    this.signatures = [];
 	    this.feePayer = void 0;
+	    /**
+	     * The instructions to atomically execute
+	     */
 	    this.instructions = [];
+	    /**
+	     * A recent transaction id. Must be populated by the caller
+	     */
 	    this.recentBlockhash = void 0;
+	    /**
+	     * the last block chain can advance to before tx is declared expired
+	     * */
 	    this.lastValidBlockHeight = void 0;
+	    /**
+	     * Optional Nonce information. If populated, transaction will use a durable
+	     * Nonce hash instead of a recentBlockhash. Must be populated by the caller
+	     */
 	    this.nonceInfo = void 0;
+	    /**
+	     * If this is a nonce transaction this represents the minimum slot from which
+	     * to evaluate if the nonce has advanced when attempting to confirm the
+	     * transaction. This protects against a case where the transaction confirmation
+	     * logic loads the nonce account from an old slot and assumes the mismatch in
+	     * nonce value implies that the nonce has been advanced.
+	     */
 	    this.minNonceContextSlot = void 0;
+	    /**
+	     * @internal
+	     */
 	    this._message = void 0;
+	    /**
+	     * @internal
+	     */
 	    this._json = void 0;
 	    if (!opts) {
 	      return;
@@ -14726,6 +16917,8 @@ var solanaStakePool = (function (exports) {
 
 	  /**
 	   * Add one or more instructions to this Transaction
+	   *
+	   * @param {Array< Transaction | TransactionInstruction | TransactionInstructionCtorFields >} items - Instructions to add to the Transaction
 	   */
 	  add(...items) {
 	    if (items.length === 0) {
@@ -14832,7 +17025,15 @@ var solanaStakePool = (function (exports) {
 	        return x.isWritable ? -1 : 1;
 	      }
 	      // Otherwise, sort by pubkey, stringwise.
-	      return x.pubkey.toBase58().localeCompare(y.pubkey.toBase58());
+	      const options = {
+	        localeMatcher: 'best fit',
+	        usage: 'sort',
+	        sensitivity: 'variant',
+	        ignorePunctuation: false,
+	        numeric: false,
+	        caseFirst: 'lower'
+	      };
+	      return x.pubkey.toBase58().localeCompare(y.pubkey.toBase58(), 'en', options);
 	    });
 
 	    // Move fee payer to the front
@@ -14904,8 +17105,8 @@ var solanaStakePool = (function (exports) {
 	      };
 	    });
 	    compiledInstructions.forEach(instruction => {
-	      assert(instruction.programIdIndex >= 0);
-	      instruction.accounts.forEach(keyIndex => assert(keyIndex >= 0));
+	      assert$1(instruction.programIdIndex >= 0);
+	      instruction.accounts.forEach(keyIndex => assert$1(keyIndex >= 0));
 	    });
 	    return new Message({
 	      header: {
@@ -14947,6 +17148,10 @@ var solanaStakePool = (function (exports) {
 
 	  /**
 	   * Get the estimated fee associated with a transaction
+	   *
+	   * @param {Connection} connection Connection to RPC Endpoint.
+	   *
+	   * @returns {Promise<number | null>} The estimated fee for the transaction
 	   */
 	  async getEstimatedFee(connection) {
 	    return (await connection.getFeeForMessage(this.compileMessage())).value;
@@ -14994,6 +17199,8 @@ var solanaStakePool = (function (exports) {
 	   * rejected.
 	   *
 	   * The Transaction must be assigned a valid `recentBlockhash` before invoking this method
+	   *
+	   * @param {Array<Signer>} signers Array of signers that will sign the transaction
 	   */
 	  sign(...signers) {
 	    if (signers.length === 0) {
@@ -15026,6 +17233,8 @@ var solanaStakePool = (function (exports) {
 	   * instructions.
 	   *
 	   * All the caveats from the `sign` method apply to `partialSign`
+	   *
+	   * @param {Array<Signer>} signers Array of signers that will sign the transaction
 	   */
 	  partialSign(...signers) {
 	    if (signers.length === 0) {
@@ -15063,6 +17272,9 @@ var solanaStakePool = (function (exports) {
 	   * Add an externally created signature to a transaction. The public key
 	   * must correspond to either the fee payer or a signer account in the transaction
 	   * instructions.
+	   *
+	   * @param {PublicKey} pubkey Public key that will be added to the transaction.
+	   * @param {Buffer} signature An externally created signature to add to the transaction.
 	   */
 	  addSignature(pubkey, signature) {
 	    this._compile(); // Ensure signatures array is populated
@@ -15073,7 +17285,7 @@ var solanaStakePool = (function (exports) {
 	   * @internal
 	   */
 	  _addSignature(pubkey, signature) {
-	    assert(signature.length === 64);
+	    assert$1(signature.length === 64);
 	    const index = this.signatures.findIndex(sigpair => pubkey.equals(sigpair.publicKey));
 	    if (index < 0) {
 	      throw new Error(`unknown signer: ${pubkey.toString()}`);
@@ -15085,6 +17297,8 @@ var solanaStakePool = (function (exports) {
 	   * Verify signatures of a Transaction
 	   * Optional parameter specifies if we're expecting a fully signed Transaction or a partially signed one.
 	   * If no boolean is provided, we expect a fully signed Transaction by default.
+	   *
+	   * @param {boolean} [requireAllSignatures=true] Require a fully signed Transaction
 	   */
 	  verifySignatures(requireAllSignatures) {
 	    return this._verifySignatures(this.serializeMessage(), requireAllSignatures === undefined ? true : requireAllSignatures);
@@ -15113,6 +17327,10 @@ var solanaStakePool = (function (exports) {
 
 	  /**
 	   * Serialize the Transaction in the wire format.
+	   *
+	   * @param {Buffer} [config] Config of transaction.
+	   *
+	   * @returns {Buffer} Signature of transaction in wire format.
 	   */
 	  serialize(config) {
 	    const {
@@ -15140,18 +17358,18 @@ var solanaStakePool = (function (exports) {
 	    encodeLength(signatureCount, signatures.length);
 	    const transactionLength = signatureCount.length + signatures.length * 64 + signData.length;
 	    const wireTransaction = buffer.Buffer.alloc(transactionLength);
-	    assert(signatures.length < 256);
+	    assert$1(signatures.length < 256);
 	    buffer.Buffer.from(signatureCount).copy(wireTransaction, 0);
 	    signatures.forEach(({
 	      signature
 	    }, index) => {
 	      if (signature !== null) {
-	        assert(signature.length === 64, `signature has invalid length`);
+	        assert$1(signature.length === 64, `signature has invalid length`);
 	        buffer.Buffer.from(signature).copy(wireTransaction, signatureCount.length + index * 64);
 	      }
 	    });
 	    signData.copy(wireTransaction, signatureCount.length + signatures.length * 64);
-	    assert(wireTransaction.length <= PACKET_DATA_SIZE, `Transaction too large: ${wireTransaction.length} > ${PACKET_DATA_SIZE}`);
+	    assert$1(wireTransaction.length <= PACKET_DATA_SIZE, `Transaction too large: ${wireTransaction.length} > ${PACKET_DATA_SIZE}`);
 	    return wireTransaction;
 	  }
 
@@ -15160,7 +17378,7 @@ var solanaStakePool = (function (exports) {
 	   * @internal
 	   */
 	  get keys() {
-	    assert(this.instructions.length === 1);
+	    assert$1(this.instructions.length === 1);
 	    return this.instructions[0].keys.map(keyObj => keyObj.pubkey);
 	  }
 
@@ -15169,7 +17387,7 @@ var solanaStakePool = (function (exports) {
 	   * @internal
 	   */
 	  get programId() {
-	    assert(this.instructions.length === 1);
+	    assert$1(this.instructions.length === 1);
 	    return this.instructions[0].programId;
 	  }
 
@@ -15178,12 +17396,16 @@ var solanaStakePool = (function (exports) {
 	   * @internal
 	   */
 	  get data() {
-	    assert(this.instructions.length === 1);
+	    assert$1(this.instructions.length === 1);
 	    return this.instructions[0].data;
 	  }
 
 	  /**
 	   * Parse a wire transaction into a Transaction object.
+	   *
+	   * @param {Buffer | Uint8Array | Array<number>} buffer Signature of wire Transaction
+	   *
+	   * @returns {Transaction} Transaction associated with the signature
 	   */
 	  static from(buffer$1) {
 	    // Slice up wire data
@@ -15200,6 +17422,11 @@ var solanaStakePool = (function (exports) {
 
 	  /**
 	   * Populate Transaction object from message and signatures
+	   *
+	   * @param {Message} message Message of transaction
+	   * @param {Array<string>} signatures List of signatures to assign to the transaction
+	   *
+	   * @returns {Transaction} The populated Transaction
 	   */
 	  static populate(message, signatures = []) {
 	    const transaction = new Transaction();
@@ -15235,15 +17462,248 @@ var solanaStakePool = (function (exports) {
 	  }
 	}
 
+	class TransactionMessage {
+	  constructor(args) {
+	    this.payerKey = void 0;
+	    this.instructions = void 0;
+	    this.recentBlockhash = void 0;
+	    this.payerKey = args.payerKey;
+	    this.instructions = args.instructions;
+	    this.recentBlockhash = args.recentBlockhash;
+	  }
+	  static decompile(message, args) {
+	    const {
+	      header,
+	      compiledInstructions,
+	      recentBlockhash
+	    } = message;
+	    const {
+	      numRequiredSignatures,
+	      numReadonlySignedAccounts,
+	      numReadonlyUnsignedAccounts
+	    } = header;
+	    const numWritableSignedAccounts = numRequiredSignatures - numReadonlySignedAccounts;
+	    assert$1(numWritableSignedAccounts > 0, 'Message header is invalid');
+	    const numWritableUnsignedAccounts = message.staticAccountKeys.length - numRequiredSignatures - numReadonlyUnsignedAccounts;
+	    assert$1(numWritableUnsignedAccounts >= 0, 'Message header is invalid');
+	    const accountKeys = message.getAccountKeys(args);
+	    const payerKey = accountKeys.get(0);
+	    if (payerKey === undefined) {
+	      throw new Error('Failed to decompile message because no account keys were found');
+	    }
+	    const instructions = [];
+	    for (const compiledIx of compiledInstructions) {
+	      const keys = [];
+	      for (const keyIndex of compiledIx.accountKeyIndexes) {
+	        const pubkey = accountKeys.get(keyIndex);
+	        if (pubkey === undefined) {
+	          throw new Error(`Failed to find key for account key index ${keyIndex}`);
+	        }
+	        const isSigner = keyIndex < numRequiredSignatures;
+	        let isWritable;
+	        if (isSigner) {
+	          isWritable = keyIndex < numWritableSignedAccounts;
+	        } else if (keyIndex < accountKeys.staticAccountKeys.length) {
+	          isWritable = keyIndex - numRequiredSignatures < numWritableUnsignedAccounts;
+	        } else {
+	          isWritable = keyIndex - accountKeys.staticAccountKeys.length <
+	          // accountKeysFromLookups cannot be undefined because we already found a pubkey for this index above
+	          accountKeys.accountKeysFromLookups.writable.length;
+	        }
+	        keys.push({
+	          pubkey,
+	          isSigner: keyIndex < header.numRequiredSignatures,
+	          isWritable
+	        });
+	      }
+	      const programId = accountKeys.get(compiledIx.programIdIndex);
+	      if (programId === undefined) {
+	        throw new Error(`Failed to find program id for program id index ${compiledIx.programIdIndex}`);
+	      }
+	      instructions.push(new TransactionInstruction({
+	        programId,
+	        data: toBuffer(compiledIx.data),
+	        keys
+	      }));
+	    }
+	    return new TransactionMessage({
+	      payerKey,
+	      instructions,
+	      recentBlockhash
+	    });
+	  }
+	  compileToLegacyMessage() {
+	    return Message.compile({
+	      payerKey: this.payerKey,
+	      recentBlockhash: this.recentBlockhash,
+	      instructions: this.instructions
+	    });
+	  }
+	  compileToV0Message(addressLookupTableAccounts) {
+	    return MessageV0.compile({
+	      payerKey: this.payerKey,
+	      recentBlockhash: this.recentBlockhash,
+	      instructions: this.instructions,
+	      addressLookupTableAccounts
+	    });
+	  }
+	}
+
+	/**
+	 * Versioned transaction class
+	 */
+	class VersionedTransaction {
+	  get version() {
+	    return this.message.version;
+	  }
+	  constructor(message, signatures) {
+	    this.signatures = void 0;
+	    this.message = void 0;
+	    if (signatures !== undefined) {
+	      assert$1(signatures.length === message.header.numRequiredSignatures, 'Expected signatures length to be equal to the number of required signatures');
+	      this.signatures = signatures;
+	    } else {
+	      const defaultSignatures = [];
+	      for (let i = 0; i < message.header.numRequiredSignatures; i++) {
+	        defaultSignatures.push(new Uint8Array(SIGNATURE_LENGTH_IN_BYTES));
+	      }
+	      this.signatures = defaultSignatures;
+	    }
+	    this.message = message;
+	  }
+	  serialize() {
+	    const serializedMessage = this.message.serialize();
+	    const encodedSignaturesLength = Array();
+	    encodeLength(encodedSignaturesLength, this.signatures.length);
+	    const transactionLayout = struct([blob(encodedSignaturesLength.length, 'encodedSignaturesLength'), seq(signature(), this.signatures.length, 'signatures'), blob(serializedMessage.length, 'serializedMessage')]);
+	    const serializedTransaction = new Uint8Array(2048);
+	    const serializedTransactionLength = transactionLayout.encode({
+	      encodedSignaturesLength: new Uint8Array(encodedSignaturesLength),
+	      signatures: this.signatures,
+	      serializedMessage
+	    }, serializedTransaction);
+	    return serializedTransaction.slice(0, serializedTransactionLength);
+	  }
+	  static deserialize(serializedTransaction) {
+	    let byteArray = [...serializedTransaction];
+	    const signatures = [];
+	    const signaturesLength = decodeLength(byteArray);
+	    for (let i = 0; i < signaturesLength; i++) {
+	      signatures.push(new Uint8Array(byteArray.splice(0, SIGNATURE_LENGTH_IN_BYTES)));
+	    }
+	    const message = VersionedMessage.deserialize(new Uint8Array(byteArray));
+	    return new VersionedTransaction(message, signatures);
+	  }
+	  sign(signers) {
+	    const messageData = this.message.serialize();
+	    const signerPubkeys = this.message.staticAccountKeys.slice(0, this.message.header.numRequiredSignatures);
+	    for (const signer of signers) {
+	      const signerIndex = signerPubkeys.findIndex(pubkey => pubkey.equals(signer.publicKey));
+	      assert$1(signerIndex >= 0, `Cannot sign with non signer key ${signer.publicKey.toBase58()}`);
+	      this.signatures[signerIndex] = sign(messageData, signer.secretKey);
+	    }
+	  }
+	  addSignature(publicKey, signature) {
+	    assert$1(signature.byteLength === 64, 'Signature must be 64 bytes long');
+	    const signerPubkeys = this.message.staticAccountKeys.slice(0, this.message.header.numRequiredSignatures);
+	    const signerIndex = signerPubkeys.findIndex(pubkey => pubkey.equals(publicKey));
+	    assert$1(signerIndex >= 0, `Can not add signature; \`${publicKey.toBase58()}\` is not required to sign this transaction`);
+	    this.signatures[signerIndex] = signature;
+	  }
+	}
+
+	// TODO: These constants should be removed in favor of reading them out of a
+	// Syscall account
+
+	/**
+	 * @internal
+	 */
+	const NUM_TICKS_PER_SECOND = 160;
+
+	/**
+	 * @internal
+	 */
+	const DEFAULT_TICKS_PER_SLOT = 64;
+
+	/**
+	 * @internal
+	 */
+	const NUM_SLOTS_PER_SECOND = NUM_TICKS_PER_SECOND / DEFAULT_TICKS_PER_SLOT;
+
+	/**
+	 * @internal
+	 */
+	const MS_PER_SLOT = 1000 / NUM_SLOTS_PER_SECOND;
+
 	const SYSVAR_CLOCK_PUBKEY = new PublicKey('SysvarC1ock11111111111111111111111111111111');
-	new PublicKey('SysvarEpochSchedu1e111111111111111111111111');
-	new PublicKey('Sysvar1nstructions1111111111111111111111111');
+	const SYSVAR_EPOCH_SCHEDULE_PUBKEY = new PublicKey('SysvarEpochSchedu1e111111111111111111111111');
+	const SYSVAR_INSTRUCTIONS_PUBKEY = new PublicKey('Sysvar1nstructions1111111111111111111111111');
 	const SYSVAR_RECENT_BLOCKHASHES_PUBKEY = new PublicKey('SysvarRecentB1ockHashes11111111111111111111');
 	const SYSVAR_RENT_PUBKEY = new PublicKey('SysvarRent111111111111111111111111111111111');
-	new PublicKey('SysvarRewards111111111111111111111111111111');
-	new PublicKey('SysvarS1otHashes111111111111111111111111111');
-	new PublicKey('SysvarS1otHistory11111111111111111111111111');
+	const SYSVAR_REWARDS_PUBKEY = new PublicKey('SysvarRewards111111111111111111111111111111');
+	const SYSVAR_SLOT_HASHES_PUBKEY = new PublicKey('SysvarS1otHashes111111111111111111111111111');
+	const SYSVAR_SLOT_HISTORY_PUBKEY = new PublicKey('SysvarS1otHistory11111111111111111111111111');
 	const SYSVAR_STAKE_HISTORY_PUBKEY = new PublicKey('SysvarStakeHistory1111111111111111111111111');
+
+	/**
+	 * Sign, send and confirm a transaction.
+	 *
+	 * If `commitment` option is not specified, defaults to 'max' commitment.
+	 *
+	 * @param {Connection} connection
+	 * @param {Transaction} transaction
+	 * @param {Array<Signer>} signers
+	 * @param {ConfirmOptions} [options]
+	 * @returns {Promise<TransactionSignature>}
+	 */
+	async function sendAndConfirmTransaction(connection, transaction, signers, options) {
+	  const sendOptions = options && {
+	    skipPreflight: options.skipPreflight,
+	    preflightCommitment: options.preflightCommitment || options.commitment,
+	    maxRetries: options.maxRetries,
+	    minContextSlot: options.minContextSlot
+	  };
+	  const signature = await connection.sendTransaction(transaction, signers, sendOptions);
+	  let status;
+	  if (transaction.recentBlockhash != null && transaction.lastValidBlockHeight != null) {
+	    status = (await connection.confirmTransaction({
+	      abortSignal: options?.abortSignal,
+	      signature: signature,
+	      blockhash: transaction.recentBlockhash,
+	      lastValidBlockHeight: transaction.lastValidBlockHeight
+	    }, options && options.commitment)).value;
+	  } else if (transaction.minNonceContextSlot != null && transaction.nonceInfo != null) {
+	    const {
+	      nonceInstruction
+	    } = transaction.nonceInfo;
+	    const nonceAccountPubkey = nonceInstruction.keys[0].pubkey;
+	    status = (await connection.confirmTransaction({
+	      abortSignal: options?.abortSignal,
+	      minContextSlot: transaction.minNonceContextSlot,
+	      nonceAccountPubkey,
+	      nonceValue: transaction.nonceInfo.nonce,
+	      signature
+	    }, options && options.commitment)).value;
+	  } else {
+	    if (options?.abortSignal != null) {
+	      console.warn('sendAndConfirmTransaction(): A transaction with a deprecated confirmation strategy was ' + 'supplied along with an `abortSignal`. Only transactions having `lastValidBlockHeight` ' + 'or a combination of `nonceInfo` and `minNonceContextSlot` are abortable.');
+	    }
+	    status = (await connection.confirmTransaction(signature, options && options.commitment)).value;
+	  }
+	  if (status.err) {
+	    throw new Error(`Transaction ${signature} failed (${JSON.stringify(status)})`);
+	  }
+	  return signature;
+	}
+
+	// zzz
+	function sleep(ms) {
+	  return new Promise(resolve => setTimeout(resolve, ms));
+	}
+
+	/**
+	 * @internal
+	 */
 
 	/**
 	 * Populate a buffer of instruction data using an InstructionType
@@ -15256,6 +17716,23 @@ var solanaStakePool = (function (exports) {
 	    instruction: type.index
 	  }, fields);
 	  type.layout.encode(layoutFields, data);
+	  return data;
+	}
+
+	/**
+	 * Decode instruction data buffer using an InstructionType
+	 * @internal
+	 */
+	function decodeData$1(type, buffer) {
+	  let data;
+	  try {
+	    data = type.layout.decode(buffer);
+	  } catch (err) {
+	    throw new Error('invalid instruction; ' + err);
+	  }
+	  if (data.instruction !== type.index) {
+	    throw new Error(`invalid instruction; instruction index mismatch ${data.instruction} != ${type.index}`);
+	  }
 	  return data;
 	}
 
@@ -15277,8 +17754,44 @@ var solanaStakePool = (function (exports) {
 	 *
 	 * @internal
 	 */
-	const NonceAccountLayout = struct([u32('version'), u32('state'), publicKey$2('authorizedPubkey'), publicKey$2('nonce'), struct([FeeCalculatorLayout], 'feeCalculator')]);
+	const NonceAccountLayout = struct([u32('version'), u32('state'), publicKey$1('authorizedPubkey'), publicKey$1('nonce'), struct([FeeCalculatorLayout], 'feeCalculator')]);
 	const NONCE_ACCOUNT_LENGTH = NonceAccountLayout.span;
+
+	/**
+	 * A durable nonce is a 32 byte value encoded as a base58 string.
+	 */
+
+	/**
+	 * NonceAccount class
+	 */
+	class NonceAccount {
+	  /**
+	   * @internal
+	   */
+	  constructor(args) {
+	    this.authorizedPubkey = void 0;
+	    this.nonce = void 0;
+	    this.feeCalculator = void 0;
+	    this.authorizedPubkey = args.authorizedPubkey;
+	    this.nonce = args.nonce;
+	    this.feeCalculator = args.feeCalculator;
+	  }
+
+	  /**
+	   * Deserialize NonceAccount from the account data.
+	   *
+	   * @param buffer account data
+	   * @return NonceAccount
+	   */
+	  static fromAccountData(buffer) {
+	    const nonceAccount = NonceAccountLayout.decode(toBuffer(buffer), 0);
+	    return new NonceAccount({
+	      authorizedPubkey: new PublicKey(nonceAccount.authorizedPubkey),
+	      nonce: new PublicKey(nonceAccount.nonce).toString(),
+	      feeCalculator: nonceAccount.feeCalculator
+	    });
+	  }
+	}
 
 	const encodeDecode$1 = layout => {
 	  const decode = layout.decode.bind(layout);
@@ -15305,7 +17818,327 @@ var solanaStakePool = (function (exports) {
 	  };
 	  return bigIntLayout;
 	};
-	const u64$2 = bigInt$1(8);
+	const u64$1 = bigInt$1(8);
+
+	/**
+	 * Create account system transaction params
+	 */
+
+	/**
+	 * Transfer system transaction params
+	 */
+
+	/**
+	 * Assign system transaction params
+	 */
+
+	/**
+	 * Create account with seed system transaction params
+	 */
+
+	/**
+	 * Create nonce account system transaction params
+	 */
+
+	/**
+	 * Create nonce account with seed system transaction params
+	 */
+
+	/**
+	 * Initialize nonce account system instruction params
+	 */
+
+	/**
+	 * Advance nonce account system instruction params
+	 */
+
+	/**
+	 * Withdraw nonce account system transaction params
+	 */
+
+	/**
+	 * Authorize nonce account system transaction params
+	 */
+
+	/**
+	 * Allocate account system transaction params
+	 */
+
+	/**
+	 * Allocate account with seed system transaction params
+	 */
+
+	/**
+	 * Assign account with seed system transaction params
+	 */
+
+	/**
+	 * Transfer with seed system transaction params
+	 */
+
+	/** Decoded transfer system transaction instruction */
+
+	/** Decoded transferWithSeed system transaction instruction */
+
+	/**
+	 * System Instruction class
+	 */
+	class SystemInstruction {
+	  /**
+	   * @internal
+	   */
+	  constructor() {}
+
+	  /**
+	   * Decode a system instruction and retrieve the instruction type.
+	   */
+	  static decodeInstructionType(instruction) {
+	    this.checkProgramId(instruction.programId);
+	    const instructionTypeLayout = u32('instruction');
+	    const typeIndex = instructionTypeLayout.decode(instruction.data);
+	    let type;
+	    for (const [ixType, layout] of Object.entries(SYSTEM_INSTRUCTION_LAYOUTS)) {
+	      if (layout.index == typeIndex) {
+	        type = ixType;
+	        break;
+	      }
+	    }
+	    if (!type) {
+	      throw new Error('Instruction type incorrect; not a SystemInstruction');
+	    }
+	    return type;
+	  }
+
+	  /**
+	   * Decode a create account system instruction and retrieve the instruction params.
+	   */
+	  static decodeCreateAccount(instruction) {
+	    this.checkProgramId(instruction.programId);
+	    this.checkKeyLength(instruction.keys, 2);
+	    const {
+	      lamports,
+	      space,
+	      programId
+	    } = decodeData$1(SYSTEM_INSTRUCTION_LAYOUTS.Create, instruction.data);
+	    return {
+	      fromPubkey: instruction.keys[0].pubkey,
+	      newAccountPubkey: instruction.keys[1].pubkey,
+	      lamports,
+	      space,
+	      programId: new PublicKey(programId)
+	    };
+	  }
+
+	  /**
+	   * Decode a transfer system instruction and retrieve the instruction params.
+	   */
+	  static decodeTransfer(instruction) {
+	    this.checkProgramId(instruction.programId);
+	    this.checkKeyLength(instruction.keys, 2);
+	    const {
+	      lamports
+	    } = decodeData$1(SYSTEM_INSTRUCTION_LAYOUTS.Transfer, instruction.data);
+	    return {
+	      fromPubkey: instruction.keys[0].pubkey,
+	      toPubkey: instruction.keys[1].pubkey,
+	      lamports
+	    };
+	  }
+
+	  /**
+	   * Decode a transfer with seed system instruction and retrieve the instruction params.
+	   */
+	  static decodeTransferWithSeed(instruction) {
+	    this.checkProgramId(instruction.programId);
+	    this.checkKeyLength(instruction.keys, 3);
+	    const {
+	      lamports,
+	      seed,
+	      programId
+	    } = decodeData$1(SYSTEM_INSTRUCTION_LAYOUTS.TransferWithSeed, instruction.data);
+	    return {
+	      fromPubkey: instruction.keys[0].pubkey,
+	      basePubkey: instruction.keys[1].pubkey,
+	      toPubkey: instruction.keys[2].pubkey,
+	      lamports,
+	      seed,
+	      programId: new PublicKey(programId)
+	    };
+	  }
+
+	  /**
+	   * Decode an allocate system instruction and retrieve the instruction params.
+	   */
+	  static decodeAllocate(instruction) {
+	    this.checkProgramId(instruction.programId);
+	    this.checkKeyLength(instruction.keys, 1);
+	    const {
+	      space
+	    } = decodeData$1(SYSTEM_INSTRUCTION_LAYOUTS.Allocate, instruction.data);
+	    return {
+	      accountPubkey: instruction.keys[0].pubkey,
+	      space
+	    };
+	  }
+
+	  /**
+	   * Decode an allocate with seed system instruction and retrieve the instruction params.
+	   */
+	  static decodeAllocateWithSeed(instruction) {
+	    this.checkProgramId(instruction.programId);
+	    this.checkKeyLength(instruction.keys, 1);
+	    const {
+	      base,
+	      seed,
+	      space,
+	      programId
+	    } = decodeData$1(SYSTEM_INSTRUCTION_LAYOUTS.AllocateWithSeed, instruction.data);
+	    return {
+	      accountPubkey: instruction.keys[0].pubkey,
+	      basePubkey: new PublicKey(base),
+	      seed,
+	      space,
+	      programId: new PublicKey(programId)
+	    };
+	  }
+
+	  /**
+	   * Decode an assign system instruction and retrieve the instruction params.
+	   */
+	  static decodeAssign(instruction) {
+	    this.checkProgramId(instruction.programId);
+	    this.checkKeyLength(instruction.keys, 1);
+	    const {
+	      programId
+	    } = decodeData$1(SYSTEM_INSTRUCTION_LAYOUTS.Assign, instruction.data);
+	    return {
+	      accountPubkey: instruction.keys[0].pubkey,
+	      programId: new PublicKey(programId)
+	    };
+	  }
+
+	  /**
+	   * Decode an assign with seed system instruction and retrieve the instruction params.
+	   */
+	  static decodeAssignWithSeed(instruction) {
+	    this.checkProgramId(instruction.programId);
+	    this.checkKeyLength(instruction.keys, 1);
+	    const {
+	      base,
+	      seed,
+	      programId
+	    } = decodeData$1(SYSTEM_INSTRUCTION_LAYOUTS.AssignWithSeed, instruction.data);
+	    return {
+	      accountPubkey: instruction.keys[0].pubkey,
+	      basePubkey: new PublicKey(base),
+	      seed,
+	      programId: new PublicKey(programId)
+	    };
+	  }
+
+	  /**
+	   * Decode a create account with seed system instruction and retrieve the instruction params.
+	   */
+	  static decodeCreateWithSeed(instruction) {
+	    this.checkProgramId(instruction.programId);
+	    this.checkKeyLength(instruction.keys, 2);
+	    const {
+	      base,
+	      seed,
+	      lamports,
+	      space,
+	      programId
+	    } = decodeData$1(SYSTEM_INSTRUCTION_LAYOUTS.CreateWithSeed, instruction.data);
+	    return {
+	      fromPubkey: instruction.keys[0].pubkey,
+	      newAccountPubkey: instruction.keys[1].pubkey,
+	      basePubkey: new PublicKey(base),
+	      seed,
+	      lamports,
+	      space,
+	      programId: new PublicKey(programId)
+	    };
+	  }
+
+	  /**
+	   * Decode a nonce initialize system instruction and retrieve the instruction params.
+	   */
+	  static decodeNonceInitialize(instruction) {
+	    this.checkProgramId(instruction.programId);
+	    this.checkKeyLength(instruction.keys, 3);
+	    const {
+	      authorized
+	    } = decodeData$1(SYSTEM_INSTRUCTION_LAYOUTS.InitializeNonceAccount, instruction.data);
+	    return {
+	      noncePubkey: instruction.keys[0].pubkey,
+	      authorizedPubkey: new PublicKey(authorized)
+	    };
+	  }
+
+	  /**
+	   * Decode a nonce advance system instruction and retrieve the instruction params.
+	   */
+	  static decodeNonceAdvance(instruction) {
+	    this.checkProgramId(instruction.programId);
+	    this.checkKeyLength(instruction.keys, 3);
+	    decodeData$1(SYSTEM_INSTRUCTION_LAYOUTS.AdvanceNonceAccount, instruction.data);
+	    return {
+	      noncePubkey: instruction.keys[0].pubkey,
+	      authorizedPubkey: instruction.keys[2].pubkey
+	    };
+	  }
+
+	  /**
+	   * Decode a nonce withdraw system instruction and retrieve the instruction params.
+	   */
+	  static decodeNonceWithdraw(instruction) {
+	    this.checkProgramId(instruction.programId);
+	    this.checkKeyLength(instruction.keys, 5);
+	    const {
+	      lamports
+	    } = decodeData$1(SYSTEM_INSTRUCTION_LAYOUTS.WithdrawNonceAccount, instruction.data);
+	    return {
+	      noncePubkey: instruction.keys[0].pubkey,
+	      toPubkey: instruction.keys[1].pubkey,
+	      authorizedPubkey: instruction.keys[4].pubkey,
+	      lamports
+	    };
+	  }
+
+	  /**
+	   * Decode a nonce authorize system instruction and retrieve the instruction params.
+	   */
+	  static decodeNonceAuthorize(instruction) {
+	    this.checkProgramId(instruction.programId);
+	    this.checkKeyLength(instruction.keys, 2);
+	    const {
+	      authorized
+	    } = decodeData$1(SYSTEM_INSTRUCTION_LAYOUTS.AuthorizeNonceAccount, instruction.data);
+	    return {
+	      noncePubkey: instruction.keys[0].pubkey,
+	      authorizedPubkey: instruction.keys[1].pubkey,
+	      newAuthorizedPubkey: new PublicKey(authorized)
+	    };
+	  }
+
+	  /**
+	   * @internal
+	   */
+	  static checkProgramId(programId) {
+	    if (!programId.equals(SystemProgram.programId)) {
+	      throw new Error('invalid instruction; programId is not SystemProgram');
+	    }
+	  }
+
+	  /**
+	   * @internal
+	   */
+	  static checkKeyLength(keys, expectedLength) {
+	    if (keys.length < expectedLength) {
+	      throw new Error(`invalid instruction; found ${keys.length} keys, expected at least ${expectedLength}`);
+	    }
+	  }
+	}
 
 	/**
 	 * An enumeration of valid SystemInstructionType's
@@ -15318,19 +18151,19 @@ var solanaStakePool = (function (exports) {
 	const SYSTEM_INSTRUCTION_LAYOUTS = Object.freeze({
 	  Create: {
 	    index: 0,
-	    layout: struct([u32('instruction'), ns64('lamports'), ns64('space'), publicKey$2('programId')])
+	    layout: struct([u32('instruction'), ns64('lamports'), ns64('space'), publicKey$1('programId')])
 	  },
 	  Assign: {
 	    index: 1,
-	    layout: struct([u32('instruction'), publicKey$2('programId')])
+	    layout: struct([u32('instruction'), publicKey$1('programId')])
 	  },
 	  Transfer: {
 	    index: 2,
-	    layout: struct([u32('instruction'), u64$2('lamports')])
+	    layout: struct([u32('instruction'), u64$1('lamports')])
 	  },
 	  CreateWithSeed: {
 	    index: 3,
-	    layout: struct([u32('instruction'), publicKey$2('base'), rustString('seed'), ns64('lamports'), ns64('space'), publicKey$2('programId')])
+	    layout: struct([u32('instruction'), publicKey$1('base'), rustString('seed'), ns64('lamports'), ns64('space'), publicKey$1('programId')])
 	  },
 	  AdvanceNonceAccount: {
 	    index: 4,
@@ -15342,11 +18175,11 @@ var solanaStakePool = (function (exports) {
 	  },
 	  InitializeNonceAccount: {
 	    index: 6,
-	    layout: struct([u32('instruction'), publicKey$2('authorized')])
+	    layout: struct([u32('instruction'), publicKey$1('authorized')])
 	  },
 	  AuthorizeNonceAccount: {
 	    index: 7,
-	    layout: struct([u32('instruction'), publicKey$2('authorized')])
+	    layout: struct([u32('instruction'), publicKey$1('authorized')])
 	  },
 	  Allocate: {
 	    index: 8,
@@ -15354,15 +18187,15 @@ var solanaStakePool = (function (exports) {
 	  },
 	  AllocateWithSeed: {
 	    index: 9,
-	    layout: struct([u32('instruction'), publicKey$2('base'), rustString('seed'), ns64('space'), publicKey$2('programId')])
+	    layout: struct([u32('instruction'), publicKey$1('base'), rustString('seed'), ns64('space'), publicKey$1('programId')])
 	  },
 	  AssignWithSeed: {
 	    index: 10,
-	    layout: struct([u32('instruction'), publicKey$2('base'), rustString('seed'), publicKey$2('programId')])
+	    layout: struct([u32('instruction'), publicKey$1('base'), rustString('seed'), publicKey$1('programId')])
 	  },
 	  TransferWithSeed: {
 	    index: 11,
-	    layout: struct([u32('instruction'), u64$2('lamports'), rustString('seed'), publicKey$2('programId')])
+	    layout: struct([u32('instruction'), u64$1('lamports'), rustString('seed'), publicKey$1('programId')])
 	  },
 	  UpgradeNonceAccount: {
 	    index: 12,
@@ -15720,33 +18553,704 @@ var solanaStakePool = (function (exports) {
 	}
 	SystemProgram.programId = new PublicKey('11111111111111111111111111111111');
 
-	new PublicKey('BPFLoader2111111111111111111111111111111111');
-	({
-	  index: 1,
-	  layout: struct([u32('typeIndex'), u64$2('deactivationSlot'), nu64('lastExtendedSlot'), u8('lastExtendedStartIndex'), u8(),
-	  // option
-	  seq(publicKey$2(), offset(u8(), -1), 'authority')])
-	});
+	// Keep program chunks under PACKET_DATA_SIZE, leaving enough room for the
+	// rest of the Transaction fields
+	//
+	// TODO: replace 300 with a proper constant for the size of the other
+	// Transaction fields
+	const CHUNK_SIZE = PACKET_DATA_SIZE - 300;
 
-	const PublicKeyFromString$1 = coerce(instance(PublicKey), string(), value => new PublicKey(value));
-	const RawAccountDataResult = tuple([string(), literal('base64')]);
-	const BufferFromRawAccountData = coerce(instance(buffer.Buffer), RawAccountDataResult, value => buffer.Buffer.from(value[0], 'base64'));
+	/**
+	 * Program loader interface
+	 */
+	class Loader {
+	  /**
+	   * @internal
+	   */
+	  constructor() {}
+
+	  /**
+	   * Amount of program data placed in each load Transaction
+	   */
+
+	  /**
+	   * Minimum number of signatures required to load a program not including
+	   * retries
+	   *
+	   * Can be used to calculate transaction fees
+	   */
+	  static getMinNumSignatures(dataLength) {
+	    return 2 * (
+	    // Every transaction requires two signatures (payer + program)
+	    Math.ceil(dataLength / Loader.chunkSize) + 1 +
+	    // Add one for Create transaction
+	    1) // Add one for Finalize transaction
+	    ;
+	  }
+
+	  /**
+	   * Loads a generic program
+	   *
+	   * @param connection The connection to use
+	   * @param payer System account that pays to load the program
+	   * @param program Account to load the program into
+	   * @param programId Public key that identifies the loader
+	   * @param data Program octets
+	   * @return true if program was loaded successfully, false if program was already loaded
+	   */
+	  static async load(connection, payer, program, programId, data) {
+	    {
+	      const balanceNeeded = await connection.getMinimumBalanceForRentExemption(data.length);
+
+	      // Fetch program account info to check if it has already been created
+	      const programInfo = await connection.getAccountInfo(program.publicKey, 'confirmed');
+	      let transaction = null;
+	      if (programInfo !== null) {
+	        if (programInfo.executable) {
+	          console.error('Program load failed, account is already executable');
+	          return false;
+	        }
+	        if (programInfo.data.length !== data.length) {
+	          transaction = transaction || new Transaction();
+	          transaction.add(SystemProgram.allocate({
+	            accountPubkey: program.publicKey,
+	            space: data.length
+	          }));
+	        }
+	        if (!programInfo.owner.equals(programId)) {
+	          transaction = transaction || new Transaction();
+	          transaction.add(SystemProgram.assign({
+	            accountPubkey: program.publicKey,
+	            programId
+	          }));
+	        }
+	        if (programInfo.lamports < balanceNeeded) {
+	          transaction = transaction || new Transaction();
+	          transaction.add(SystemProgram.transfer({
+	            fromPubkey: payer.publicKey,
+	            toPubkey: program.publicKey,
+	            lamports: balanceNeeded - programInfo.lamports
+	          }));
+	        }
+	      } else {
+	        transaction = new Transaction().add(SystemProgram.createAccount({
+	          fromPubkey: payer.publicKey,
+	          newAccountPubkey: program.publicKey,
+	          lamports: balanceNeeded > 0 ? balanceNeeded : 1,
+	          space: data.length,
+	          programId
+	        }));
+	      }
+
+	      // If the account is already created correctly, skip this step
+	      // and proceed directly to loading instructions
+	      if (transaction !== null) {
+	        await sendAndConfirmTransaction(connection, transaction, [payer, program], {
+	          commitment: 'confirmed'
+	        });
+	      }
+	    }
+	    const dataLayout = struct([u32('instruction'), u32('offset'), u32('bytesLength'), u32('bytesLengthPadding'), seq(u8('byte'), offset(u32(), -8), 'bytes')]);
+	    const chunkSize = Loader.chunkSize;
+	    let offset$1 = 0;
+	    let array = data;
+	    let transactions = [];
+	    while (array.length > 0) {
+	      const bytes = array.slice(0, chunkSize);
+	      const data = buffer.Buffer.alloc(chunkSize + 16);
+	      dataLayout.encode({
+	        instruction: 0,
+	        // Load instruction
+	        offset: offset$1,
+	        bytes: bytes,
+	        bytesLength: 0,
+	        bytesLengthPadding: 0
+	      }, data);
+	      const transaction = new Transaction().add({
+	        keys: [{
+	          pubkey: program.publicKey,
+	          isSigner: true,
+	          isWritable: true
+	        }],
+	        programId,
+	        data
+	      });
+	      transactions.push(sendAndConfirmTransaction(connection, transaction, [payer, program], {
+	        commitment: 'confirmed'
+	      }));
+
+	      // Delay between sends in an attempt to reduce rate limit errors
+	      if (connection._rpcEndpoint.includes('solana.com')) {
+	        const REQUESTS_PER_SECOND = 4;
+	        await sleep(1000 / REQUESTS_PER_SECOND);
+	      }
+	      offset$1 += chunkSize;
+	      array = array.slice(chunkSize);
+	    }
+	    await Promise.all(transactions);
+
+	    // Finalize the account loaded with program data for execution
+	    {
+	      const dataLayout = struct([u32('instruction')]);
+	      const data = buffer.Buffer.alloc(dataLayout.span);
+	      dataLayout.encode({
+	        instruction: 1 // Finalize instruction
+	      }, data);
+	      const transaction = new Transaction().add({
+	        keys: [{
+	          pubkey: program.publicKey,
+	          isSigner: true,
+	          isWritable: true
+	        }, {
+	          pubkey: SYSVAR_RENT_PUBKEY,
+	          isSigner: false,
+	          isWritable: false
+	        }],
+	        programId,
+	        data
+	      });
+	      const deployCommitment = 'processed';
+	      const finalizeSignature = await connection.sendTransaction(transaction, [payer, program], {
+	        preflightCommitment: deployCommitment
+	      });
+	      const {
+	        context,
+	        value
+	      } = await connection.confirmTransaction({
+	        signature: finalizeSignature,
+	        lastValidBlockHeight: transaction.lastValidBlockHeight,
+	        blockhash: transaction.recentBlockhash
+	      }, deployCommitment);
+	      if (value.err) {
+	        throw new Error(`Transaction ${finalizeSignature} failed (${JSON.stringify(value)})`);
+	      }
+	      // We prevent programs from being usable until the slot after their deployment.
+	      // See https://github.com/solana-labs/solana/pull/29654
+	      while (true // eslint-disable-line no-constant-condition
+	      ) {
+	        try {
+	          const currentSlot = await connection.getSlot({
+	            commitment: deployCommitment
+	          });
+	          if (currentSlot > context.slot) {
+	            break;
+	          }
+	        } catch {
+	          /* empty */
+	        }
+	        await new Promise(resolve => setTimeout(resolve, Math.round(MS_PER_SLOT / 2)));
+	      }
+	    }
+
+	    // success
+	    return true;
+	  }
+	}
+	Loader.chunkSize = CHUNK_SIZE;
+
+	const BPF_LOADER_PROGRAM_ID = new PublicKey('BPFLoader2111111111111111111111111111111111');
+
+	/**
+	 * Factory class for transactions to interact with a program loader
+	 */
+	class BpfLoader {
+	  /**
+	   * Minimum number of signatures required to load a program not including
+	   * retries
+	   *
+	   * Can be used to calculate transaction fees
+	   */
+	  static getMinNumSignatures(dataLength) {
+	    return Loader.getMinNumSignatures(dataLength);
+	  }
+
+	  /**
+	   * Load a SBF program
+	   *
+	   * @param connection The connection to use
+	   * @param payer Account that will pay program loading fees
+	   * @param program Account to load the program into
+	   * @param elf The entire ELF containing the SBF program
+	   * @param loaderProgramId The program id of the BPF loader to use
+	   * @return true if program was loaded successfully, false if program was already loaded
+	   */
+	  static load(connection, payer, program, elf, loaderProgramId) {
+	    return Loader.load(connection, payer, program, loaderProgramId, elf);
+	  }
+	}
+
+	function getDefaultExportFromCjs (x) {
+		return x && x.__esModule && Object.prototype.hasOwnProperty.call(x, 'default') ? x['default'] : x;
+	}
+
+	var objToString = Object.prototype.toString;
+	var objKeys = Object.keys || function(obj) {
+			var keys = [];
+			for (var name in obj) {
+				keys.push(name);
+			}
+			return keys;
+		};
+
+	function stringify(val, isArrayProp) {
+		var i, max, str, keys, key, propVal, toStr;
+		if (val === true) {
+			return "true";
+		}
+		if (val === false) {
+			return "false";
+		}
+		switch (typeof val) {
+			case "object":
+				if (val === null) {
+					return null;
+				} else if (val.toJSON && typeof val.toJSON === "function") {
+					return stringify(val.toJSON(), isArrayProp);
+				} else {
+					toStr = objToString.call(val);
+					if (toStr === "[object Array]") {
+						str = '[';
+						max = val.length - 1;
+						for(i = 0; i < max; i++) {
+							str += stringify(val[i], true) + ',';
+						}
+						if (max > -1) {
+							str += stringify(val[i], true);
+						}
+						return str + ']';
+					} else if (toStr === "[object Object]") {
+						// only object is left
+						keys = objKeys(val).sort();
+						max = keys.length;
+						str = "";
+						i = 0;
+						while (i < max) {
+							key = keys[i];
+							propVal = stringify(val[key], false);
+							if (propVal !== undefined) {
+								if (str) {
+									str += ',';
+								}
+								str += JSON.stringify(key) + ':' + propVal;
+							}
+							i++;
+						}
+						return '{' + str + '}';
+					} else {
+						return JSON.stringify(val);
+					}
+				}
+			case "function":
+			case "undefined":
+				return isArrayProp ? null : undefined;
+			case "string":
+				return JSON.stringify(val);
+			default:
+				return isFinite(val) ? val : null;
+		}
+	}
+
+	var fastStableStringify = function(val) {
+		var returnVal = stringify(val, false);
+		if (returnVal !== undefined) {
+			return ''+ returnVal;
+		}
+	};
+
+	var fastStableStringify$1 = /*@__PURE__*/getDefaultExportFromCjs(fastStableStringify);
+
+	const MINIMUM_SLOT_PER_EPOCH = 32;
+
+	// Returns the number of trailing zeros in the binary representation of self.
+	function trailingZeros(n) {
+	  let trailingZeros = 0;
+	  while (n > 1) {
+	    n /= 2;
+	    trailingZeros++;
+	  }
+	  return trailingZeros;
+	}
+
+	// Returns the smallest power of two greater than or equal to n
+	function nextPowerOfTwo(n) {
+	  if (n === 0) return 1;
+	  n--;
+	  n |= n >> 1;
+	  n |= n >> 2;
+	  n |= n >> 4;
+	  n |= n >> 8;
+	  n |= n >> 16;
+	  n |= n >> 32;
+	  return n + 1;
+	}
+
+	/**
+	 * Epoch schedule
+	 * (see https://docs.solana.com/terminology#epoch)
+	 * Can be retrieved with the {@link Connection.getEpochSchedule} method
+	 */
+	class EpochSchedule {
+	  constructor(slotsPerEpoch, leaderScheduleSlotOffset, warmup, firstNormalEpoch, firstNormalSlot) {
+	    /** The maximum number of slots in each epoch */
+	    this.slotsPerEpoch = void 0;
+	    /** The number of slots before beginning of an epoch to calculate a leader schedule for that epoch */
+	    this.leaderScheduleSlotOffset = void 0;
+	    /** Indicates whether epochs start short and grow */
+	    this.warmup = void 0;
+	    /** The first epoch with `slotsPerEpoch` slots */
+	    this.firstNormalEpoch = void 0;
+	    /** The first slot of `firstNormalEpoch` */
+	    this.firstNormalSlot = void 0;
+	    this.slotsPerEpoch = slotsPerEpoch;
+	    this.leaderScheduleSlotOffset = leaderScheduleSlotOffset;
+	    this.warmup = warmup;
+	    this.firstNormalEpoch = firstNormalEpoch;
+	    this.firstNormalSlot = firstNormalSlot;
+	  }
+	  getEpoch(slot) {
+	    return this.getEpochAndSlotIndex(slot)[0];
+	  }
+	  getEpochAndSlotIndex(slot) {
+	    if (slot < this.firstNormalSlot) {
+	      const epoch = trailingZeros(nextPowerOfTwo(slot + MINIMUM_SLOT_PER_EPOCH + 1)) - trailingZeros(MINIMUM_SLOT_PER_EPOCH) - 1;
+	      const epochLen = this.getSlotsInEpoch(epoch);
+	      const slotIndex = slot - (epochLen - MINIMUM_SLOT_PER_EPOCH);
+	      return [epoch, slotIndex];
+	    } else {
+	      const normalSlotIndex = slot - this.firstNormalSlot;
+	      const normalEpochIndex = Math.floor(normalSlotIndex / this.slotsPerEpoch);
+	      const epoch = this.firstNormalEpoch + normalEpochIndex;
+	      const slotIndex = normalSlotIndex % this.slotsPerEpoch;
+	      return [epoch, slotIndex];
+	    }
+	  }
+	  getFirstSlotInEpoch(epoch) {
+	    if (epoch <= this.firstNormalEpoch) {
+	      return (Math.pow(2, epoch) - 1) * MINIMUM_SLOT_PER_EPOCH;
+	    } else {
+	      return (epoch - this.firstNormalEpoch) * this.slotsPerEpoch + this.firstNormalSlot;
+	    }
+	  }
+	  getLastSlotInEpoch(epoch) {
+	    return this.getFirstSlotInEpoch(epoch) + this.getSlotsInEpoch(epoch) - 1;
+	  }
+	  getSlotsInEpoch(epoch) {
+	    if (epoch < this.firstNormalEpoch) {
+	      return Math.pow(2, epoch + trailingZeros(MINIMUM_SLOT_PER_EPOCH));
+	    } else {
+	      return this.slotsPerEpoch;
+	    }
+	  }
+	}
+
+	class SendTransactionError extends Error {
+	  constructor(message, logs) {
+	    super(message);
+	    this.logs = void 0;
+	    this.logs = logs;
+	  }
+	}
+
+	// Keep in sync with client/src/rpc_custom_errors.rs
+	// Typescript `enums` thwart tree-shaking. See https://bargsten.org/jsts/enums/
+	const SolanaJSONRPCErrorCode = {
+	  JSON_RPC_SERVER_ERROR_BLOCK_CLEANED_UP: -32001,
+	  JSON_RPC_SERVER_ERROR_SEND_TRANSACTION_PREFLIGHT_FAILURE: -32002,
+	  JSON_RPC_SERVER_ERROR_TRANSACTION_SIGNATURE_VERIFICATION_FAILURE: -32003,
+	  JSON_RPC_SERVER_ERROR_BLOCK_NOT_AVAILABLE: -32004,
+	  JSON_RPC_SERVER_ERROR_NODE_UNHEALTHY: -32005,
+	  JSON_RPC_SERVER_ERROR_TRANSACTION_PRECOMPILE_VERIFICATION_FAILURE: -32006,
+	  JSON_RPC_SERVER_ERROR_SLOT_SKIPPED: -32007,
+	  JSON_RPC_SERVER_ERROR_NO_SNAPSHOT: -32008,
+	  JSON_RPC_SERVER_ERROR_LONG_TERM_STORAGE_SLOT_SKIPPED: -32009,
+	  JSON_RPC_SERVER_ERROR_KEY_EXCLUDED_FROM_SECONDARY_INDEX: -32010,
+	  JSON_RPC_SERVER_ERROR_TRANSACTION_HISTORY_NOT_AVAILABLE: -32011,
+	  JSON_RPC_SCAN_ERROR: -32012,
+	  JSON_RPC_SERVER_ERROR_TRANSACTION_SIGNATURE_LEN_MISMATCH: -32013,
+	  JSON_RPC_SERVER_ERROR_BLOCK_STATUS_NOT_AVAILABLE_YET: -32014,
+	  JSON_RPC_SERVER_ERROR_UNSUPPORTED_TRANSACTION_VERSION: -32015,
+	  JSON_RPC_SERVER_ERROR_MIN_CONTEXT_SLOT_NOT_REACHED: -32016
+	};
+	class SolanaJSONRPCError extends Error {
+	  constructor({
+	    code,
+	    message,
+	    data
+	  }, customMessage) {
+	    super(customMessage != null ? `${customMessage}: ${message}` : message);
+	    this.code = void 0;
+	    this.data = void 0;
+	    this.code = code;
+	    this.data = data;
+	    this.name = 'SolanaJSONRPCError';
+	  }
+	}
+
+	var fetchImpl = globalThis.fetch;
+
+	class RpcWebSocketClient extends RpcWebSocketCommonClient {
+	  constructor(address, options, generate_request_id) {
+	    const webSocketFactory = url => {
+	      const rpc = createRpc(url, {
+	        autoconnect: true,
+	        max_reconnects: 5,
+	        reconnect: true,
+	        reconnect_interval: 1000,
+	        ...options
+	      });
+	      if ('socket' in rpc) {
+	        this.underlyingSocket = rpc.socket;
+	      } else {
+	        this.underlyingSocket = rpc;
+	      }
+	      return rpc;
+	    };
+	    super(webSocketFactory, address, options, generate_request_id);
+	    this.underlyingSocket = void 0;
+	  }
+	  call(...args) {
+	    const readyState = this.underlyingSocket?.readyState;
+	    if (readyState === 1 /* WebSocket.OPEN */) {
+	      return super.call(...args);
+	    }
+	    return Promise.reject(new Error('Tried to call a JSON-RPC method `' + args[0] + '` but the socket was not `CONNECTING` or `OPEN` (`readyState` was ' + readyState + ')'));
+	  }
+	  notify(...args) {
+	    const readyState = this.underlyingSocket?.readyState;
+	    if (readyState === 1 /* WebSocket.OPEN */) {
+	      return super.notify(...args);
+	    }
+	    return Promise.reject(new Error('Tried to send a JSON-RPC notification `' + args[0] + '` but the socket was not `CONNECTING` or `OPEN` (`readyState` was ' + readyState + ')'));
+	  }
+	}
+
+	/**
+	 * @internal
+	 */
+
+	/**
+	 * Decode account data buffer using an AccountType
+	 * @internal
+	 */
+	function decodeData(type, data) {
+	  let decoded;
+	  try {
+	    decoded = type.layout.decode(data);
+	  } catch (err) {
+	    throw new Error('invalid instruction; ' + err);
+	  }
+	  if (decoded.typeIndex !== type.index) {
+	    throw new Error(`invalid account data; account type mismatch ${decoded.typeIndex} != ${type.index}`);
+	  }
+	  return decoded;
+	}
+
+	/// The serialized size of lookup table metadata
+	const LOOKUP_TABLE_META_SIZE = 56;
+	class AddressLookupTableAccount {
+	  constructor(args) {
+	    this.key = void 0;
+	    this.state = void 0;
+	    this.key = args.key;
+	    this.state = args.state;
+	  }
+	  isActive() {
+	    const U64_MAX = BigInt('0xffffffffffffffff');
+	    return this.state.deactivationSlot === U64_MAX;
+	  }
+	  static deserialize(accountData) {
+	    const meta = decodeData(LookupTableMetaLayout, accountData);
+	    const serializedAddressesLen = accountData.length - LOOKUP_TABLE_META_SIZE;
+	    assert$1(serializedAddressesLen >= 0, 'lookup table is invalid');
+	    assert$1(serializedAddressesLen % 32 === 0, 'lookup table is invalid');
+	    const numSerializedAddresses = serializedAddressesLen / 32;
+	    const {
+	      addresses
+	    } = struct([seq(publicKey$1(), numSerializedAddresses, 'addresses')]).decode(accountData.slice(LOOKUP_TABLE_META_SIZE));
+	    return {
+	      deactivationSlot: meta.deactivationSlot,
+	      lastExtendedSlot: meta.lastExtendedSlot,
+	      lastExtendedSlotStartIndex: meta.lastExtendedStartIndex,
+	      authority: meta.authority.length !== 0 ? new PublicKey(meta.authority[0]) : undefined,
+	      addresses: addresses.map(address => new PublicKey(address))
+	    };
+	  }
+	}
+	const LookupTableMetaLayout = {
+	  index: 1,
+	  layout: struct([u32('typeIndex'), u64$1('deactivationSlot'), nu64('lastExtendedSlot'), u8('lastExtendedStartIndex'), u8(),
+	  // option
+	  seq(publicKey$1(), offset(u8(), -1), 'authority')])
+	};
+
+	const URL_RE = /^[^:]+:\/\/([^:[]+|\[[^\]]+\])(:\d+)?(.*)/i;
+	function makeWebsocketUrl(endpoint) {
+	  const matches = endpoint.match(URL_RE);
+	  if (matches == null) {
+	    throw TypeError(`Failed to validate endpoint URL \`${endpoint}\``);
+	  }
+	  const [_,
+	  // eslint-disable-line @typescript-eslint/no-unused-vars
+	  hostish, portWithColon, rest] = matches;
+	  const protocol = endpoint.startsWith('https:') ? 'wss:' : 'ws:';
+	  const startPort = portWithColon == null ? null : parseInt(portWithColon.slice(1), 10);
+	  const websocketPort =
+	  // Only shift the port by +1 as a convention for ws(s) only if given endpoint
+	  // is explicitly specifying the endpoint port (HTTP-based RPC), assuming
+	  // we're directly trying to connect to solana-validator's ws listening port.
+	  // When the endpoint omits the port, we're connecting to the protocol
+	  // default ports: http(80) or https(443) and it's assumed we're behind a reverse
+	  // proxy which manages WebSocket upgrade and backend port redirection.
+	  startPort == null ? '' : `:${startPort + 1}`;
+	  return `${protocol}//${hostish}${websocketPort}${rest}`;
+	}
+
+	const PublicKeyFromString$1 = coerce$1(instance$1(PublicKey), string$1(), value => new PublicKey(value));
+	const RawAccountDataResult = tuple([string$1(), literal('base64')]);
+	const BufferFromRawAccountData = coerce$1(instance$1(buffer.Buffer), RawAccountDataResult, value => buffer.Buffer.from(value[0], 'base64'));
+
+	/**
+	 * Attempt to use a recent blockhash for up to 30 seconds
+	 * @internal
+	 */
+	const BLOCKHASH_CACHE_TIMEOUT_MS = 30 * 1000;
+
+	/**
+	 * HACK.
+	 * Copied from rpc-websockets/dist/lib/client.
+	 * Otherwise, `yarn build` fails with:
+	 * https://gist.github.com/steveluscher/c057eca81d479ef705cdb53162f9971d
+	 */
+
+	/** @internal */
+	/** @internal */
+	/** @internal */
+	/** @internal */
+
+	/** @internal */
+	/**
+	 * @internal
+	 * Every subscription contains the args used to open the subscription with
+	 * the server, and a list of callers interested in notifications.
+	 */
+
+	/**
+	 * @internal
+	 * A subscription may be in various states of connectedness. Only when it is
+	 * fully connected will it have a server subscription id associated with it.
+	 * This id can be returned to the server to unsubscribe the client entirely.
+	 */
+
+	/**
+	 * A type that encapsulates a subscription's RPC method
+	 * names and notification (callback) signature.
+	 */
+
+	/**
+	 * @internal
+	 * Utility type that keeps tagged unions intact while omitting properties.
+	 */
+
+	/**
+	 * @internal
+	 * This type represents a single subscribable 'topic.' It's made up of:
+	 *
+	 * - The args used to open the subscription with the server,
+	 * - The state of the subscription, in terms of its connectedness, and
+	 * - The set of callbacks to call when the server publishes notifications
+	 *
+	 * This record gets indexed by `SubscriptionConfigHash` and is used to
+	 * set up subscriptions, fan out notifications, and track subscription state.
+	 */
+
+	/**
+	 * @internal
+	 */
+
+	/**
+	 * Extra contextual information for RPC responses
+	 */
+
+	/**
+	 * Options for sending transactions
+	 */
+
+	/**
+	 * Options for confirming transactions
+	 */
+
+	/**
+	 * Options for getConfirmedSignaturesForAddress2
+	 */
+
+	/**
+	 * Options for getSignaturesForAddress
+	 */
+
+	/**
+	 * RPC Response with extra contextual information
+	 */
+
+	/**
+	 * A strategy for confirming transactions that uses the last valid
+	 * block height for a given blockhash to check for transaction expiration.
+	 */
+
+	/**
+	 * A strategy for confirming durable nonce transactions.
+	 */
+
+	/**
+	 * Properties shared by all transaction confirmation strategies
+	 */
+
+	/**
+	 * This type represents all transaction confirmation strategies
+	 */
+
+	/* @internal */
+	function assertEndpointUrl(putativeUrl) {
+	  if (/^https?:/.test(putativeUrl) === false) {
+	    throw new TypeError('Endpoint URL must start with `http:` or `https:`.');
+	  }
+	  return putativeUrl;
+	}
+
+	/** @internal */
+	function extractCommitmentFromConfig(commitmentOrConfig) {
+	  let commitment;
+	  let config;
+	  if (typeof commitmentOrConfig === 'string') {
+	    commitment = commitmentOrConfig;
+	  } else if (commitmentOrConfig) {
+	    const {
+	      commitment: specifiedCommitment,
+	      ...specifiedConfig
+	    } = commitmentOrConfig;
+	    commitment = specifiedCommitment;
+	    config = specifiedConfig;
+	  }
+	  return {
+	    commitment,
+	    config
+	  };
+	}
 
 	/**
 	 * @internal
 	 */
 	function createRpcResult(result) {
-	  return union([type({
+	  return union([type$1({
 	    jsonrpc: literal('2.0'),
-	    id: string(),
+	    id: string$1(),
 	    result
-	  }), type({
+	  }), type$1({
 	    jsonrpc: literal('2.0'),
-	    id: string(),
-	    error: type({
+	    id: string$1(),
+	    error: type$1({
 	      code: unknown(),
-	      message: string(),
-	      data: optional(any())
+	      message: string$1(),
+	      data: optional$1(any())
 	    })
 	  })]);
 	}
@@ -15756,13 +19260,13 @@ var solanaStakePool = (function (exports) {
 	 * @internal
 	 */
 	function jsonRpcResult(schema) {
-	  return coerce(createRpcResult(schema), UnknownRpcResult, value => {
+	  return coerce$1(createRpcResult(schema), UnknownRpcResult, value => {
 	    if ('error' in value) {
 	      return value;
 	    } else {
 	      return {
 	        ...value,
-	        result: create(value.result, schema)
+	        result: create$1(value.result, schema)
 	      };
 	    }
 	  });
@@ -15772,9 +19276,9 @@ var solanaStakePool = (function (exports) {
 	 * @internal
 	 */
 	function jsonRpcResultAndContext(value) {
-	  return jsonRpcResult(type({
-	    context: type({
-	      slot: number()
+	  return jsonRpcResult(type$1({
+	    context: type$1({
+	      slot: number$1()
 	    }),
 	    value
 	  }));
@@ -15784,12 +19288,33 @@ var solanaStakePool = (function (exports) {
 	 * @internal
 	 */
 	function notificationResultAndContext(value) {
-	  return type({
-	    context: type({
-	      slot: number()
+	  return type$1({
+	    context: type$1({
+	      slot: number$1()
 	    }),
 	    value
 	  });
+	}
+
+	/**
+	 * @internal
+	 */
+	function versionedMessageFromResponse(version, response) {
+	  if (version === 0) {
+	    return new MessageV0({
+	      header: response.header,
+	      staticAccountKeys: response.accountKeys.map(accountKey => new PublicKey(accountKey)),
+	      recentBlockhash: response.recentBlockhash,
+	      compiledInstructions: response.instructions.map(ix => ({
+	        programIdIndex: ix.programIdIndex,
+	        accountKeyIndexes: ix.accounts,
+	        data: bs58$1.decode(ix.data)
+	      })),
+	      addressTableLookups: response.addressTableLookups
+	    });
+	  } else {
+	    return new Message(response);
+	  }
 	}
 
 	/**
@@ -15801,12 +19326,91 @@ var solanaStakePool = (function (exports) {
 	 * </pre>
 	 */
 
-	const GetInflationGovernorResult = type({
-	  foundation: number(),
-	  foundationTerm: number(),
-	  initial: number(),
-	  taper: number(),
-	  terminal: number()
+	// Deprecated as of v1.5.5
+	/**
+	 * A subset of Commitment levels, which are at least optimistically confirmed
+	 * <pre>
+	 *   'confirmed': Query the most recent block which has reached 1 confirmation by the cluster
+	 *   'finalized': Query the most recent block which has been finalized by the cluster
+	 * </pre>
+	 */
+	/**
+	 * Filter for largest accounts query
+	 * <pre>
+	 *   'circulating':    Return the largest accounts that are part of the circulating supply
+	 *   'nonCirculating': Return the largest accounts that are not part of the circulating supply
+	 * </pre>
+	 */
+	/**
+	 * Configuration object for changing `getAccountInfo` query behavior
+	 */
+	/**
+	 * Configuration object for changing `getBalance` query behavior
+	 */
+	/**
+	 * Configuration object for changing `getBlock` query behavior
+	 */
+	/**
+	 * Configuration object for changing `getBlock` query behavior
+	 */
+	/**
+	 * Configuration object for changing `getStakeMinimumDelegation` query behavior
+	 */
+	/**
+	 * Configuration object for changing `getBlockHeight` query behavior
+	 */
+	/**
+	 * Configuration object for changing `getEpochInfo` query behavior
+	 */
+	/**
+	 * Configuration object for changing `getInflationReward` query behavior
+	 */
+	/**
+	 * Configuration object for changing `getLatestBlockhash` query behavior
+	 */
+	/**
+	 * Configuration object for changing `isBlockhashValid` query behavior
+	 */
+	/**
+	 * Configuration object for changing `getSlot` query behavior
+	 */
+	/**
+	 * Configuration object for changing `getSlotLeader` query behavior
+	 */
+	/**
+	 * Configuration object for changing `getTransaction` query behavior
+	 */
+	/**
+	 * Configuration object for changing `getTransaction` query behavior
+	 */
+	/**
+	 * Configuration object for changing `getLargestAccounts` query behavior
+	 */
+	/**
+	 * Configuration object for changing `getSupply` request behavior
+	 */
+	/**
+	 * Configuration object for changing query behavior
+	 */
+	/**
+	 * Information describing a cluster node
+	 */
+	/**
+	 * Information describing a vote account
+	 */
+	/**
+	 * A collection of cluster vote accounts
+	 */
+	/**
+	 * Network Inflation
+	 * (see https://docs.solana.com/implemented-proposals/ed_overview)
+	 */
+	const GetInflationGovernorResult = type$1({
+	  foundation: number$1(),
+	  foundationTerm: number$1(),
+	  initial: number$1(),
+	  taper: number$1(),
+	  terminal: number$1()
 	});
 
 	/**
@@ -15816,48 +19420,53 @@ var solanaStakePool = (function (exports) {
 	/**
 	 * Expected JSON RPC response for the "getInflationReward" message
 	 */
-	jsonRpcResult(array(nullable(type({
-	  epoch: number(),
-	  effectiveSlot: number(),
-	  amount: number(),
-	  postBalance: number(),
-	  commission: optional(nullable(number()))
+	const GetInflationRewardResult = jsonRpcResult(array(nullable$1(type$1({
+	  epoch: number$1(),
+	  effectiveSlot: number$1(),
+	  amount: number$1(),
+	  postBalance: number$1(),
+	  commission: optional$1(nullable$1(number$1()))
 	}))));
+
+	/**
+	 * Configuration object for changing `getRecentPrioritizationFees` query behavior
+	 */
+
 	/**
 	 * Expected JSON RPC response for the "getRecentPrioritizationFees" message
 	 */
-	const GetRecentPrioritizationFeesResult = array(type({
-	  slot: number(),
-	  prioritizationFee: number()
+	const GetRecentPrioritizationFeesResult = array(type$1({
+	  slot: number$1(),
+	  prioritizationFee: number$1()
 	}));
 	/**
 	 * Expected JSON RPC response for the "getInflationRate" message
 	 */
-	const GetInflationRateResult = type({
-	  total: number(),
-	  validator: number(),
-	  foundation: number(),
-	  epoch: number()
+	const GetInflationRateResult = type$1({
+	  total: number$1(),
+	  validator: number$1(),
+	  foundation: number$1(),
+	  epoch: number$1()
 	});
 
 	/**
 	 * Information about the current epoch
 	 */
 
-	const GetEpochInfoResult = type({
-	  epoch: number(),
-	  slotIndex: number(),
-	  slotsInEpoch: number(),
-	  absoluteSlot: number(),
-	  blockHeight: optional(number()),
-	  transactionCount: optional(number())
+	const GetEpochInfoResult = type$1({
+	  epoch: number$1(),
+	  slotIndex: number$1(),
+	  slotsInEpoch: number$1(),
+	  absoluteSlot: number$1(),
+	  blockHeight: optional$1(number$1()),
+	  transactionCount: optional$1(number$1())
 	});
-	const GetEpochScheduleResult = type({
-	  slotsPerEpoch: number(),
-	  leaderScheduleSlotOffset: number(),
+	const GetEpochScheduleResult = type$1({
+	  slotsPerEpoch: number$1(),
+	  leaderScheduleSlotOffset: number$1(),
 	  warmup: boolean(),
-	  firstNormalEpoch: number(),
-	  firstNormalSlot: number()
+	  firstNormalEpoch: number$1(),
+	  firstNormalSlot: number$1()
 	});
 
 	/**
@@ -15865,17 +19474,17 @@ var solanaStakePool = (function (exports) {
 	 * (see https://docs.solana.com/terminology#leader-schedule)
 	 */
 
-	const GetLeaderScheduleResult = record(string(), array(number()));
+	const GetLeaderScheduleResult = record(string$1(), array(number$1()));
 
 	/**
 	 * Transaction error or null
 	 */
-	const TransactionErrorResult = nullable(union([type({}), string()]));
+	const TransactionErrorResult = nullable$1(union([type$1({}), string$1()]));
 
 	/**
 	 * Signature status for a transaction
 	 */
-	const SignatureStatusResult = type({
+	const SignatureStatusResult = type$1({
 	  err: TransactionErrorResult
 	});
 
@@ -15888,71 +19497,294 @@ var solanaStakePool = (function (exports) {
 	 * Version info for a node
 	 */
 
-	type({
-	  'solana-core': string(),
-	  'feature-set': optional(number())
+	const VersionResult = type$1({
+	  'solana-core': string$1(),
+	  'feature-set': optional$1(number$1())
 	});
-	jsonRpcResultAndContext(type({
-	  err: nullable(union([type({}), string()])),
-	  logs: nullable(array(string())),
-	  accounts: optional(nullable(array(nullable(type({
+	const SimulatedTransactionResponseStruct = jsonRpcResultAndContext(type$1({
+	  err: nullable$1(union([type$1({}), string$1()])),
+	  logs: nullable$1(array(string$1())),
+	  accounts: optional$1(nullable$1(array(nullable$1(type$1({
 	    executable: boolean(),
-	    owner: string(),
-	    lamports: number(),
-	    data: array(string()),
-	    rentEpoch: optional(number())
+	    owner: string$1(),
+	    lamports: number$1(),
+	    data: array(string$1()),
+	    rentEpoch: optional$1(number$1())
 	  }))))),
-	  unitsConsumed: optional(number()),
-	  returnData: optional(nullable(type({
-	    programId: string(),
-	    data: tuple([string(), literal('base64')])
+	  unitsConsumed: optional$1(number$1()),
+	  returnData: optional$1(nullable$1(type$1({
+	    programId: string$1(),
+	    data: tuple([string$1(), literal('base64')])
 	  })))
 	}));
+
+	/**
+	 * Metadata for a parsed confirmed transaction on the ledger
+	 *
+	 * @deprecated Deprecated since Solana v1.8.0. Please use {@link ParsedTransactionMeta} instead.
+	 */
+
+	/**
+	 * Collection of addresses loaded by a transaction using address table lookups
+	 */
+
+	/**
+	 * Metadata for a parsed transaction on the ledger
+	 */
+
+	/**
+	 * Metadata for a confirmed transaction on the ledger
+	 */
+
+	/**
+	 * A processed transaction from the RPC API
+	 */
+
+	/**
+	 * A processed transaction from the RPC API
+	 */
+
+	/**
+	 * A processed transaction message from the RPC API
+	 */
+
+	/**
+	 * A confirmed transaction on the ledger
+	 *
+	 * @deprecated Deprecated since Solana v1.8.0.
+	 */
+
+	/**
+	 * A partially decoded transaction instruction
+	 */
+
+	/**
+	 * A parsed transaction message account
+	 */
+
+	/**
+	 * A parsed transaction instruction
+	 */
+
+	/**
+	 * A parsed address table lookup
+	 */
+
+	/**
+	 * A parsed transaction message
+	 */
+
+	/**
+	 * A parsed transaction
+	 */
+
+	/**
+	 * A parsed and confirmed transaction on the ledger
+	 *
+	 * @deprecated Deprecated since Solana v1.8.0. Please use {@link ParsedTransactionWithMeta} instead.
+	 */
+
+	/**
+	 * A parsed transaction on the ledger with meta
+	 */
+
+	/**
+	 * A processed block fetched from the RPC API
+	 */
+
+	/**
+	 * A processed block fetched from the RPC API where the `transactionDetails` mode is `accounts`
+	 */
+
+	/**
+	 * A processed block fetched from the RPC API where the `transactionDetails` mode is `none`
+	 */
+
+	/**
+	 * A block with parsed transactions
+	 */
+
+	/**
+	 * A block with parsed transactions where the `transactionDetails` mode is `accounts`
+	 */
+
+	/**
+	 * A block with parsed transactions where the `transactionDetails` mode is `none`
+	 */
+
+	/**
+	 * A processed block fetched from the RPC API
+	 */
+
+	/**
+	 * A processed block fetched from the RPC API where the `transactionDetails` mode is `accounts`
+	 */
+
+	/**
+	 * A processed block fetched from the RPC API where the `transactionDetails` mode is `none`
+	 */
+
+	/**
+	 * A confirmed block on the ledger
+	 *
+	 * @deprecated Deprecated since Solana v1.8.0.
+	 */
+
+	/**
+	 * A Block on the ledger with signatures only
+	 */
+
+	/**
+	 * recent block production information
+	 */
+
 	/**
 	 * Expected JSON RPC response for the "getBlockProduction" message
 	 */
-	jsonRpcResultAndContext(type({
-	  byIdentity: record(string(), array(number())),
-	  range: type({
-	    firstSlot: number(),
-	    lastSlot: number()
+	const BlockProductionResponseStruct = jsonRpcResultAndContext(type$1({
+	  byIdentity: record(string$1(), array(number$1())),
+	  range: type$1({
+	    firstSlot: number$1(),
+	    lastSlot: number$1()
 	  })
 	}));
 
 	/**
+	 * A performance sample
+	 */
+
+	function createRpcClient(url, httpHeaders, customFetch, fetchMiddleware, disableRetryOnRateLimit, httpAgent) {
+	  const fetch = customFetch ? customFetch : fetchImpl;
+	  let agent;
+	  {
+	    if (httpAgent != null) {
+	      console.warn('You have supplied an `httpAgent` when creating a `Connection` in a browser environment.' + 'It has been ignored; `httpAgent` is only used in Node environments.');
+	    }
+	  }
+	  let fetchWithMiddleware;
+	  if (fetchMiddleware) {
+	    fetchWithMiddleware = async (info, init) => {
+	      const modifiedFetchArgs = await new Promise((resolve, reject) => {
+	        try {
+	          fetchMiddleware(info, init, (modifiedInfo, modifiedInit) => resolve([modifiedInfo, modifiedInit]));
+	        } catch (error) {
+	          reject(error);
+	        }
+	      });
+	      return await fetch(...modifiedFetchArgs);
+	    };
+	  }
+	  const clientBrowser = new RpcClient(async (request, callback) => {
+	    const options = {
+	      method: 'POST',
+	      body: request,
+	      agent,
+	      headers: Object.assign({
+	        'Content-Type': 'application/json'
+	      }, httpHeaders || {}, COMMON_HTTP_HEADERS)
+	    };
+	    try {
+	      let too_many_requests_retries = 5;
+	      let res;
+	      let waitTime = 500;
+	      for (;;) {
+	        if (fetchWithMiddleware) {
+	          res = await fetchWithMiddleware(url, options);
+	        } else {
+	          res = await fetch(url, options);
+	        }
+	        if (res.status !== 429 /* Too many requests */) {
+	          break;
+	        }
+	        if (disableRetryOnRateLimit === true) {
+	          break;
+	        }
+	        too_many_requests_retries -= 1;
+	        if (too_many_requests_retries === 0) {
+	          break;
+	        }
+	        console.log(`Server responded with ${res.status} ${res.statusText}.  Retrying after ${waitTime}ms delay...`);
+	        await sleep(waitTime);
+	        waitTime *= 2;
+	      }
+	      const text = await res.text();
+	      if (res.ok) {
+	        callback(null, text);
+	      } else {
+	        callback(new Error(`${res.status} ${res.statusText}: ${text}`));
+	      }
+	    } catch (err) {
+	      if (err instanceof Error) callback(err);
+	    }
+	  }, {});
+	  return clientBrowser;
+	}
+	function createRpcRequest(client) {
+	  return (method, args) => {
+	    return new Promise((resolve, reject) => {
+	      client.request(method, args, (err, response) => {
+	        if (err) {
+	          reject(err);
+	          return;
+	        }
+	        resolve(response);
+	      });
+	    });
+	  };
+	}
+	function createRpcBatchRequest(client) {
+	  return requests => {
+	    return new Promise((resolve, reject) => {
+	      // Do nothing if requests is empty
+	      if (requests.length === 0) resolve([]);
+	      const batch = requests.map(params => {
+	        return client.request(params.methodName, params.args);
+	      });
+	      client.request(batch, (err, response) => {
+	        if (err) {
+	          reject(err);
+	          return;
+	        }
+	        resolve(response);
+	      });
+	    });
+	  };
+	}
+
+	/**
 	 * Expected JSON RPC response for the "getInflationGovernor" message
 	 */
-	jsonRpcResult(GetInflationGovernorResult);
+	const GetInflationGovernorRpcResult = jsonRpcResult(GetInflationGovernorResult);
 
 	/**
 	 * Expected JSON RPC response for the "getInflationRate" message
 	 */
-	jsonRpcResult(GetInflationRateResult);
+	const GetInflationRateRpcResult = jsonRpcResult(GetInflationRateResult);
 
 	/**
 	 * Expected JSON RPC response for the "getRecentPrioritizationFees" message
 	 */
-	jsonRpcResult(GetRecentPrioritizationFeesResult);
+	const GetRecentPrioritizationFeesRpcResult = jsonRpcResult(GetRecentPrioritizationFeesResult);
 
 	/**
 	 * Expected JSON RPC response for the "getEpochInfo" message
 	 */
-	jsonRpcResult(GetEpochInfoResult);
+	const GetEpochInfoRpcResult = jsonRpcResult(GetEpochInfoResult);
 
 	/**
 	 * Expected JSON RPC response for the "getEpochSchedule" message
 	 */
-	jsonRpcResult(GetEpochScheduleResult);
+	const GetEpochScheduleRpcResult = jsonRpcResult(GetEpochScheduleResult);
 
 	/**
 	 * Expected JSON RPC response for the "getLeaderSchedule" message
 	 */
-	jsonRpcResult(GetLeaderScheduleResult);
+	const GetLeaderScheduleRpcResult = jsonRpcResult(GetLeaderScheduleResult);
 
 	/**
 	 * Expected JSON RPC response for the "minimumLedgerSlot" and "getFirstAvailableBlock" messages
 	 */
-	jsonRpcResult(number());
+	const SlotRpcResult = jsonRpcResult(number$1());
 
 	/**
 	 * Supply
@@ -15961,10 +19793,10 @@ var solanaStakePool = (function (exports) {
 	/**
 	 * Expected JSON RPC response for the "getSupply" message
 	 */
-	jsonRpcResultAndContext(type({
-	  total: number(),
-	  circulating: number(),
-	  nonCirculating: number(),
+	const GetSupplyRpcResult = jsonRpcResultAndContext(type$1({
+	  total: number$1(),
+	  circulating: number$1(),
+	  nonCirculating: number$1(),
 	  nonCirculatingAccounts: array(PublicKeyFromString$1)
 	}));
 
@@ -15976,11 +19808,11 @@ var solanaStakePool = (function (exports) {
 	/**
 	 * Expected JSON RPC structure for token amounts
 	 */
-	const TokenAmountResult = type({
-	  amount: string(),
-	  uiAmount: nullable(number()),
-	  decimals: number(),
-	  uiAmountString: optional(string())
+	const TokenAmountResult = type$1({
+	  amount: string$1(),
+	  uiAmount: nullable$1(number$1()),
+	  decimals: number$1(),
+	  uiAmountString: optional$1(string$1())
 	});
 
 	/**
@@ -15990,44 +19822,44 @@ var solanaStakePool = (function (exports) {
 	/**
 	 * Expected JSON RPC response for the "getTokenLargestAccounts" message
 	 */
-	jsonRpcResultAndContext(array(type({
+	const GetTokenLargestAccountsResult = jsonRpcResultAndContext(array(type$1({
 	  address: PublicKeyFromString$1,
-	  amount: string(),
-	  uiAmount: nullable(number()),
-	  decimals: number(),
-	  uiAmountString: optional(string())
+	  amount: string$1(),
+	  uiAmount: nullable$1(number$1()),
+	  decimals: number$1(),
+	  uiAmountString: optional$1(string$1())
 	})));
 
 	/**
 	 * Expected JSON RPC response for the "getTokenAccountsByOwner" message
 	 */
-	jsonRpcResultAndContext(array(type({
+	const GetTokenAccountsByOwner = jsonRpcResultAndContext(array(type$1({
 	  pubkey: PublicKeyFromString$1,
-	  account: type({
+	  account: type$1({
 	    executable: boolean(),
 	    owner: PublicKeyFromString$1,
-	    lamports: number(),
+	    lamports: number$1(),
 	    data: BufferFromRawAccountData,
-	    rentEpoch: number()
+	    rentEpoch: number$1()
 	  })
 	})));
-	const ParsedAccountDataResult = type({
-	  program: string(),
+	const ParsedAccountDataResult = type$1({
+	  program: string$1(),
 	  parsed: unknown(),
-	  space: number()
+	  space: number$1()
 	});
 
 	/**
 	 * Expected JSON RPC response for the "getTokenAccountsByOwner" message with parsed data
 	 */
-	jsonRpcResultAndContext(array(type({
+	const GetParsedTokenAccountsByOwner = jsonRpcResultAndContext(array(type$1({
 	  pubkey: PublicKeyFromString$1,
-	  account: type({
+	  account: type$1({
 	    executable: boolean(),
 	    owner: PublicKeyFromString$1,
-	    lamports: number(),
+	    lamports: number$1(),
 	    data: ParsedAccountDataResult,
-	    rentEpoch: number()
+	    rentEpoch: number$1()
 	  })
 	})));
 
@@ -16038,32 +19870,32 @@ var solanaStakePool = (function (exports) {
 	/**
 	 * Expected JSON RPC response for the "getLargestAccounts" message
 	 */
-	jsonRpcResultAndContext(array(type({
-	  lamports: number(),
+	const GetLargestAccountsRpcResult = jsonRpcResultAndContext(array(type$1({
+	  lamports: number$1(),
 	  address: PublicKeyFromString$1
 	})));
 
 	/**
 	 * @internal
 	 */
-	const AccountInfoResult = type({
+	const AccountInfoResult = type$1({
 	  executable: boolean(),
 	  owner: PublicKeyFromString$1,
-	  lamports: number(),
+	  lamports: number$1(),
 	  data: BufferFromRawAccountData,
-	  rentEpoch: number()
+	  rentEpoch: number$1()
 	});
 
 	/**
 	 * @internal
 	 */
-	type({
+	const KeyedAccountInfoResult = type$1({
 	  pubkey: PublicKeyFromString$1,
 	  account: AccountInfoResult
 	});
-	const ParsedOrRawAccountData = coerce(union([instance(buffer.Buffer), ParsedAccountDataResult]), union([RawAccountDataResult, ParsedAccountDataResult]), value => {
+	const ParsedOrRawAccountData = coerce$1(union([instance$1(buffer.Buffer), ParsedAccountDataResult]), union([RawAccountDataResult, ParsedAccountDataResult]), value => {
 	  if (Array.isArray(value)) {
-	    return create(value, BufferFromRawAccountData);
+	    return create$1(value, BufferFromRawAccountData);
 	  } else {
 	    return value;
 	  }
@@ -16072,14 +19904,14 @@ var solanaStakePool = (function (exports) {
 	/**
 	 * @internal
 	 */
-	const ParsedAccountInfoResult = type({
+	const ParsedAccountInfoResult = type$1({
 	  executable: boolean(),
 	  owner: PublicKeyFromString$1,
-	  lamports: number(),
+	  lamports: number$1(),
 	  data: ParsedOrRawAccountData,
-	  rentEpoch: number()
+	  rentEpoch: number$1()
 	});
-	type({
+	const KeyedParsedAccountInfoResult = type$1({
 	  pubkey: PublicKeyFromString$1,
 	  account: ParsedAccountInfoResult
 	});
@@ -16087,47 +19919,47 @@ var solanaStakePool = (function (exports) {
 	/**
 	 * @internal
 	 */
-	type({
+	const StakeActivationResult = type$1({
 	  state: union([literal('active'), literal('inactive'), literal('activating'), literal('deactivating')]),
-	  active: number(),
-	  inactive: number()
+	  active: number$1(),
+	  inactive: number$1()
 	});
 
 	/**
 	 * Expected JSON RPC response for the "getConfirmedSignaturesForAddress2" message
 	 */
 
-	jsonRpcResult(array(type({
-	  signature: string(),
-	  slot: number(),
+	const GetConfirmedSignaturesForAddress2RpcResult = jsonRpcResult(array(type$1({
+	  signature: string$1(),
+	  slot: number$1(),
 	  err: TransactionErrorResult,
-	  memo: nullable(string()),
-	  blockTime: optional(nullable(number()))
+	  memo: nullable$1(string$1()),
+	  blockTime: optional$1(nullable$1(number$1()))
 	})));
 
 	/**
 	 * Expected JSON RPC response for the "getSignaturesForAddress" message
 	 */
-	jsonRpcResult(array(type({
-	  signature: string(),
-	  slot: number(),
+	const GetSignaturesForAddressRpcResult = jsonRpcResult(array(type$1({
+	  signature: string$1(),
+	  slot: number$1(),
 	  err: TransactionErrorResult,
-	  memo: nullable(string()),
-	  blockTime: optional(nullable(number()))
+	  memo: nullable$1(string$1()),
+	  blockTime: optional$1(nullable$1(number$1()))
 	})));
 
 	/***
 	 * Expected JSON RPC response for the "accountNotification" message
 	 */
-	type({
-	  subscription: number(),
+	const AccountNotificationResult = type$1({
+	  subscription: number$1(),
 	  result: notificationResultAndContext(AccountInfoResult)
 	});
 
 	/**
 	 * @internal
 	 */
-	const ProgramAccountInfoResult = type({
+	const ProgramAccountInfoResult = type$1({
 	  pubkey: PublicKeyFromString$1,
 	  account: AccountInfoResult
 	});
@@ -16135,25 +19967,25 @@ var solanaStakePool = (function (exports) {
 	/***
 	 * Expected JSON RPC response for the "programNotification" message
 	 */
-	type({
-	  subscription: number(),
+	const ProgramAccountNotificationResult = type$1({
+	  subscription: number$1(),
 	  result: notificationResultAndContext(ProgramAccountInfoResult)
 	});
 
 	/**
 	 * @internal
 	 */
-	const SlotInfoResult = type({
-	  parent: number(),
-	  slot: number(),
-	  root: number()
+	const SlotInfoResult = type$1({
+	  parent: number$1(),
+	  slot: number$1(),
+	  root: number$1()
 	});
 
 	/**
 	 * Expected JSON RPC response for the "slotNotification" message
 	 */
-	type({
-	  subscription: number(),
+	const SlotNotificationResult = type$1({
+	  subscription: number$1(),
 	  result: SlotInfoResult
 	});
 
@@ -16175,177 +20007,177 @@ var solanaStakePool = (function (exports) {
 	/**
 	 * @internal
 	 */
-	const SlotUpdateResult = union([type({
+	const SlotUpdateResult = union([type$1({
 	  type: union([literal('firstShredReceived'), literal('completed'), literal('optimisticConfirmation'), literal('root')]),
-	  slot: number(),
-	  timestamp: number()
-	}), type({
+	  slot: number$1(),
+	  timestamp: number$1()
+	}), type$1({
 	  type: literal('createdBank'),
-	  parent: number(),
-	  slot: number(),
-	  timestamp: number()
-	}), type({
+	  parent: number$1(),
+	  slot: number$1(),
+	  timestamp: number$1()
+	}), type$1({
 	  type: literal('frozen'),
-	  slot: number(),
-	  timestamp: number(),
-	  stats: type({
-	    numTransactionEntries: number(),
-	    numSuccessfulTransactions: number(),
-	    numFailedTransactions: number(),
-	    maxTransactionsPerEntry: number()
+	  slot: number$1(),
+	  timestamp: number$1(),
+	  stats: type$1({
+	    numTransactionEntries: number$1(),
+	    numSuccessfulTransactions: number$1(),
+	    numFailedTransactions: number$1(),
+	    maxTransactionsPerEntry: number$1()
 	  })
-	}), type({
+	}), type$1({
 	  type: literal('dead'),
-	  slot: number(),
-	  timestamp: number(),
-	  err: string()
+	  slot: number$1(),
+	  timestamp: number$1(),
+	  err: string$1()
 	})]);
 
 	/**
 	 * Expected JSON RPC response for the "slotsUpdatesNotification" message
 	 */
-	type({
-	  subscription: number(),
+	const SlotUpdateNotificationResult = type$1({
+	  subscription: number$1(),
 	  result: SlotUpdateResult
 	});
 
 	/**
 	 * Expected JSON RPC response for the "signatureNotification" message
 	 */
-	type({
-	  subscription: number(),
+	const SignatureNotificationResult = type$1({
+	  subscription: number$1(),
 	  result: notificationResultAndContext(union([SignatureStatusResult, SignatureReceivedResult]))
 	});
 
 	/**
 	 * Expected JSON RPC response for the "rootNotification" message
 	 */
-	type({
-	  subscription: number(),
-	  result: number()
+	const RootNotificationResult = type$1({
+	  subscription: number$1(),
+	  result: number$1()
 	});
-	type({
-	  pubkey: string(),
-	  gossip: nullable(string()),
-	  tpu: nullable(string()),
-	  rpc: nullable(string()),
-	  version: nullable(string())
+	const ContactInfoResult = type$1({
+	  pubkey: string$1(),
+	  gossip: nullable$1(string$1()),
+	  tpu: nullable$1(string$1()),
+	  rpc: nullable$1(string$1()),
+	  version: nullable$1(string$1())
 	});
-	const VoteAccountInfoResult = type({
-	  votePubkey: string(),
-	  nodePubkey: string(),
-	  activatedStake: number(),
+	const VoteAccountInfoResult = type$1({
+	  votePubkey: string$1(),
+	  nodePubkey: string$1(),
+	  activatedStake: number$1(),
 	  epochVoteAccount: boolean(),
-	  epochCredits: array(tuple([number(), number(), number()])),
-	  commission: number(),
-	  lastVote: number(),
-	  rootSlot: nullable(number())
+	  epochCredits: array(tuple([number$1(), number$1(), number$1()])),
+	  commission: number$1(),
+	  lastVote: number$1(),
+	  rootSlot: nullable$1(number$1())
 	});
 
 	/**
 	 * Expected JSON RPC response for the "getVoteAccounts" message
 	 */
-	jsonRpcResult(type({
+	const GetVoteAccounts = jsonRpcResult(type$1({
 	  current: array(VoteAccountInfoResult),
 	  delinquent: array(VoteAccountInfoResult)
 	}));
 	const ConfirmationStatus = union([literal('processed'), literal('confirmed'), literal('finalized')]);
-	const SignatureStatusResponse = type({
-	  slot: number(),
-	  confirmations: nullable(number()),
+	const SignatureStatusResponse = type$1({
+	  slot: number$1(),
+	  confirmations: nullable$1(number$1()),
 	  err: TransactionErrorResult,
-	  confirmationStatus: optional(ConfirmationStatus)
+	  confirmationStatus: optional$1(ConfirmationStatus)
 	});
 
 	/**
 	 * Expected JSON RPC response for the "getSignatureStatuses" message
 	 */
-	jsonRpcResultAndContext(array(nullable(SignatureStatusResponse)));
+	const GetSignatureStatusesRpcResult = jsonRpcResultAndContext(array(nullable$1(SignatureStatusResponse)));
 
 	/**
 	 * Expected JSON RPC response for the "getMinimumBalanceForRentExemption" message
 	 */
-	jsonRpcResult(number());
-	const AddressTableLookupStruct = type({
+	const GetMinimumBalanceForRentExemptionRpcResult = jsonRpcResult(number$1());
+	const AddressTableLookupStruct = type$1({
 	  accountKey: PublicKeyFromString$1,
-	  writableIndexes: array(number()),
-	  readonlyIndexes: array(number())
+	  writableIndexes: array(number$1()),
+	  readonlyIndexes: array(number$1())
 	});
-	const ConfirmedTransactionResult = type({
-	  signatures: array(string()),
-	  message: type({
-	    accountKeys: array(string()),
-	    header: type({
-	      numRequiredSignatures: number(),
-	      numReadonlySignedAccounts: number(),
-	      numReadonlyUnsignedAccounts: number()
+	const ConfirmedTransactionResult = type$1({
+	  signatures: array(string$1()),
+	  message: type$1({
+	    accountKeys: array(string$1()),
+	    header: type$1({
+	      numRequiredSignatures: number$1(),
+	      numReadonlySignedAccounts: number$1(),
+	      numReadonlyUnsignedAccounts: number$1()
 	    }),
-	    instructions: array(type({
-	      accounts: array(number()),
-	      data: string(),
-	      programIdIndex: number()
+	    instructions: array(type$1({
+	      accounts: array(number$1()),
+	      data: string$1(),
+	      programIdIndex: number$1()
 	    })),
-	    recentBlockhash: string(),
-	    addressTableLookups: optional(array(AddressTableLookupStruct))
+	    recentBlockhash: string$1(),
+	    addressTableLookups: optional$1(array(AddressTableLookupStruct))
 	  })
 	});
-	const AnnotatedAccountKey = type({
+	const AnnotatedAccountKey = type$1({
 	  pubkey: PublicKeyFromString$1,
 	  signer: boolean(),
 	  writable: boolean(),
-	  source: optional(union([literal('transaction'), literal('lookupTable')]))
+	  source: optional$1(union([literal('transaction'), literal('lookupTable')]))
 	});
-	const ConfirmedTransactionAccountsModeResult = type({
+	const ConfirmedTransactionAccountsModeResult = type$1({
 	  accountKeys: array(AnnotatedAccountKey),
-	  signatures: array(string())
+	  signatures: array(string$1())
 	});
-	const ParsedInstructionResult = type({
+	const ParsedInstructionResult = type$1({
 	  parsed: unknown(),
-	  program: string(),
+	  program: string$1(),
 	  programId: PublicKeyFromString$1
 	});
-	const RawInstructionResult = type({
+	const RawInstructionResult = type$1({
 	  accounts: array(PublicKeyFromString$1),
-	  data: string(),
+	  data: string$1(),
 	  programId: PublicKeyFromString$1
 	});
 	const InstructionResult = union([RawInstructionResult, ParsedInstructionResult]);
-	const UnknownInstructionResult = union([type({
+	const UnknownInstructionResult = union([type$1({
 	  parsed: unknown(),
-	  program: string(),
-	  programId: string()
-	}), type({
-	  accounts: array(string()),
-	  data: string(),
-	  programId: string()
+	  program: string$1(),
+	  programId: string$1()
+	}), type$1({
+	  accounts: array(string$1()),
+	  data: string$1(),
+	  programId: string$1()
 	})]);
-	const ParsedOrRawInstruction = coerce(InstructionResult, UnknownInstructionResult, value => {
+	const ParsedOrRawInstruction = coerce$1(InstructionResult, UnknownInstructionResult, value => {
 	  if ('accounts' in value) {
-	    return create(value, RawInstructionResult);
+	    return create$1(value, RawInstructionResult);
 	  } else {
-	    return create(value, ParsedInstructionResult);
+	    return create$1(value, ParsedInstructionResult);
 	  }
 	});
 
 	/**
 	 * @internal
 	 */
-	const ParsedConfirmedTransactionResult = type({
-	  signatures: array(string()),
-	  message: type({
+	const ParsedConfirmedTransactionResult = type$1({
+	  signatures: array(string$1()),
+	  message: type$1({
 	    accountKeys: array(AnnotatedAccountKey),
 	    instructions: array(ParsedOrRawInstruction),
-	    recentBlockhash: string(),
-	    addressTableLookups: optional(nullable(array(AddressTableLookupStruct)))
+	    recentBlockhash: string$1(),
+	    addressTableLookups: optional$1(nullable$1(array(AddressTableLookupStruct)))
 	  })
 	});
-	const TokenBalanceResult = type({
-	  accountIndex: number(),
-	  mint: string(),
-	  owner: optional(string()),
+	const TokenBalanceResult = type$1({
+	  accountIndex: number$1(),
+	  mint: string$1(),
+	  owner: optional$1(string$1()),
 	  uiTokenAmount: TokenAmountResult
 	});
-	const LoadedAddressesResult = type({
+	const LoadedAddressesResult = type$1({
 	  writable: array(PublicKeyFromString$1),
 	  readonly: array(PublicKeyFromString$1)
 	});
@@ -16353,145 +20185,145 @@ var solanaStakePool = (function (exports) {
 	/**
 	 * @internal
 	 */
-	const ConfirmedTransactionMetaResult = type({
+	const ConfirmedTransactionMetaResult = type$1({
 	  err: TransactionErrorResult,
-	  fee: number(),
-	  innerInstructions: optional(nullable(array(type({
-	    index: number(),
-	    instructions: array(type({
-	      accounts: array(number()),
-	      data: string(),
-	      programIdIndex: number()
+	  fee: number$1(),
+	  innerInstructions: optional$1(nullable$1(array(type$1({
+	    index: number$1(),
+	    instructions: array(type$1({
+	      accounts: array(number$1()),
+	      data: string$1(),
+	      programIdIndex: number$1()
 	    }))
 	  })))),
-	  preBalances: array(number()),
-	  postBalances: array(number()),
-	  logMessages: optional(nullable(array(string()))),
-	  preTokenBalances: optional(nullable(array(TokenBalanceResult))),
-	  postTokenBalances: optional(nullable(array(TokenBalanceResult))),
-	  loadedAddresses: optional(LoadedAddressesResult),
-	  computeUnitsConsumed: optional(number())
+	  preBalances: array(number$1()),
+	  postBalances: array(number$1()),
+	  logMessages: optional$1(nullable$1(array(string$1()))),
+	  preTokenBalances: optional$1(nullable$1(array(TokenBalanceResult))),
+	  postTokenBalances: optional$1(nullable$1(array(TokenBalanceResult))),
+	  loadedAddresses: optional$1(LoadedAddressesResult),
+	  computeUnitsConsumed: optional$1(number$1())
 	});
 
 	/**
 	 * @internal
 	 */
-	const ParsedConfirmedTransactionMetaResult = type({
+	const ParsedConfirmedTransactionMetaResult = type$1({
 	  err: TransactionErrorResult,
-	  fee: number(),
-	  innerInstructions: optional(nullable(array(type({
-	    index: number(),
+	  fee: number$1(),
+	  innerInstructions: optional$1(nullable$1(array(type$1({
+	    index: number$1(),
 	    instructions: array(ParsedOrRawInstruction)
 	  })))),
-	  preBalances: array(number()),
-	  postBalances: array(number()),
-	  logMessages: optional(nullable(array(string()))),
-	  preTokenBalances: optional(nullable(array(TokenBalanceResult))),
-	  postTokenBalances: optional(nullable(array(TokenBalanceResult))),
-	  loadedAddresses: optional(LoadedAddressesResult),
-	  computeUnitsConsumed: optional(number())
+	  preBalances: array(number$1()),
+	  postBalances: array(number$1()),
+	  logMessages: optional$1(nullable$1(array(string$1()))),
+	  preTokenBalances: optional$1(nullable$1(array(TokenBalanceResult))),
+	  postTokenBalances: optional$1(nullable$1(array(TokenBalanceResult))),
+	  loadedAddresses: optional$1(LoadedAddressesResult),
+	  computeUnitsConsumed: optional$1(number$1())
 	});
 	const TransactionVersionStruct = union([literal(0), literal('legacy')]);
 
 	/** @internal */
-	const RewardsResult = type({
-	  pubkey: string(),
-	  lamports: number(),
-	  postBalance: nullable(number()),
-	  rewardType: nullable(string()),
-	  commission: optional(nullable(number()))
+	const RewardsResult = type$1({
+	  pubkey: string$1(),
+	  lamports: number$1(),
+	  postBalance: nullable$1(number$1()),
+	  rewardType: nullable$1(string$1()),
+	  commission: optional$1(nullable$1(number$1()))
 	});
 
 	/**
 	 * Expected JSON RPC response for the "getBlock" message
 	 */
-	jsonRpcResult(nullable(type({
-	  blockhash: string(),
-	  previousBlockhash: string(),
-	  parentSlot: number(),
-	  transactions: array(type({
+	const GetBlockRpcResult = jsonRpcResult(nullable$1(type$1({
+	  blockhash: string$1(),
+	  previousBlockhash: string$1(),
+	  parentSlot: number$1(),
+	  transactions: array(type$1({
 	    transaction: ConfirmedTransactionResult,
-	    meta: nullable(ConfirmedTransactionMetaResult),
-	    version: optional(TransactionVersionStruct)
+	    meta: nullable$1(ConfirmedTransactionMetaResult),
+	    version: optional$1(TransactionVersionStruct)
 	  })),
-	  rewards: optional(array(RewardsResult)),
-	  blockTime: nullable(number()),
-	  blockHeight: nullable(number())
+	  rewards: optional$1(array(RewardsResult)),
+	  blockTime: nullable$1(number$1()),
+	  blockHeight: nullable$1(number$1())
 	})));
 
 	/**
 	 * Expected JSON RPC response for the "getBlock" message when `transactionDetails` is `none`
 	 */
-	jsonRpcResult(nullable(type({
-	  blockhash: string(),
-	  previousBlockhash: string(),
-	  parentSlot: number(),
-	  rewards: optional(array(RewardsResult)),
-	  blockTime: nullable(number()),
-	  blockHeight: nullable(number())
+	const GetNoneModeBlockRpcResult = jsonRpcResult(nullable$1(type$1({
+	  blockhash: string$1(),
+	  previousBlockhash: string$1(),
+	  parentSlot: number$1(),
+	  rewards: optional$1(array(RewardsResult)),
+	  blockTime: nullable$1(number$1()),
+	  blockHeight: nullable$1(number$1())
 	})));
 
 	/**
 	 * Expected JSON RPC response for the "getBlock" message when `transactionDetails` is `accounts`
 	 */
-	jsonRpcResult(nullable(type({
-	  blockhash: string(),
-	  previousBlockhash: string(),
-	  parentSlot: number(),
-	  transactions: array(type({
+	const GetAccountsModeBlockRpcResult = jsonRpcResult(nullable$1(type$1({
+	  blockhash: string$1(),
+	  previousBlockhash: string$1(),
+	  parentSlot: number$1(),
+	  transactions: array(type$1({
 	    transaction: ConfirmedTransactionAccountsModeResult,
-	    meta: nullable(ConfirmedTransactionMetaResult),
-	    version: optional(TransactionVersionStruct)
+	    meta: nullable$1(ConfirmedTransactionMetaResult),
+	    version: optional$1(TransactionVersionStruct)
 	  })),
-	  rewards: optional(array(RewardsResult)),
-	  blockTime: nullable(number()),
-	  blockHeight: nullable(number())
+	  rewards: optional$1(array(RewardsResult)),
+	  blockTime: nullable$1(number$1()),
+	  blockHeight: nullable$1(number$1())
 	})));
 
 	/**
 	 * Expected parsed JSON RPC response for the "getBlock" message
 	 */
-	jsonRpcResult(nullable(type({
-	  blockhash: string(),
-	  previousBlockhash: string(),
-	  parentSlot: number(),
-	  transactions: array(type({
+	const GetParsedBlockRpcResult = jsonRpcResult(nullable$1(type$1({
+	  blockhash: string$1(),
+	  previousBlockhash: string$1(),
+	  parentSlot: number$1(),
+	  transactions: array(type$1({
 	    transaction: ParsedConfirmedTransactionResult,
-	    meta: nullable(ParsedConfirmedTransactionMetaResult),
-	    version: optional(TransactionVersionStruct)
+	    meta: nullable$1(ParsedConfirmedTransactionMetaResult),
+	    version: optional$1(TransactionVersionStruct)
 	  })),
-	  rewards: optional(array(RewardsResult)),
-	  blockTime: nullable(number()),
-	  blockHeight: nullable(number())
+	  rewards: optional$1(array(RewardsResult)),
+	  blockTime: nullable$1(number$1()),
+	  blockHeight: nullable$1(number$1())
 	})));
 
 	/**
 	 * Expected parsed JSON RPC response for the "getBlock" message  when `transactionDetails` is `accounts`
 	 */
-	jsonRpcResult(nullable(type({
-	  blockhash: string(),
-	  previousBlockhash: string(),
-	  parentSlot: number(),
-	  transactions: array(type({
+	const GetParsedAccountsModeBlockRpcResult = jsonRpcResult(nullable$1(type$1({
+	  blockhash: string$1(),
+	  previousBlockhash: string$1(),
+	  parentSlot: number$1(),
+	  transactions: array(type$1({
 	    transaction: ConfirmedTransactionAccountsModeResult,
-	    meta: nullable(ParsedConfirmedTransactionMetaResult),
-	    version: optional(TransactionVersionStruct)
+	    meta: nullable$1(ParsedConfirmedTransactionMetaResult),
+	    version: optional$1(TransactionVersionStruct)
 	  })),
-	  rewards: optional(array(RewardsResult)),
-	  blockTime: nullable(number()),
-	  blockHeight: nullable(number())
+	  rewards: optional$1(array(RewardsResult)),
+	  blockTime: nullable$1(number$1()),
+	  blockHeight: nullable$1(number$1())
 	})));
 
 	/**
 	 * Expected parsed JSON RPC response for the "getBlock" message  when `transactionDetails` is `none`
 	 */
-	jsonRpcResult(nullable(type({
-	  blockhash: string(),
-	  previousBlockhash: string(),
-	  parentSlot: number(),
-	  rewards: optional(array(RewardsResult)),
-	  blockTime: nullable(number()),
-	  blockHeight: nullable(number())
+	const GetParsedNoneModeBlockRpcResult = jsonRpcResult(nullable$1(type$1({
+	  blockhash: string$1(),
+	  previousBlockhash: string$1(),
+	  parentSlot: number$1(),
+	  rewards: optional$1(array(RewardsResult)),
+	  blockTime: nullable$1(number$1()),
+	  blockHeight: nullable$1(number$1())
 	})));
 
 	/**
@@ -16499,49 +20331,49 @@ var solanaStakePool = (function (exports) {
 	 *
 	 * @deprecated Deprecated since Solana v1.8.0. Please use {@link GetBlockRpcResult} instead.
 	 */
-	jsonRpcResult(nullable(type({
-	  blockhash: string(),
-	  previousBlockhash: string(),
-	  parentSlot: number(),
-	  transactions: array(type({
+	const GetConfirmedBlockRpcResult = jsonRpcResult(nullable$1(type$1({
+	  blockhash: string$1(),
+	  previousBlockhash: string$1(),
+	  parentSlot: number$1(),
+	  transactions: array(type$1({
 	    transaction: ConfirmedTransactionResult,
-	    meta: nullable(ConfirmedTransactionMetaResult)
+	    meta: nullable$1(ConfirmedTransactionMetaResult)
 	  })),
-	  rewards: optional(array(RewardsResult)),
-	  blockTime: nullable(number())
+	  rewards: optional$1(array(RewardsResult)),
+	  blockTime: nullable$1(number$1())
 	})));
 
 	/**
 	 * Expected JSON RPC response for the "getBlock" message
 	 */
-	jsonRpcResult(nullable(type({
-	  blockhash: string(),
-	  previousBlockhash: string(),
-	  parentSlot: number(),
-	  signatures: array(string()),
-	  blockTime: nullable(number())
+	const GetBlockSignaturesRpcResult = jsonRpcResult(nullable$1(type$1({
+	  blockhash: string$1(),
+	  previousBlockhash: string$1(),
+	  parentSlot: number$1(),
+	  signatures: array(string$1()),
+	  blockTime: nullable$1(number$1())
 	})));
 
 	/**
 	 * Expected JSON RPC response for the "getTransaction" message
 	 */
-	jsonRpcResult(nullable(type({
-	  slot: number(),
-	  meta: ConfirmedTransactionMetaResult,
-	  blockTime: optional(nullable(number())),
+	const GetTransactionRpcResult = jsonRpcResult(nullable$1(type$1({
+	  slot: number$1(),
+	  meta: nullable$1(ConfirmedTransactionMetaResult),
+	  blockTime: optional$1(nullable$1(number$1())),
 	  transaction: ConfirmedTransactionResult,
-	  version: optional(TransactionVersionStruct)
+	  version: optional$1(TransactionVersionStruct)
 	})));
 
 	/**
 	 * Expected parsed JSON RPC response for the "getTransaction" message
 	 */
-	jsonRpcResult(nullable(type({
-	  slot: number(),
+	const GetParsedTransactionRpcResult = jsonRpcResult(nullable$1(type$1({
+	  slot: number$1(),
 	  transaction: ParsedConfirmedTransactionResult,
-	  meta: nullable(ParsedConfirmedTransactionMetaResult),
-	  blockTime: optional(nullable(number())),
-	  version: optional(TransactionVersionStruct)
+	  meta: nullable$1(ParsedConfirmedTransactionMetaResult),
+	  blockTime: optional$1(nullable$1(number$1())),
+	  version: optional$1(TransactionVersionStruct)
 	})));
 
 	/**
@@ -16549,62 +20381,171 @@ var solanaStakePool = (function (exports) {
 	 *
 	 * @deprecated Deprecated since Solana v1.8.0. Please use {@link GetLatestBlockhashRpcResult} instead.
 	 */
-	jsonRpcResultAndContext(type({
-	  blockhash: string(),
-	  feeCalculator: type({
-	    lamportsPerSignature: number()
+	const GetRecentBlockhashAndContextRpcResult = jsonRpcResultAndContext(type$1({
+	  blockhash: string$1(),
+	  feeCalculator: type$1({
+	    lamportsPerSignature: number$1()
 	  })
 	}));
 
 	/**
 	 * Expected JSON RPC response for the "getLatestBlockhash" message
 	 */
-	jsonRpcResultAndContext(type({
-	  blockhash: string(),
-	  lastValidBlockHeight: number()
+	const GetLatestBlockhashRpcResult = jsonRpcResultAndContext(type$1({
+	  blockhash: string$1(),
+	  lastValidBlockHeight: number$1()
 	}));
-	const PerfSampleResult = type({
-	  slot: number(),
-	  numTransactions: number(),
-	  numSlots: number(),
-	  samplePeriodSecs: number()
+
+	/**
+	 * Expected JSON RPC response for the "isBlockhashValid" message
+	 */
+	const IsBlockhashValidRpcResult = jsonRpcResultAndContext(boolean());
+	const PerfSampleResult = type$1({
+	  slot: number$1(),
+	  numTransactions: number$1(),
+	  numSlots: number$1(),
+	  samplePeriodSecs: number$1()
 	});
 
 	/*
 	 * Expected JSON RPC response for "getRecentPerformanceSamples" message
 	 */
-	jsonRpcResult(array(PerfSampleResult));
+	const GetRecentPerformanceSamplesRpcResult = jsonRpcResult(array(PerfSampleResult));
 
 	/**
 	 * Expected JSON RPC response for the "getFeeCalculatorForBlockhash" message
 	 */
-	jsonRpcResultAndContext(nullable(type({
-	  feeCalculator: type({
-	    lamportsPerSignature: number()
+	const GetFeeCalculatorRpcResult = jsonRpcResultAndContext(nullable$1(type$1({
+	  feeCalculator: type$1({
+	    lamportsPerSignature: number$1()
 	  })
 	})));
 
 	/**
 	 * Expected JSON RPC response for the "requestAirdrop" message
 	 */
-	jsonRpcResult(string());
+	const RequestAirdropRpcResult = jsonRpcResult(string$1());
 
 	/**
 	 * Expected JSON RPC response for the "sendTransaction" message
 	 */
-	jsonRpcResult(string());
+	const SendTransactionRpcResult = jsonRpcResult(string$1());
 
 	/**
 	 * Information about the latest slot being processed by a node
 	 */
 
 	/**
+	 * Parsed account data
+	 */
+
+	/**
+	 * Stake Activation data
+	 */
+
+	/**
+	 * Data slice argument for getProgramAccounts
+	 */
+
+	/**
+	 * Memory comparison filter for getProgramAccounts
+	 */
+
+	/**
+	 * Data size comparison filter for getProgramAccounts
+	 */
+
+	/**
+	 * A filter object for getProgramAccounts
+	 */
+
+	/**
+	 * Configuration object for getProgramAccounts requests
+	 */
+
+	/**
+	 * Configuration object for getParsedProgramAccounts
+	 */
+
+	/**
+	 * Configuration object for getMultipleAccounts
+	 */
+
+	/**
+	 * Configuration object for `getStakeActivation`
+	 */
+
+	/**
+	 * Configuration object for `getStakeActivation`
+	 */
+
+	/**
+	 * Configuration object for `getStakeActivation`
+	 */
+
+	/**
+	 * Configuration object for `getNonce`
+	 */
+
+	/**
+	 * Configuration object for `getNonceAndContext`
+	 */
+
+	/**
+	 * Information describing an account
+	 */
+
+	/**
+	 * Account information identified by pubkey
+	 */
+
+	/**
+	 * Callback function for account change notifications
+	 */
+
+	/**
+	 * Callback function for program account change notifications
+	 */
+
+	/**
+	 * Callback function for slot change notifications
+	 */
+
+	/**
+	 * Callback function for slot update notifications
+	 */
+
+	/**
+	 * Callback function for signature status notifications
+	 */
+
+	/**
+	 * Signature status notification with transaction result
+	 */
+
+	/**
+	 * Signature received notification
+	 */
+
+	/**
+	 * Callback function for signature notifications
+	 */
+
+	/**
+	 * Signature subscription options
+	 */
+
+	/**
+	 * Callback function for root change notifications
+	 */
+
+	/**
 	 * @internal
 	 */
-	const LogsResult = type({
+	const LogsResult = type$1({
 	  err: TransactionErrorResult,
-	  logs: array(string()),
-	  signature: string()
+	  logs: array(string$1()),
+	  signature: string$1()
 	});
 
 	/**
@@ -16614,10 +20555,2963 @@ var solanaStakePool = (function (exports) {
 	/**
 	 * Expected JSON RPC response for the "logsNotification" message.
 	 */
-	type({
+	const LogsNotificationResult = type$1({
 	  result: notificationResultAndContext(LogsResult),
-	  subscription: number()
+	  subscription: number$1()
 	});
+
+	/**
+	 * Filter for log subscriptions.
+	 */
+
+	/**
+	 * Callback function for log notifications.
+	 */
+
+	/**
+	 * Signature result
+	 */
+
+	/**
+	 * Transaction error
+	 */
+
+	/**
+	 * Transaction confirmation status
+	 * <pre>
+	 *   'processed': Transaction landed in a block which has reached 1 confirmation by the connected node
+	 *   'confirmed': Transaction landed in a block which has reached 1 confirmation by the cluster
+	 *   'finalized': Transaction landed in a block which has been finalized by the cluster
+	 * </pre>
+	 */
+
+	/**
+	 * Signature status
+	 */
+
+	/**
+	 * A confirmed signature with its status
+	 */
+
+	/**
+	 * An object defining headers to be passed to the RPC server
+	 */
+
+	/**
+	 * The type of the JavaScript `fetch()` API
+	 */
+
+	/**
+	 * A callback used to augment the outgoing HTTP request
+	 */
+
+	/**
+	 * Configuration for instantiating a Connection
+	 */
+
+	/** @internal */
+	const COMMON_HTTP_HEADERS = {
+	  'solana-client': `js/${"0.0.0-development" }`
+	};
+
+	/**
+	 * A connection to a fullnode JSON RPC endpoint
+	 */
+	class Connection {
+	  /**
+	   * Establish a JSON RPC connection
+	   *
+	   * @param endpoint URL to the fullnode JSON RPC endpoint
+	   * @param commitmentOrConfig optional default commitment level or optional ConnectionConfig configuration object
+	   */
+	  constructor(endpoint, _commitmentOrConfig) {
+	    /** @internal */
+	    this._commitment = void 0;
+	    /** @internal */
+	    this._confirmTransactionInitialTimeout = void 0;
+	    /** @internal */
+	    this._rpcEndpoint = void 0;
+	    /** @internal */
+	    this._rpcWsEndpoint = void 0;
+	    /** @internal */
+	    this._rpcClient = void 0;
+	    /** @internal */
+	    this._rpcRequest = void 0;
+	    /** @internal */
+	    this._rpcBatchRequest = void 0;
+	    /** @internal */
+	    this._rpcWebSocket = void 0;
+	    /** @internal */
+	    this._rpcWebSocketConnected = false;
+	    /** @internal */
+	    this._rpcWebSocketHeartbeat = null;
+	    /** @internal */
+	    this._rpcWebSocketIdleTimeout = null;
+	    /** @internal
+	     * A number that we increment every time an active connection closes.
+	     * Used to determine whether the same socket connection that was open
+	     * when an async operation started is the same one that's active when
+	     * its continuation fires.
+	     *
+	     */
+	    this._rpcWebSocketGeneration = 0;
+	    /** @internal */
+	    this._disableBlockhashCaching = false;
+	    /** @internal */
+	    this._pollingBlockhash = false;
+	    /** @internal */
+	    this._blockhashInfo = {
+	      latestBlockhash: null,
+	      lastFetch: 0,
+	      transactionSignatures: [],
+	      simulatedSignatures: []
+	    };
+	    /** @internal */
+	    this._nextClientSubscriptionId = 0;
+	    /** @internal */
+	    this._subscriptionDisposeFunctionsByClientSubscriptionId = {};
+	    /** @internal */
+	    this._subscriptionHashByClientSubscriptionId = {};
+	    /** @internal */
+	    this._subscriptionStateChangeCallbacksByHash = {};
+	    /** @internal */
+	    this._subscriptionCallbacksByServerSubscriptionId = {};
+	    /** @internal */
+	    this._subscriptionsByHash = {};
+	    /**
+	     * Special case.
+	     * After a signature is processed, RPCs automatically dispose of the
+	     * subscription on the server side. We need to track which of these
+	     * subscriptions have been disposed in such a way, so that we know
+	     * whether the client is dealing with a not-yet-processed signature
+	     * (in which case we must tear down the server subscription) or an
+	     * already-processed signature (in which case the client can simply
+	     * clear out the subscription locally without telling the server).
+	     *
+	     * NOTE: There is a proposal to eliminate this special case, here:
+	     * https://github.com/solana-labs/solana/issues/18892
+	     */
+	    /** @internal */
+	    this._subscriptionsAutoDisposedByRpc = new Set();
+	    /*
+	     * Returns the current block height of the node
+	     */
+	    this.getBlockHeight = (() => {
+	      const requestPromises = {};
+	      return async commitmentOrConfig => {
+	        const {
+	          commitment,
+	          config
+	        } = extractCommitmentFromConfig(commitmentOrConfig);
+	        const args = this._buildArgs([], commitment, undefined /* encoding */, config);
+	        const requestHash = fastStableStringify$1(args);
+	        requestPromises[requestHash] = requestPromises[requestHash] ?? (async () => {
+	          try {
+	            const unsafeRes = await this._rpcRequest('getBlockHeight', args);
+	            const res = create$1(unsafeRes, jsonRpcResult(number$1()));
+	            if ('error' in res) {
+	              throw new SolanaJSONRPCError(res.error, 'failed to get block height information');
+	            }
+	            return res.result;
+	          } finally {
+	            delete requestPromises[requestHash];
+	          }
+	        })();
+	        return await requestPromises[requestHash];
+	      };
+	    })();
+	    let wsEndpoint;
+	    let httpHeaders;
+	    let fetch;
+	    let fetchMiddleware;
+	    let disableRetryOnRateLimit;
+	    let httpAgent;
+	    if (_commitmentOrConfig && typeof _commitmentOrConfig === 'string') {
+	      this._commitment = _commitmentOrConfig;
+	    } else if (_commitmentOrConfig) {
+	      this._commitment = _commitmentOrConfig.commitment;
+	      this._confirmTransactionInitialTimeout = _commitmentOrConfig.confirmTransactionInitialTimeout;
+	      wsEndpoint = _commitmentOrConfig.wsEndpoint;
+	      httpHeaders = _commitmentOrConfig.httpHeaders;
+	      fetch = _commitmentOrConfig.fetch;
+	      fetchMiddleware = _commitmentOrConfig.fetchMiddleware;
+	      disableRetryOnRateLimit = _commitmentOrConfig.disableRetryOnRateLimit;
+	      httpAgent = _commitmentOrConfig.httpAgent;
+	    }
+	    this._rpcEndpoint = assertEndpointUrl(endpoint);
+	    this._rpcWsEndpoint = wsEndpoint || makeWebsocketUrl(endpoint);
+	    this._rpcClient = createRpcClient(endpoint, httpHeaders, fetch, fetchMiddleware, disableRetryOnRateLimit, httpAgent);
+	    this._rpcRequest = createRpcRequest(this._rpcClient);
+	    this._rpcBatchRequest = createRpcBatchRequest(this._rpcClient);
+	    this._rpcWebSocket = new RpcWebSocketClient(this._rpcWsEndpoint, {
+	      autoconnect: false,
+	      max_reconnects: Infinity
+	    });
+	    this._rpcWebSocket.on('open', this._wsOnOpen.bind(this));
+	    this._rpcWebSocket.on('error', this._wsOnError.bind(this));
+	    this._rpcWebSocket.on('close', this._wsOnClose.bind(this));
+	    this._rpcWebSocket.on('accountNotification', this._wsOnAccountNotification.bind(this));
+	    this._rpcWebSocket.on('programNotification', this._wsOnProgramAccountNotification.bind(this));
+	    this._rpcWebSocket.on('slotNotification', this._wsOnSlotNotification.bind(this));
+	    this._rpcWebSocket.on('slotsUpdatesNotification', this._wsOnSlotUpdatesNotification.bind(this));
+	    this._rpcWebSocket.on('signatureNotification', this._wsOnSignatureNotification.bind(this));
+	    this._rpcWebSocket.on('rootNotification', this._wsOnRootNotification.bind(this));
+	    this._rpcWebSocket.on('logsNotification', this._wsOnLogsNotification.bind(this));
+	  }
+
+	  /**
+	   * The default commitment used for requests
+	   */
+	  get commitment() {
+	    return this._commitment;
+	  }
+
+	  /**
+	   * The RPC endpoint
+	   */
+	  get rpcEndpoint() {
+	    return this._rpcEndpoint;
+	  }
+
+	  /**
+	   * Fetch the balance for the specified public key, return with context
+	   */
+	  async getBalanceAndContext(publicKey, commitmentOrConfig) {
+	    /** @internal */
+	    const {
+	      commitment,
+	      config
+	    } = extractCommitmentFromConfig(commitmentOrConfig);
+	    const args = this._buildArgs([publicKey.toBase58()], commitment, undefined /* encoding */, config);
+	    const unsafeRes = await this._rpcRequest('getBalance', args);
+	    const res = create$1(unsafeRes, jsonRpcResultAndContext(number$1()));
+	    if ('error' in res) {
+	      throw new SolanaJSONRPCError(res.error, `failed to get balance for ${publicKey.toBase58()}`);
+	    }
+	    return res.result;
+	  }
+
+	  /**
+	   * Fetch the balance for the specified public key
+	   */
+	  async getBalance(publicKey, commitmentOrConfig) {
+	    return await this.getBalanceAndContext(publicKey, commitmentOrConfig).then(x => x.value).catch(e => {
+	      throw new Error('failed to get balance of account ' + publicKey.toBase58() + ': ' + e);
+	    });
+	  }
+
+	  /**
+	   * Fetch the estimated production time of a block
+	   */
+	  async getBlockTime(slot) {
+	    const unsafeRes = await this._rpcRequest('getBlockTime', [slot]);
+	    const res = create$1(unsafeRes, jsonRpcResult(nullable$1(number$1())));
+	    if ('error' in res) {
+	      throw new SolanaJSONRPCError(res.error, `failed to get block time for slot ${slot}`);
+	    }
+	    return res.result;
+	  }
+
+	  /**
+	   * Fetch the lowest slot that the node has information about in its ledger.
+	   * This value may increase over time if the node is configured to purge older ledger data
+	   */
+	  async getMinimumLedgerSlot() {
+	    const unsafeRes = await this._rpcRequest('minimumLedgerSlot', []);
+	    const res = create$1(unsafeRes, jsonRpcResult(number$1()));
+	    if ('error' in res) {
+	      throw new SolanaJSONRPCError(res.error, 'failed to get minimum ledger slot');
+	    }
+	    return res.result;
+	  }
+
+	  /**
+	   * Fetch the slot of the lowest confirmed block that has not been purged from the ledger
+	   */
+	  async getFirstAvailableBlock() {
+	    const unsafeRes = await this._rpcRequest('getFirstAvailableBlock', []);
+	    const res = create$1(unsafeRes, SlotRpcResult);
+	    if ('error' in res) {
+	      throw new SolanaJSONRPCError(res.error, 'failed to get first available block');
+	    }
+	    return res.result;
+	  }
+
+	  /**
+	   * Fetch information about the current supply
+	   */
+	  async getSupply(config) {
+	    let configArg = {};
+	    if (typeof config === 'string') {
+	      configArg = {
+	        commitment: config
+	      };
+	    } else if (config) {
+	      configArg = {
+	        ...config,
+	        commitment: config && config.commitment || this.commitment
+	      };
+	    } else {
+	      configArg = {
+	        commitment: this.commitment
+	      };
+	    }
+	    const unsafeRes = await this._rpcRequest('getSupply', [configArg]);
+	    const res = create$1(unsafeRes, GetSupplyRpcResult);
+	    if ('error' in res) {
+	      throw new SolanaJSONRPCError(res.error, 'failed to get supply');
+	    }
+	    return res.result;
+	  }
+
+	  /**
+	   * Fetch the current supply of a token mint
+	   */
+	  async getTokenSupply(tokenMintAddress, commitment) {
+	    const args = this._buildArgs([tokenMintAddress.toBase58()], commitment);
+	    const unsafeRes = await this._rpcRequest('getTokenSupply', args);
+	    const res = create$1(unsafeRes, jsonRpcResultAndContext(TokenAmountResult));
+	    if ('error' in res) {
+	      throw new SolanaJSONRPCError(res.error, 'failed to get token supply');
+	    }
+	    return res.result;
+	  }
+
+	  /**
+	   * Fetch the current balance of a token account
+	   */
+	  async getTokenAccountBalance(tokenAddress, commitment) {
+	    const args = this._buildArgs([tokenAddress.toBase58()], commitment);
+	    const unsafeRes = await this._rpcRequest('getTokenAccountBalance', args);
+	    const res = create$1(unsafeRes, jsonRpcResultAndContext(TokenAmountResult));
+	    if ('error' in res) {
+	      throw new SolanaJSONRPCError(res.error, 'failed to get token account balance');
+	    }
+	    return res.result;
+	  }
+
+	  /**
+	   * Fetch all the token accounts owned by the specified account
+	   *
+	   * @return {Promise<RpcResponseAndContext<GetProgramAccountsResponse>}
+	   */
+	  async getTokenAccountsByOwner(ownerAddress, filter, commitmentOrConfig) {
+	    const {
+	      commitment,
+	      config
+	    } = extractCommitmentFromConfig(commitmentOrConfig);
+	    let _args = [ownerAddress.toBase58()];
+	    if ('mint' in filter) {
+	      _args.push({
+	        mint: filter.mint.toBase58()
+	      });
+	    } else {
+	      _args.push({
+	        programId: filter.programId.toBase58()
+	      });
+	    }
+	    const args = this._buildArgs(_args, commitment, 'base64', config);
+	    const unsafeRes = await this._rpcRequest('getTokenAccountsByOwner', args);
+	    const res = create$1(unsafeRes, GetTokenAccountsByOwner);
+	    if ('error' in res) {
+	      throw new SolanaJSONRPCError(res.error, `failed to get token accounts owned by account ${ownerAddress.toBase58()}`);
+	    }
+	    return res.result;
+	  }
+
+	  /**
+	   * Fetch parsed token accounts owned by the specified account
+	   *
+	   * @return {Promise<RpcResponseAndContext<Array<{pubkey: PublicKey, account: AccountInfo<ParsedAccountData>}>>>}
+	   */
+	  async getParsedTokenAccountsByOwner(ownerAddress, filter, commitment) {
+	    let _args = [ownerAddress.toBase58()];
+	    if ('mint' in filter) {
+	      _args.push({
+	        mint: filter.mint.toBase58()
+	      });
+	    } else {
+	      _args.push({
+	        programId: filter.programId.toBase58()
+	      });
+	    }
+	    const args = this._buildArgs(_args, commitment, 'jsonParsed');
+	    const unsafeRes = await this._rpcRequest('getTokenAccountsByOwner', args);
+	    const res = create$1(unsafeRes, GetParsedTokenAccountsByOwner);
+	    if ('error' in res) {
+	      throw new SolanaJSONRPCError(res.error, `failed to get token accounts owned by account ${ownerAddress.toBase58()}`);
+	    }
+	    return res.result;
+	  }
+
+	  /**
+	   * Fetch the 20 largest accounts with their current balances
+	   */
+	  async getLargestAccounts(config) {
+	    const arg = {
+	      ...config,
+	      commitment: config && config.commitment || this.commitment
+	    };
+	    const args = arg.filter || arg.commitment ? [arg] : [];
+	    const unsafeRes = await this._rpcRequest('getLargestAccounts', args);
+	    const res = create$1(unsafeRes, GetLargestAccountsRpcResult);
+	    if ('error' in res) {
+	      throw new SolanaJSONRPCError(res.error, 'failed to get largest accounts');
+	    }
+	    return res.result;
+	  }
+
+	  /**
+	   * Fetch the 20 largest token accounts with their current balances
+	   * for a given mint.
+	   */
+	  async getTokenLargestAccounts(mintAddress, commitment) {
+	    const args = this._buildArgs([mintAddress.toBase58()], commitment);
+	    const unsafeRes = await this._rpcRequest('getTokenLargestAccounts', args);
+	    const res = create$1(unsafeRes, GetTokenLargestAccountsResult);
+	    if ('error' in res) {
+	      throw new SolanaJSONRPCError(res.error, 'failed to get token largest accounts');
+	    }
+	    return res.result;
+	  }
+
+	  /**
+	   * Fetch all the account info for the specified public key, return with context
+	   */
+	  async getAccountInfoAndContext(publicKey, commitmentOrConfig) {
+	    const {
+	      commitment,
+	      config
+	    } = extractCommitmentFromConfig(commitmentOrConfig);
+	    const args = this._buildArgs([publicKey.toBase58()], commitment, 'base64', config);
+	    const unsafeRes = await this._rpcRequest('getAccountInfo', args);
+	    const res = create$1(unsafeRes, jsonRpcResultAndContext(nullable$1(AccountInfoResult)));
+	    if ('error' in res) {
+	      throw new SolanaJSONRPCError(res.error, `failed to get info about account ${publicKey.toBase58()}`);
+	    }
+	    return res.result;
+	  }
+
+	  /**
+	   * Fetch parsed account info for the specified public key
+	   */
+	  async getParsedAccountInfo(publicKey, commitmentOrConfig) {
+	    const {
+	      commitment,
+	      config
+	    } = extractCommitmentFromConfig(commitmentOrConfig);
+	    const args = this._buildArgs([publicKey.toBase58()], commitment, 'jsonParsed', config);
+	    const unsafeRes = await this._rpcRequest('getAccountInfo', args);
+	    const res = create$1(unsafeRes, jsonRpcResultAndContext(nullable$1(ParsedAccountInfoResult)));
+	    if ('error' in res) {
+	      throw new SolanaJSONRPCError(res.error, `failed to get info about account ${publicKey.toBase58()}`);
+	    }
+	    return res.result;
+	  }
+
+	  /**
+	   * Fetch all the account info for the specified public key
+	   */
+	  async getAccountInfo(publicKey, commitmentOrConfig) {
+	    try {
+	      const res = await this.getAccountInfoAndContext(publicKey, commitmentOrConfig);
+	      return res.value;
+	    } catch (e) {
+	      throw new Error('failed to get info about account ' + publicKey.toBase58() + ': ' + e);
+	    }
+	  }
+
+	  /**
+	   * Fetch all the account info for multiple accounts specified by an array of public keys, return with context
+	   */
+	  async getMultipleParsedAccounts(publicKeys, rawConfig) {
+	    const {
+	      commitment,
+	      config
+	    } = extractCommitmentFromConfig(rawConfig);
+	    const keys = publicKeys.map(key => key.toBase58());
+	    const args = this._buildArgs([keys], commitment, 'jsonParsed', config);
+	    const unsafeRes = await this._rpcRequest('getMultipleAccounts', args);
+	    const res = create$1(unsafeRes, jsonRpcResultAndContext(array(nullable$1(ParsedAccountInfoResult))));
+	    if ('error' in res) {
+	      throw new SolanaJSONRPCError(res.error, `failed to get info for accounts ${keys}`);
+	    }
+	    return res.result;
+	  }
+
+	  /**
+	   * Fetch all the account info for multiple accounts specified by an array of public keys, return with context
+	   */
+	  async getMultipleAccountsInfoAndContext(publicKeys, commitmentOrConfig) {
+	    const {
+	      commitment,
+	      config
+	    } = extractCommitmentFromConfig(commitmentOrConfig);
+	    const keys = publicKeys.map(key => key.toBase58());
+	    const args = this._buildArgs([keys], commitment, 'base64', config);
+	    const unsafeRes = await this._rpcRequest('getMultipleAccounts', args);
+	    const res = create$1(unsafeRes, jsonRpcResultAndContext(array(nullable$1(AccountInfoResult))));
+	    if ('error' in res) {
+	      throw new SolanaJSONRPCError(res.error, `failed to get info for accounts ${keys}`);
+	    }
+	    return res.result;
+	  }
+
+	  /**
+	   * Fetch all the account info for multiple accounts specified by an array of public keys
+	   */
+	  async getMultipleAccountsInfo(publicKeys, commitmentOrConfig) {
+	    const res = await this.getMultipleAccountsInfoAndContext(publicKeys, commitmentOrConfig);
+	    return res.value;
+	  }
+
+	  /**
+	   * Returns epoch activation information for a stake account that has been delegated
+	   */
+	  async getStakeActivation(publicKey, commitmentOrConfig, epoch) {
+	    const {
+	      commitment,
+	      config
+	    } = extractCommitmentFromConfig(commitmentOrConfig);
+	    const args = this._buildArgs([publicKey.toBase58()], commitment, undefined /* encoding */, {
+	      ...config,
+	      epoch: epoch != null ? epoch : config?.epoch
+	    });
+	    const unsafeRes = await this._rpcRequest('getStakeActivation', args);
+	    const res = create$1(unsafeRes, jsonRpcResult(StakeActivationResult));
+	    if ('error' in res) {
+	      throw new SolanaJSONRPCError(res.error, `failed to get Stake Activation ${publicKey.toBase58()}`);
+	    }
+	    return res.result;
+	  }
+
+	  /**
+	   * Fetch all the accounts owned by the specified program id
+	   *
+	   * @return {Promise<Array<{pubkey: PublicKey, account: AccountInfo<Buffer>}>>}
+	   */
+
+	  // eslint-disable-next-line no-dupe-class-members
+
+	  // eslint-disable-next-line no-dupe-class-members
+	  async getProgramAccounts(programId, configOrCommitment) {
+	    const {
+	      commitment,
+	      config
+	    } = extractCommitmentFromConfig(configOrCommitment);
+	    const {
+	      encoding,
+	      ...configWithoutEncoding
+	    } = config || {};
+	    const args = this._buildArgs([programId.toBase58()], commitment, encoding || 'base64', configWithoutEncoding);
+	    const unsafeRes = await this._rpcRequest('getProgramAccounts', args);
+	    const baseSchema = array(KeyedAccountInfoResult);
+	    const res = configWithoutEncoding.withContext === true ? create$1(unsafeRes, jsonRpcResultAndContext(baseSchema)) : create$1(unsafeRes, jsonRpcResult(baseSchema));
+	    if ('error' in res) {
+	      throw new SolanaJSONRPCError(res.error, `failed to get accounts owned by program ${programId.toBase58()}`);
+	    }
+	    return res.result;
+	  }
+
+	  /**
+	   * Fetch and parse all the accounts owned by the specified program id
+	   *
+	   * @return {Promise<Array<{pubkey: PublicKey, account: AccountInfo<Buffer | ParsedAccountData>}>>}
+	   */
+	  async getParsedProgramAccounts(programId, configOrCommitment) {
+	    const {
+	      commitment,
+	      config
+	    } = extractCommitmentFromConfig(configOrCommitment);
+	    const args = this._buildArgs([programId.toBase58()], commitment, 'jsonParsed', config);
+	    const unsafeRes = await this._rpcRequest('getProgramAccounts', args);
+	    const res = create$1(unsafeRes, jsonRpcResult(array(KeyedParsedAccountInfoResult)));
+	    if ('error' in res) {
+	      throw new SolanaJSONRPCError(res.error, `failed to get accounts owned by program ${programId.toBase58()}`);
+	    }
+	    return res.result;
+	  }
+
+	  /** @deprecated Instead, call `confirmTransaction` and pass in {@link TransactionConfirmationStrategy} */ // eslint-disable-next-line no-dupe-class-members
+	  // eslint-disable-next-line no-dupe-class-members
+	  async confirmTransaction(strategy, commitment) {
+	    let rawSignature;
+	    if (typeof strategy == 'string') {
+	      rawSignature = strategy;
+	    } else {
+	      const config = strategy;
+	      if (config.abortSignal?.aborted) {
+	        return Promise.reject(config.abortSignal.reason);
+	      }
+	      rawSignature = config.signature;
+	    }
+	    let decodedSignature;
+	    try {
+	      decodedSignature = bs58$1.decode(rawSignature);
+	    } catch (err) {
+	      throw new Error('signature must be base58 encoded: ' + rawSignature);
+	    }
+	    assert$1(decodedSignature.length === 64, 'signature has invalid length');
+	    if (typeof strategy === 'string') {
+	      return await this.confirmTransactionUsingLegacyTimeoutStrategy({
+	        commitment: commitment || this.commitment,
+	        signature: rawSignature
+	      });
+	    } else if ('lastValidBlockHeight' in strategy) {
+	      return await this.confirmTransactionUsingBlockHeightExceedanceStrategy({
+	        commitment: commitment || this.commitment,
+	        strategy
+	      });
+	    } else {
+	      return await this.confirmTransactionUsingDurableNonceStrategy({
+	        commitment: commitment || this.commitment,
+	        strategy
+	      });
+	    }
+	  }
+	  getCancellationPromise(signal) {
+	    return new Promise((_, reject) => {
+	      if (signal == null) {
+	        return;
+	      }
+	      if (signal.aborted) {
+	        reject(signal.reason);
+	      } else {
+	        signal.addEventListener('abort', () => {
+	          reject(signal.reason);
+	        });
+	      }
+	    });
+	  }
+	  getTransactionConfirmationPromise({
+	    commitment,
+	    signature
+	  }) {
+	    let signatureSubscriptionId;
+	    let disposeSignatureSubscriptionStateChangeObserver;
+	    let done = false;
+	    const confirmationPromise = new Promise((resolve, reject) => {
+	      try {
+	        signatureSubscriptionId = this.onSignature(signature, (result, context) => {
+	          signatureSubscriptionId = undefined;
+	          const response = {
+	            context,
+	            value: result
+	          };
+	          resolve({
+	            __type: TransactionStatus.PROCESSED,
+	            response
+	          });
+	        }, commitment);
+	        const subscriptionSetupPromise = new Promise(resolveSubscriptionSetup => {
+	          if (signatureSubscriptionId == null) {
+	            resolveSubscriptionSetup();
+	          } else {
+	            disposeSignatureSubscriptionStateChangeObserver = this._onSubscriptionStateChange(signatureSubscriptionId, nextState => {
+	              if (nextState === 'subscribed') {
+	                resolveSubscriptionSetup();
+	              }
+	            });
+	          }
+	        });
+	        (async () => {
+	          await subscriptionSetupPromise;
+	          if (done) return;
+	          const response = await this.getSignatureStatus(signature);
+	          if (done) return;
+	          if (response == null) {
+	            return;
+	          }
+	          const {
+	            context,
+	            value
+	          } = response;
+	          if (value == null) {
+	            return;
+	          }
+	          if (value?.err) {
+	            reject(value.err);
+	          } else {
+	            switch (commitment) {
+	              case 'confirmed':
+	              case 'single':
+	              case 'singleGossip':
+	                {
+	                  if (value.confirmationStatus === 'processed') {
+	                    return;
+	                  }
+	                  break;
+	                }
+	              case 'finalized':
+	              case 'max':
+	              case 'root':
+	                {
+	                  if (value.confirmationStatus === 'processed' || value.confirmationStatus === 'confirmed') {
+	                    return;
+	                  }
+	                  break;
+	                }
+	              // exhaust enums to ensure full coverage
+	              case 'processed':
+	              case 'recent':
+	            }
+	            done = true;
+	            resolve({
+	              __type: TransactionStatus.PROCESSED,
+	              response: {
+	                context,
+	                value
+	              }
+	            });
+	          }
+	        })();
+	      } catch (err) {
+	        reject(err);
+	      }
+	    });
+	    const abortConfirmation = () => {
+	      if (disposeSignatureSubscriptionStateChangeObserver) {
+	        disposeSignatureSubscriptionStateChangeObserver();
+	        disposeSignatureSubscriptionStateChangeObserver = undefined;
+	      }
+	      if (signatureSubscriptionId != null) {
+	        this.removeSignatureListener(signatureSubscriptionId);
+	        signatureSubscriptionId = undefined;
+	      }
+	    };
+	    return {
+	      abortConfirmation,
+	      confirmationPromise
+	    };
+	  }
+	  async confirmTransactionUsingBlockHeightExceedanceStrategy({
+	    commitment,
+	    strategy: {
+	      abortSignal,
+	      lastValidBlockHeight,
+	      signature
+	    }
+	  }) {
+	    let done = false;
+	    const expiryPromise = new Promise(resolve => {
+	      const checkBlockHeight = async () => {
+	        try {
+	          const blockHeight = await this.getBlockHeight(commitment);
+	          return blockHeight;
+	        } catch (_e) {
+	          return -1;
+	        }
+	      };
+	      (async () => {
+	        let currentBlockHeight = await checkBlockHeight();
+	        if (done) return;
+	        while (currentBlockHeight <= lastValidBlockHeight) {
+	          await sleep(1000);
+	          if (done) return;
+	          currentBlockHeight = await checkBlockHeight();
+	          if (done) return;
+	        }
+	        resolve({
+	          __type: TransactionStatus.BLOCKHEIGHT_EXCEEDED
+	        });
+	      })();
+	    });
+	    const {
+	      abortConfirmation,
+	      confirmationPromise
+	    } = this.getTransactionConfirmationPromise({
+	      commitment,
+	      signature
+	    });
+	    const cancellationPromise = this.getCancellationPromise(abortSignal);
+	    let result;
+	    try {
+	      const outcome = await Promise.race([cancellationPromise, confirmationPromise, expiryPromise]);
+	      if (outcome.__type === TransactionStatus.PROCESSED) {
+	        result = outcome.response;
+	      } else {
+	        throw new TransactionExpiredBlockheightExceededError(signature);
+	      }
+	    } finally {
+	      done = true;
+	      abortConfirmation();
+	    }
+	    return result;
+	  }
+	  async confirmTransactionUsingDurableNonceStrategy({
+	    commitment,
+	    strategy: {
+	      abortSignal,
+	      minContextSlot,
+	      nonceAccountPubkey,
+	      nonceValue,
+	      signature
+	    }
+	  }) {
+	    let done = false;
+	    const expiryPromise = new Promise(resolve => {
+	      let currentNonceValue = nonceValue;
+	      let lastCheckedSlot = null;
+	      const getCurrentNonceValue = async () => {
+	        try {
+	          const {
+	            context,
+	            value: nonceAccount
+	          } = await this.getNonceAndContext(nonceAccountPubkey, {
+	            commitment,
+	            minContextSlot
+	          });
+	          lastCheckedSlot = context.slot;
+	          return nonceAccount?.nonce;
+	        } catch (e) {
+	          // If for whatever reason we can't reach/read the nonce
+	          // account, just keep using the last-known value.
+	          return currentNonceValue;
+	        }
+	      };
+	      (async () => {
+	        currentNonceValue = await getCurrentNonceValue();
+	        if (done) return;
+	        while (true // eslint-disable-line no-constant-condition
+	        ) {
+	          if (nonceValue !== currentNonceValue) {
+	            resolve({
+	              __type: TransactionStatus.NONCE_INVALID,
+	              slotInWhichNonceDidAdvance: lastCheckedSlot
+	            });
+	            return;
+	          }
+	          await sleep(2000);
+	          if (done) return;
+	          currentNonceValue = await getCurrentNonceValue();
+	          if (done) return;
+	        }
+	      })();
+	    });
+	    const {
+	      abortConfirmation,
+	      confirmationPromise
+	    } = this.getTransactionConfirmationPromise({
+	      commitment,
+	      signature
+	    });
+	    const cancellationPromise = this.getCancellationPromise(abortSignal);
+	    let result;
+	    try {
+	      const outcome = await Promise.race([cancellationPromise, confirmationPromise, expiryPromise]);
+	      if (outcome.__type === TransactionStatus.PROCESSED) {
+	        result = outcome.response;
+	      } else {
+	        // Double check that the transaction is indeed unconfirmed.
+	        let signatureStatus;
+	        while (true // eslint-disable-line no-constant-condition
+	        ) {
+	          const status = await this.getSignatureStatus(signature);
+	          if (status == null) {
+	            break;
+	          }
+	          if (status.context.slot < (outcome.slotInWhichNonceDidAdvance ?? minContextSlot)) {
+	            await sleep(400);
+	            continue;
+	          }
+	          signatureStatus = status;
+	          break;
+	        }
+	        if (signatureStatus?.value) {
+	          const commitmentForStatus = commitment || 'finalized';
+	          const {
+	            confirmationStatus
+	          } = signatureStatus.value;
+	          switch (commitmentForStatus) {
+	            case 'processed':
+	            case 'recent':
+	              if (confirmationStatus !== 'processed' && confirmationStatus !== 'confirmed' && confirmationStatus !== 'finalized') {
+	                throw new TransactionExpiredNonceInvalidError(signature);
+	              }
+	              break;
+	            case 'confirmed':
+	            case 'single':
+	            case 'singleGossip':
+	              if (confirmationStatus !== 'confirmed' && confirmationStatus !== 'finalized') {
+	                throw new TransactionExpiredNonceInvalidError(signature);
+	              }
+	              break;
+	            case 'finalized':
+	            case 'max':
+	            case 'root':
+	              if (confirmationStatus !== 'finalized') {
+	                throw new TransactionExpiredNonceInvalidError(signature);
+	              }
+	              break;
+	            default:
+	              // Exhaustive switch.
+	              // eslint-disable-next-line @typescript-eslint/no-unused-vars
+	              (_ => {})(commitmentForStatus);
+	          }
+	          result = {
+	            context: signatureStatus.context,
+	            value: {
+	              err: signatureStatus.value.err
+	            }
+	          };
+	        } else {
+	          throw new TransactionExpiredNonceInvalidError(signature);
+	        }
+	      }
+	    } finally {
+	      done = true;
+	      abortConfirmation();
+	    }
+	    return result;
+	  }
+	  async confirmTransactionUsingLegacyTimeoutStrategy({
+	    commitment,
+	    signature
+	  }) {
+	    let timeoutId;
+	    const expiryPromise = new Promise(resolve => {
+	      let timeoutMs = this._confirmTransactionInitialTimeout || 60 * 1000;
+	      switch (commitment) {
+	        case 'processed':
+	        case 'recent':
+	        case 'single':
+	        case 'confirmed':
+	        case 'singleGossip':
+	          {
+	            timeoutMs = this._confirmTransactionInitialTimeout || 30 * 1000;
+	            break;
+	          }
+	      }
+	      timeoutId = setTimeout(() => resolve({
+	        __type: TransactionStatus.TIMED_OUT,
+	        timeoutMs
+	      }), timeoutMs);
+	    });
+	    const {
+	      abortConfirmation,
+	      confirmationPromise
+	    } = this.getTransactionConfirmationPromise({
+	      commitment,
+	      signature
+	    });
+	    let result;
+	    try {
+	      const outcome = await Promise.race([confirmationPromise, expiryPromise]);
+	      if (outcome.__type === TransactionStatus.PROCESSED) {
+	        result = outcome.response;
+	      } else {
+	        throw new TransactionExpiredTimeoutError(signature, outcome.timeoutMs / 1000);
+	      }
+	    } finally {
+	      clearTimeout(timeoutId);
+	      abortConfirmation();
+	    }
+	    return result;
+	  }
+
+	  /**
+	   * Return the list of nodes that are currently participating in the cluster
+	   */
+	  async getClusterNodes() {
+	    const unsafeRes = await this._rpcRequest('getClusterNodes', []);
+	    const res = create$1(unsafeRes, jsonRpcResult(array(ContactInfoResult)));
+	    if ('error' in res) {
+	      throw new SolanaJSONRPCError(res.error, 'failed to get cluster nodes');
+	    }
+	    return res.result;
+	  }
+
+	  /**
+	   * Return the list of nodes that are currently participating in the cluster
+	   */
+	  async getVoteAccounts(commitment) {
+	    const args = this._buildArgs([], commitment);
+	    const unsafeRes = await this._rpcRequest('getVoteAccounts', args);
+	    const res = create$1(unsafeRes, GetVoteAccounts);
+	    if ('error' in res) {
+	      throw new SolanaJSONRPCError(res.error, 'failed to get vote accounts');
+	    }
+	    return res.result;
+	  }
+
+	  /**
+	   * Fetch the current slot that the node is processing
+	   */
+	  async getSlot(commitmentOrConfig) {
+	    const {
+	      commitment,
+	      config
+	    } = extractCommitmentFromConfig(commitmentOrConfig);
+	    const args = this._buildArgs([], commitment, undefined /* encoding */, config);
+	    const unsafeRes = await this._rpcRequest('getSlot', args);
+	    const res = create$1(unsafeRes, jsonRpcResult(number$1()));
+	    if ('error' in res) {
+	      throw new SolanaJSONRPCError(res.error, 'failed to get slot');
+	    }
+	    return res.result;
+	  }
+
+	  /**
+	   * Fetch the current slot leader of the cluster
+	   */
+	  async getSlotLeader(commitmentOrConfig) {
+	    const {
+	      commitment,
+	      config
+	    } = extractCommitmentFromConfig(commitmentOrConfig);
+	    const args = this._buildArgs([], commitment, undefined /* encoding */, config);
+	    const unsafeRes = await this._rpcRequest('getSlotLeader', args);
+	    const res = create$1(unsafeRes, jsonRpcResult(string$1()));
+	    if ('error' in res) {
+	      throw new SolanaJSONRPCError(res.error, 'failed to get slot leader');
+	    }
+	    return res.result;
+	  }
+
+	  /**
+	   * Fetch `limit` number of slot leaders starting from `startSlot`
+	   *
+	   * @param startSlot fetch slot leaders starting from this slot
+	   * @param limit number of slot leaders to return
+	   */
+	  async getSlotLeaders(startSlot, limit) {
+	    const args = [startSlot, limit];
+	    const unsafeRes = await this._rpcRequest('getSlotLeaders', args);
+	    const res = create$1(unsafeRes, jsonRpcResult(array(PublicKeyFromString$1)));
+	    if ('error' in res) {
+	      throw new SolanaJSONRPCError(res.error, 'failed to get slot leaders');
+	    }
+	    return res.result;
+	  }
+
+	  /**
+	   * Fetch the current status of a signature
+	   */
+	  async getSignatureStatus(signature, config) {
+	    const {
+	      context,
+	      value: values
+	    } = await this.getSignatureStatuses([signature], config);
+	    assert$1(values.length === 1);
+	    const value = values[0];
+	    return {
+	      context,
+	      value
+	    };
+	  }
+
+	  /**
+	   * Fetch the current statuses of a batch of signatures
+	   */
+	  async getSignatureStatuses(signatures, config) {
+	    const params = [signatures];
+	    if (config) {
+	      params.push(config);
+	    }
+	    const unsafeRes = await this._rpcRequest('getSignatureStatuses', params);
+	    const res = create$1(unsafeRes, GetSignatureStatusesRpcResult);
+	    if ('error' in res) {
+	      throw new SolanaJSONRPCError(res.error, 'failed to get signature status');
+	    }
+	    return res.result;
+	  }
+
+	  /**
+	   * Fetch the current transaction count of the cluster
+	   */
+	  async getTransactionCount(commitmentOrConfig) {
+	    const {
+	      commitment,
+	      config
+	    } = extractCommitmentFromConfig(commitmentOrConfig);
+	    const args = this._buildArgs([], commitment, undefined /* encoding */, config);
+	    const unsafeRes = await this._rpcRequest('getTransactionCount', args);
+	    const res = create$1(unsafeRes, jsonRpcResult(number$1()));
+	    if ('error' in res) {
+	      throw new SolanaJSONRPCError(res.error, 'failed to get transaction count');
+	    }
+	    return res.result;
+	  }
+
+	  /**
+	   * Fetch the current total currency supply of the cluster in lamports
+	   *
+	   * @deprecated Deprecated since v1.2.8. Please use {@link getSupply} instead.
+	   */
+	  async getTotalSupply(commitment) {
+	    const result = await this.getSupply({
+	      commitment,
+	      excludeNonCirculatingAccountsList: true
+	    });
+	    return result.value.total;
+	  }
+
+	  /**
+	   * Fetch the cluster InflationGovernor parameters
+	   */
+	  async getInflationGovernor(commitment) {
+	    const args = this._buildArgs([], commitment);
+	    const unsafeRes = await this._rpcRequest('getInflationGovernor', args);
+	    const res = create$1(unsafeRes, GetInflationGovernorRpcResult);
+	    if ('error' in res) {
+	      throw new SolanaJSONRPCError(res.error, 'failed to get inflation');
+	    }
+	    return res.result;
+	  }
+
+	  /**
+	   * Fetch the inflation reward for a list of addresses for an epoch
+	   */
+	  async getInflationReward(addresses, epoch, commitmentOrConfig) {
+	    const {
+	      commitment,
+	      config
+	    } = extractCommitmentFromConfig(commitmentOrConfig);
+	    const args = this._buildArgs([addresses.map(pubkey => pubkey.toBase58())], commitment, undefined /* encoding */, {
+	      ...config,
+	      epoch: epoch != null ? epoch : config?.epoch
+	    });
+	    const unsafeRes = await this._rpcRequest('getInflationReward', args);
+	    const res = create$1(unsafeRes, GetInflationRewardResult);
+	    if ('error' in res) {
+	      throw new SolanaJSONRPCError(res.error, 'failed to get inflation reward');
+	    }
+	    return res.result;
+	  }
+
+	  /**
+	   * Fetch the specific inflation values for the current epoch
+	   */
+	  async getInflationRate() {
+	    const unsafeRes = await this._rpcRequest('getInflationRate', []);
+	    const res = create$1(unsafeRes, GetInflationRateRpcResult);
+	    if ('error' in res) {
+	      throw new SolanaJSONRPCError(res.error, 'failed to get inflation rate');
+	    }
+	    return res.result;
+	  }
+
+	  /**
+	   * Fetch the Epoch Info parameters
+	   */
+	  async getEpochInfo(commitmentOrConfig) {
+	    const {
+	      commitment,
+	      config
+	    } = extractCommitmentFromConfig(commitmentOrConfig);
+	    const args = this._buildArgs([], commitment, undefined /* encoding */, config);
+	    const unsafeRes = await this._rpcRequest('getEpochInfo', args);
+	    const res = create$1(unsafeRes, GetEpochInfoRpcResult);
+	    if ('error' in res) {
+	      throw new SolanaJSONRPCError(res.error, 'failed to get epoch info');
+	    }
+	    return res.result;
+	  }
+
+	  /**
+	   * Fetch the Epoch Schedule parameters
+	   */
+	  async getEpochSchedule() {
+	    const unsafeRes = await this._rpcRequest('getEpochSchedule', []);
+	    const res = create$1(unsafeRes, GetEpochScheduleRpcResult);
+	    if ('error' in res) {
+	      throw new SolanaJSONRPCError(res.error, 'failed to get epoch schedule');
+	    }
+	    const epochSchedule = res.result;
+	    return new EpochSchedule(epochSchedule.slotsPerEpoch, epochSchedule.leaderScheduleSlotOffset, epochSchedule.warmup, epochSchedule.firstNormalEpoch, epochSchedule.firstNormalSlot);
+	  }
+
+	  /**
+	   * Fetch the leader schedule for the current epoch
+	   * @return {Promise<RpcResponseAndContext<LeaderSchedule>>}
+	   */
+	  async getLeaderSchedule() {
+	    const unsafeRes = await this._rpcRequest('getLeaderSchedule', []);
+	    const res = create$1(unsafeRes, GetLeaderScheduleRpcResult);
+	    if ('error' in res) {
+	      throw new SolanaJSONRPCError(res.error, 'failed to get leader schedule');
+	    }
+	    return res.result;
+	  }
+
+	  /**
+	   * Fetch the minimum balance needed to exempt an account of `dataLength`
+	   * size from rent
+	   */
+	  async getMinimumBalanceForRentExemption(dataLength, commitment) {
+	    const args = this._buildArgs([dataLength], commitment);
+	    const unsafeRes = await this._rpcRequest('getMinimumBalanceForRentExemption', args);
+	    const res = create$1(unsafeRes, GetMinimumBalanceForRentExemptionRpcResult);
+	    if ('error' in res) {
+	      console.warn('Unable to fetch minimum balance for rent exemption');
+	      return 0;
+	    }
+	    return res.result;
+	  }
+
+	  /**
+	   * Fetch a recent blockhash from the cluster, return with context
+	   * @return {Promise<RpcResponseAndContext<{blockhash: Blockhash, feeCalculator: FeeCalculator}>>}
+	   *
+	   * @deprecated Deprecated since Solana v1.8.0. Please use {@link getLatestBlockhash} instead.
+	   */
+	  async getRecentBlockhashAndContext(commitment) {
+	    const args = this._buildArgs([], commitment);
+	    const unsafeRes = await this._rpcRequest('getRecentBlockhash', args);
+	    const res = create$1(unsafeRes, GetRecentBlockhashAndContextRpcResult);
+	    if ('error' in res) {
+	      throw new SolanaJSONRPCError(res.error, 'failed to get recent blockhash');
+	    }
+	    return res.result;
+	  }
+
+	  /**
+	   * Fetch recent performance samples
+	   * @return {Promise<Array<PerfSample>>}
+	   */
+	  async getRecentPerformanceSamples(limit) {
+	    const unsafeRes = await this._rpcRequest('getRecentPerformanceSamples', limit ? [limit] : []);
+	    const res = create$1(unsafeRes, GetRecentPerformanceSamplesRpcResult);
+	    if ('error' in res) {
+	      throw new SolanaJSONRPCError(res.error, 'failed to get recent performance samples');
+	    }
+	    return res.result;
+	  }
+
+	  /**
+	   * Fetch the fee calculator for a recent blockhash from the cluster, return with context
+	   *
+	   * @deprecated Deprecated since Solana v1.8.0. Please use {@link getFeeForMessage} instead.
+	   */
+	  async getFeeCalculatorForBlockhash(blockhash, commitment) {
+	    const args = this._buildArgs([blockhash], commitment);
+	    const unsafeRes = await this._rpcRequest('getFeeCalculatorForBlockhash', args);
+	    const res = create$1(unsafeRes, GetFeeCalculatorRpcResult);
+	    if ('error' in res) {
+	      throw new SolanaJSONRPCError(res.error, 'failed to get fee calculator');
+	    }
+	    const {
+	      context,
+	      value
+	    } = res.result;
+	    return {
+	      context,
+	      value: value !== null ? value.feeCalculator : null
+	    };
+	  }
+
+	  /**
+	   * Fetch the fee for a message from the cluster, return with context
+	   */
+	  async getFeeForMessage(message, commitment) {
+	    const wireMessage = toBuffer(message.serialize()).toString('base64');
+	    const args = this._buildArgs([wireMessage], commitment);
+	    const unsafeRes = await this._rpcRequest('getFeeForMessage', args);
+	    const res = create$1(unsafeRes, jsonRpcResultAndContext(nullable$1(number$1())));
+	    if ('error' in res) {
+	      throw new SolanaJSONRPCError(res.error, 'failed to get fee for message');
+	    }
+	    if (res.result === null) {
+	      throw new Error('invalid blockhash');
+	    }
+	    return res.result;
+	  }
+
+	  /**
+	   * Fetch a list of prioritization fees from recent blocks.
+	   */
+	  async getRecentPrioritizationFees(config) {
+	    const accounts = config?.lockedWritableAccounts?.map(key => key.toBase58());
+	    const args = accounts?.length ? [accounts] : [];
+	    const unsafeRes = await this._rpcRequest('getRecentPrioritizationFees', args);
+	    const res = create$1(unsafeRes, GetRecentPrioritizationFeesRpcResult);
+	    if ('error' in res) {
+	      throw new SolanaJSONRPCError(res.error, 'failed to get recent prioritization fees');
+	    }
+	    return res.result;
+	  }
+	  /**
+	   * Fetch a recent blockhash from the cluster
+	   * @return {Promise<{blockhash: Blockhash, feeCalculator: FeeCalculator}>}
+	   *
+	   * @deprecated Deprecated since Solana v1.8.0. Please use {@link getLatestBlockhash} instead.
+	   */
+	  async getRecentBlockhash(commitment) {
+	    try {
+	      const res = await this.getRecentBlockhashAndContext(commitment);
+	      return res.value;
+	    } catch (e) {
+	      throw new Error('failed to get recent blockhash: ' + e);
+	    }
+	  }
+
+	  /**
+	   * Fetch the latest blockhash from the cluster
+	   * @return {Promise<BlockhashWithExpiryBlockHeight>}
+	   */
+	  async getLatestBlockhash(commitmentOrConfig) {
+	    try {
+	      const res = await this.getLatestBlockhashAndContext(commitmentOrConfig);
+	      return res.value;
+	    } catch (e) {
+	      throw new Error('failed to get recent blockhash: ' + e);
+	    }
+	  }
+
+	  /**
+	   * Fetch the latest blockhash from the cluster
+	   * @return {Promise<BlockhashWithExpiryBlockHeight>}
+	   */
+	  async getLatestBlockhashAndContext(commitmentOrConfig) {
+	    const {
+	      commitment,
+	      config
+	    } = extractCommitmentFromConfig(commitmentOrConfig);
+	    const args = this._buildArgs([], commitment, undefined /* encoding */, config);
+	    const unsafeRes = await this._rpcRequest('getLatestBlockhash', args);
+	    const res = create$1(unsafeRes, GetLatestBlockhashRpcResult);
+	    if ('error' in res) {
+	      throw new SolanaJSONRPCError(res.error, 'failed to get latest blockhash');
+	    }
+	    return res.result;
+	  }
+
+	  /**
+	   * Returns whether a blockhash is still valid or not
+	   */
+	  async isBlockhashValid(blockhash, rawConfig) {
+	    const {
+	      commitment,
+	      config
+	    } = extractCommitmentFromConfig(rawConfig);
+	    const args = this._buildArgs([blockhash], commitment, undefined /* encoding */, config);
+	    const unsafeRes = await this._rpcRequest('isBlockhashValid', args);
+	    const res = create$1(unsafeRes, IsBlockhashValidRpcResult);
+	    if ('error' in res) {
+	      throw new SolanaJSONRPCError(res.error, 'failed to determine if the blockhash `' + blockhash + '`is valid');
+	    }
+	    return res.result;
+	  }
+
+	  /**
+	   * Fetch the node version
+	   */
+	  async getVersion() {
+	    const unsafeRes = await this._rpcRequest('getVersion', []);
+	    const res = create$1(unsafeRes, jsonRpcResult(VersionResult));
+	    if ('error' in res) {
+	      throw new SolanaJSONRPCError(res.error, 'failed to get version');
+	    }
+	    return res.result;
+	  }
+
+	  /**
+	   * Fetch the genesis hash
+	   */
+	  async getGenesisHash() {
+	    const unsafeRes = await this._rpcRequest('getGenesisHash', []);
+	    const res = create$1(unsafeRes, jsonRpcResult(string$1()));
+	    if ('error' in res) {
+	      throw new SolanaJSONRPCError(res.error, 'failed to get genesis hash');
+	    }
+	    return res.result;
+	  }
+
+	  /**
+	   * Fetch a processed block from the cluster.
+	   *
+	   * @deprecated Instead, call `getBlock` using a `GetVersionedBlockConfig` by
+	   * setting the `maxSupportedTransactionVersion` property.
+	   */
+
+	  /**
+	   * @deprecated Instead, call `getBlock` using a `GetVersionedBlockConfig` by
+	   * setting the `maxSupportedTransactionVersion` property.
+	   */ // eslint-disable-next-line no-dupe-class-members
+	  /**
+	   * @deprecated Instead, call `getBlock` using a `GetVersionedBlockConfig` by
+	   * setting the `maxSupportedTransactionVersion` property.
+	   */
+	  // eslint-disable-next-line no-dupe-class-members
+	  /**
+	   * Fetch a processed block from the cluster.
+	   */
+	  // eslint-disable-next-line no-dupe-class-members
+	  // eslint-disable-next-line no-dupe-class-members
+	  // eslint-disable-next-line no-dupe-class-members
+	  /**
+	   * Fetch a processed block from the cluster.
+	   */ // eslint-disable-next-line no-dupe-class-members
+	  async getBlock(slot, rawConfig) {
+	    const {
+	      commitment,
+	      config
+	    } = extractCommitmentFromConfig(rawConfig);
+	    const args = this._buildArgsAtLeastConfirmed([slot], commitment, undefined /* encoding */, config);
+	    const unsafeRes = await this._rpcRequest('getBlock', args);
+	    try {
+	      switch (config?.transactionDetails) {
+	        case 'accounts':
+	          {
+	            const res = create$1(unsafeRes, GetAccountsModeBlockRpcResult);
+	            if ('error' in res) {
+	              throw res.error;
+	            }
+	            return res.result;
+	          }
+	        case 'none':
+	          {
+	            const res = create$1(unsafeRes, GetNoneModeBlockRpcResult);
+	            if ('error' in res) {
+	              throw res.error;
+	            }
+	            return res.result;
+	          }
+	        default:
+	          {
+	            const res = create$1(unsafeRes, GetBlockRpcResult);
+	            if ('error' in res) {
+	              throw res.error;
+	            }
+	            const {
+	              result
+	            } = res;
+	            return result ? {
+	              ...result,
+	              transactions: result.transactions.map(({
+	                transaction,
+	                meta,
+	                version
+	              }) => ({
+	                meta,
+	                transaction: {
+	                  ...transaction,
+	                  message: versionedMessageFromResponse(version, transaction.message)
+	                },
+	                version
+	              }))
+	            } : null;
+	          }
+	      }
+	    } catch (e) {
+	      throw new SolanaJSONRPCError(e, 'failed to get confirmed block');
+	    }
+	  }
+
+	  /**
+	   * Fetch parsed transaction details for a confirmed or finalized block
+	   */
+
+	  // eslint-disable-next-line no-dupe-class-members
+
+	  // eslint-disable-next-line no-dupe-class-members
+
+	  // eslint-disable-next-line no-dupe-class-members
+	  async getParsedBlock(slot, rawConfig) {
+	    const {
+	      commitment,
+	      config
+	    } = extractCommitmentFromConfig(rawConfig);
+	    const args = this._buildArgsAtLeastConfirmed([slot], commitment, 'jsonParsed', config);
+	    const unsafeRes = await this._rpcRequest('getBlock', args);
+	    try {
+	      switch (config?.transactionDetails) {
+	        case 'accounts':
+	          {
+	            const res = create$1(unsafeRes, GetParsedAccountsModeBlockRpcResult);
+	            if ('error' in res) {
+	              throw res.error;
+	            }
+	            return res.result;
+	          }
+	        case 'none':
+	          {
+	            const res = create$1(unsafeRes, GetParsedNoneModeBlockRpcResult);
+	            if ('error' in res) {
+	              throw res.error;
+	            }
+	            return res.result;
+	          }
+	        default:
+	          {
+	            const res = create$1(unsafeRes, GetParsedBlockRpcResult);
+	            if ('error' in res) {
+	              throw res.error;
+	            }
+	            return res.result;
+	          }
+	      }
+	    } catch (e) {
+	      throw new SolanaJSONRPCError(e, 'failed to get block');
+	    }
+	  }
+	  /*
+	   * Returns recent block production information from the current or previous epoch
+	   */
+	  async getBlockProduction(configOrCommitment) {
+	    let extra;
+	    let commitment;
+	    if (typeof configOrCommitment === 'string') {
+	      commitment = configOrCommitment;
+	    } else if (configOrCommitment) {
+	      const {
+	        commitment: c,
+	        ...rest
+	      } = configOrCommitment;
+	      commitment = c;
+	      extra = rest;
+	    }
+	    const args = this._buildArgs([], commitment, 'base64', extra);
+	    const unsafeRes = await this._rpcRequest('getBlockProduction', args);
+	    const res = create$1(unsafeRes, BlockProductionResponseStruct);
+	    if ('error' in res) {
+	      throw new SolanaJSONRPCError(res.error, 'failed to get block production information');
+	    }
+	    return res.result;
+	  }
+
+	  /**
+	   * Fetch a confirmed or finalized transaction from the cluster.
+	   *
+	   * @deprecated Instead, call `getTransaction` using a
+	   * `GetVersionedTransactionConfig` by setting the
+	   * `maxSupportedTransactionVersion` property.
+	   */
+
+	  /**
+	   * Fetch a confirmed or finalized transaction from the cluster.
+	   */ // eslint-disable-next-line no-dupe-class-members
+	  /**
+	   * Fetch a confirmed or finalized transaction from the cluster.
+	   */ // eslint-disable-next-line no-dupe-class-members
+	  async getTransaction(signature, rawConfig) {
+	    const {
+	      commitment,
+	      config
+	    } = extractCommitmentFromConfig(rawConfig);
+	    const args = this._buildArgsAtLeastConfirmed([signature], commitment, undefined /* encoding */, config);
+	    const unsafeRes = await this._rpcRequest('getTransaction', args);
+	    const res = create$1(unsafeRes, GetTransactionRpcResult);
+	    if ('error' in res) {
+	      throw new SolanaJSONRPCError(res.error, 'failed to get transaction');
+	    }
+	    const result = res.result;
+	    if (!result) return result;
+	    return {
+	      ...result,
+	      transaction: {
+	        ...result.transaction,
+	        message: versionedMessageFromResponse(result.version, result.transaction.message)
+	      }
+	    };
+	  }
+
+	  /**
+	   * Fetch parsed transaction details for a confirmed or finalized transaction
+	   */
+	  async getParsedTransaction(signature, commitmentOrConfig) {
+	    const {
+	      commitment,
+	      config
+	    } = extractCommitmentFromConfig(commitmentOrConfig);
+	    const args = this._buildArgsAtLeastConfirmed([signature], commitment, 'jsonParsed', config);
+	    const unsafeRes = await this._rpcRequest('getTransaction', args);
+	    const res = create$1(unsafeRes, GetParsedTransactionRpcResult);
+	    if ('error' in res) {
+	      throw new SolanaJSONRPCError(res.error, 'failed to get transaction');
+	    }
+	    return res.result;
+	  }
+
+	  /**
+	   * Fetch parsed transaction details for a batch of confirmed transactions
+	   */
+	  async getParsedTransactions(signatures, commitmentOrConfig) {
+	    const {
+	      commitment,
+	      config
+	    } = extractCommitmentFromConfig(commitmentOrConfig);
+	    const batch = signatures.map(signature => {
+	      const args = this._buildArgsAtLeastConfirmed([signature], commitment, 'jsonParsed', config);
+	      return {
+	        methodName: 'getTransaction',
+	        args
+	      };
+	    });
+	    const unsafeRes = await this._rpcBatchRequest(batch);
+	    const res = unsafeRes.map(unsafeRes => {
+	      const res = create$1(unsafeRes, GetParsedTransactionRpcResult);
+	      if ('error' in res) {
+	        throw new SolanaJSONRPCError(res.error, 'failed to get transactions');
+	      }
+	      return res.result;
+	    });
+	    return res;
+	  }
+
+	  /**
+	   * Fetch transaction details for a batch of confirmed transactions.
+	   * Similar to {@link getParsedTransactions} but returns a {@link TransactionResponse}.
+	   *
+	   * @deprecated Instead, call `getTransactions` using a
+	   * `GetVersionedTransactionConfig` by setting the
+	   * `maxSupportedTransactionVersion` property.
+	   */
+
+	  /**
+	   * Fetch transaction details for a batch of confirmed transactions.
+	   * Similar to {@link getParsedTransactions} but returns a {@link
+	   * VersionedTransactionResponse}.
+	   */ // eslint-disable-next-line no-dupe-class-members
+	  /**
+	   * Fetch transaction details for a batch of confirmed transactions.
+	   * Similar to {@link getParsedTransactions} but returns a {@link
+	   * VersionedTransactionResponse}.
+	   */ // eslint-disable-next-line no-dupe-class-members
+	  async getTransactions(signatures, commitmentOrConfig) {
+	    const {
+	      commitment,
+	      config
+	    } = extractCommitmentFromConfig(commitmentOrConfig);
+	    const batch = signatures.map(signature => {
+	      const args = this._buildArgsAtLeastConfirmed([signature], commitment, undefined /* encoding */, config);
+	      return {
+	        methodName: 'getTransaction',
+	        args
+	      };
+	    });
+	    const unsafeRes = await this._rpcBatchRequest(batch);
+	    const res = unsafeRes.map(unsafeRes => {
+	      const res = create$1(unsafeRes, GetTransactionRpcResult);
+	      if ('error' in res) {
+	        throw new SolanaJSONRPCError(res.error, 'failed to get transactions');
+	      }
+	      const result = res.result;
+	      if (!result) return result;
+	      return {
+	        ...result,
+	        transaction: {
+	          ...result.transaction,
+	          message: versionedMessageFromResponse(result.version, result.transaction.message)
+	        }
+	      };
+	    });
+	    return res;
+	  }
+
+	  /**
+	   * Fetch a list of Transactions and transaction statuses from the cluster
+	   * for a confirmed block.
+	   *
+	   * @deprecated Deprecated since v1.13.0. Please use {@link getBlock} instead.
+	   */
+	  async getConfirmedBlock(slot, commitment) {
+	    const args = this._buildArgsAtLeastConfirmed([slot], commitment);
+	    const unsafeRes = await this._rpcRequest('getConfirmedBlock', args);
+	    const res = create$1(unsafeRes, GetConfirmedBlockRpcResult);
+	    if ('error' in res) {
+	      throw new SolanaJSONRPCError(res.error, 'failed to get confirmed block');
+	    }
+	    const result = res.result;
+	    if (!result) {
+	      throw new Error('Confirmed block ' + slot + ' not found');
+	    }
+	    const block = {
+	      ...result,
+	      transactions: result.transactions.map(({
+	        transaction,
+	        meta
+	      }) => {
+	        const message = new Message(transaction.message);
+	        return {
+	          meta,
+	          transaction: {
+	            ...transaction,
+	            message
+	          }
+	        };
+	      })
+	    };
+	    return {
+	      ...block,
+	      transactions: block.transactions.map(({
+	        transaction,
+	        meta
+	      }) => {
+	        return {
+	          meta,
+	          transaction: Transaction.populate(transaction.message, transaction.signatures)
+	        };
+	      })
+	    };
+	  }
+
+	  /**
+	   * Fetch confirmed blocks between two slots
+	   */
+	  async getBlocks(startSlot, endSlot, commitment) {
+	    const args = this._buildArgsAtLeastConfirmed(endSlot !== undefined ? [startSlot, endSlot] : [startSlot], commitment);
+	    const unsafeRes = await this._rpcRequest('getBlocks', args);
+	    const res = create$1(unsafeRes, jsonRpcResult(array(number$1())));
+	    if ('error' in res) {
+	      throw new SolanaJSONRPCError(res.error, 'failed to get blocks');
+	    }
+	    return res.result;
+	  }
+
+	  /**
+	   * Fetch a list of Signatures from the cluster for a block, excluding rewards
+	   */
+	  async getBlockSignatures(slot, commitment) {
+	    const args = this._buildArgsAtLeastConfirmed([slot], commitment, undefined, {
+	      transactionDetails: 'signatures',
+	      rewards: false
+	    });
+	    const unsafeRes = await this._rpcRequest('getBlock', args);
+	    const res = create$1(unsafeRes, GetBlockSignaturesRpcResult);
+	    if ('error' in res) {
+	      throw new SolanaJSONRPCError(res.error, 'failed to get block');
+	    }
+	    const result = res.result;
+	    if (!result) {
+	      throw new Error('Block ' + slot + ' not found');
+	    }
+	    return result;
+	  }
+
+	  /**
+	   * Fetch a list of Signatures from the cluster for a confirmed block, excluding rewards
+	   *
+	   * @deprecated Deprecated since Solana v1.8.0. Please use {@link getBlockSignatures} instead.
+	   */
+	  async getConfirmedBlockSignatures(slot, commitment) {
+	    const args = this._buildArgsAtLeastConfirmed([slot], commitment, undefined, {
+	      transactionDetails: 'signatures',
+	      rewards: false
+	    });
+	    const unsafeRes = await this._rpcRequest('getConfirmedBlock', args);
+	    const res = create$1(unsafeRes, GetBlockSignaturesRpcResult);
+	    if ('error' in res) {
+	      throw new SolanaJSONRPCError(res.error, 'failed to get confirmed block');
+	    }
+	    const result = res.result;
+	    if (!result) {
+	      throw new Error('Confirmed block ' + slot + ' not found');
+	    }
+	    return result;
+	  }
+
+	  /**
+	   * Fetch a transaction details for a confirmed transaction
+	   *
+	   * @deprecated Deprecated since Solana v1.8.0. Please use {@link getTransaction} instead.
+	   */
+	  async getConfirmedTransaction(signature, commitment) {
+	    const args = this._buildArgsAtLeastConfirmed([signature], commitment);
+	    const unsafeRes = await this._rpcRequest('getConfirmedTransaction', args);
+	    const res = create$1(unsafeRes, GetTransactionRpcResult);
+	    if ('error' in res) {
+	      throw new SolanaJSONRPCError(res.error, 'failed to get transaction');
+	    }
+	    const result = res.result;
+	    if (!result) return result;
+	    const message = new Message(result.transaction.message);
+	    const signatures = result.transaction.signatures;
+	    return {
+	      ...result,
+	      transaction: Transaction.populate(message, signatures)
+	    };
+	  }
+
+	  /**
+	   * Fetch parsed transaction details for a confirmed transaction
+	   *
+	   * @deprecated Deprecated since Solana v1.8.0. Please use {@link getParsedTransaction} instead.
+	   */
+	  async getParsedConfirmedTransaction(signature, commitment) {
+	    const args = this._buildArgsAtLeastConfirmed([signature], commitment, 'jsonParsed');
+	    const unsafeRes = await this._rpcRequest('getConfirmedTransaction', args);
+	    const res = create$1(unsafeRes, GetParsedTransactionRpcResult);
+	    if ('error' in res) {
+	      throw new SolanaJSONRPCError(res.error, 'failed to get confirmed transaction');
+	    }
+	    return res.result;
+	  }
+
+	  /**
+	   * Fetch parsed transaction details for a batch of confirmed transactions
+	   *
+	   * @deprecated Deprecated since Solana v1.8.0. Please use {@link getParsedTransactions} instead.
+	   */
+	  async getParsedConfirmedTransactions(signatures, commitment) {
+	    const batch = signatures.map(signature => {
+	      const args = this._buildArgsAtLeastConfirmed([signature], commitment, 'jsonParsed');
+	      return {
+	        methodName: 'getConfirmedTransaction',
+	        args
+	      };
+	    });
+	    const unsafeRes = await this._rpcBatchRequest(batch);
+	    const res = unsafeRes.map(unsafeRes => {
+	      const res = create$1(unsafeRes, GetParsedTransactionRpcResult);
+	      if ('error' in res) {
+	        throw new SolanaJSONRPCError(res.error, 'failed to get confirmed transactions');
+	      }
+	      return res.result;
+	    });
+	    return res;
+	  }
+
+	  /**
+	   * Fetch a list of all the confirmed signatures for transactions involving an address
+	   * within a specified slot range. Max range allowed is 10,000 slots.
+	   *
+	   * @deprecated Deprecated since v1.3. Please use {@link getConfirmedSignaturesForAddress2} instead.
+	   *
+	   * @param address queried address
+	   * @param startSlot start slot, inclusive
+	   * @param endSlot end slot, inclusive
+	   */
+	  async getConfirmedSignaturesForAddress(address, startSlot, endSlot) {
+	    let options = {};
+	    let firstAvailableBlock = await this.getFirstAvailableBlock();
+	    while (!('until' in options)) {
+	      startSlot--;
+	      if (startSlot <= 0 || startSlot < firstAvailableBlock) {
+	        break;
+	      }
+	      try {
+	        const block = await this.getConfirmedBlockSignatures(startSlot, 'finalized');
+	        if (block.signatures.length > 0) {
+	          options.until = block.signatures[block.signatures.length - 1].toString();
+	        }
+	      } catch (err) {
+	        if (err instanceof Error && err.message.includes('skipped')) {
+	          continue;
+	        } else {
+	          throw err;
+	        }
+	      }
+	    }
+	    let highestConfirmedRoot = await this.getSlot('finalized');
+	    while (!('before' in options)) {
+	      endSlot++;
+	      if (endSlot > highestConfirmedRoot) {
+	        break;
+	      }
+	      try {
+	        const block = await this.getConfirmedBlockSignatures(endSlot);
+	        if (block.signatures.length > 0) {
+	          options.before = block.signatures[block.signatures.length - 1].toString();
+	        }
+	      } catch (err) {
+	        if (err instanceof Error && err.message.includes('skipped')) {
+	          continue;
+	        } else {
+	          throw err;
+	        }
+	      }
+	    }
+	    const confirmedSignatureInfo = await this.getConfirmedSignaturesForAddress2(address, options);
+	    return confirmedSignatureInfo.map(info => info.signature);
+	  }
+
+	  /**
+	   * Returns confirmed signatures for transactions involving an
+	   * address backwards in time from the provided signature or most recent confirmed block
+	   *
+	   *
+	   * @param address queried address
+	   * @param options
+	   */
+	  async getConfirmedSignaturesForAddress2(address, options, commitment) {
+	    const args = this._buildArgsAtLeastConfirmed([address.toBase58()], commitment, undefined, options);
+	    const unsafeRes = await this._rpcRequest('getConfirmedSignaturesForAddress2', args);
+	    const res = create$1(unsafeRes, GetConfirmedSignaturesForAddress2RpcResult);
+	    if ('error' in res) {
+	      throw new SolanaJSONRPCError(res.error, 'failed to get confirmed signatures for address');
+	    }
+	    return res.result;
+	  }
+
+	  /**
+	   * Returns confirmed signatures for transactions involving an
+	   * address backwards in time from the provided signature or most recent confirmed block
+	   *
+	   *
+	   * @param address queried address
+	   * @param options
+	   */
+	  async getSignaturesForAddress(address, options, commitment) {
+	    const args = this._buildArgsAtLeastConfirmed([address.toBase58()], commitment, undefined, options);
+	    const unsafeRes = await this._rpcRequest('getSignaturesForAddress', args);
+	    const res = create$1(unsafeRes, GetSignaturesForAddressRpcResult);
+	    if ('error' in res) {
+	      throw new SolanaJSONRPCError(res.error, 'failed to get signatures for address');
+	    }
+	    return res.result;
+	  }
+	  async getAddressLookupTable(accountKey, config) {
+	    const {
+	      context,
+	      value: accountInfo
+	    } = await this.getAccountInfoAndContext(accountKey, config);
+	    let value = null;
+	    if (accountInfo !== null) {
+	      value = new AddressLookupTableAccount({
+	        key: accountKey,
+	        state: AddressLookupTableAccount.deserialize(accountInfo.data)
+	      });
+	    }
+	    return {
+	      context,
+	      value
+	    };
+	  }
+
+	  /**
+	   * Fetch the contents of a Nonce account from the cluster, return with context
+	   */
+	  async getNonceAndContext(nonceAccount, commitmentOrConfig) {
+	    const {
+	      context,
+	      value: accountInfo
+	    } = await this.getAccountInfoAndContext(nonceAccount, commitmentOrConfig);
+	    let value = null;
+	    if (accountInfo !== null) {
+	      value = NonceAccount.fromAccountData(accountInfo.data);
+	    }
+	    return {
+	      context,
+	      value
+	    };
+	  }
+
+	  /**
+	   * Fetch the contents of a Nonce account from the cluster
+	   */
+	  async getNonce(nonceAccount, commitmentOrConfig) {
+	    return await this.getNonceAndContext(nonceAccount, commitmentOrConfig).then(x => x.value).catch(e => {
+	      throw new Error('failed to get nonce for account ' + nonceAccount.toBase58() + ': ' + e);
+	    });
+	  }
+
+	  /**
+	   * Request an allocation of lamports to the specified address
+	   *
+	   * ```typescript
+	   * import { Connection, PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
+	   *
+	   * (async () => {
+	   *   const connection = new Connection("https://api.testnet.solana.com", "confirmed");
+	   *   const myAddress = new PublicKey("2nr1bHFT86W9tGnyvmYW4vcHKsQB3sVQfnddasz4kExM");
+	   *   const signature = await connection.requestAirdrop(myAddress, LAMPORTS_PER_SOL);
+	   *   await connection.confirmTransaction(signature);
+	   * })();
+	   * ```
+	   */
+	  async requestAirdrop(to, lamports) {
+	    const unsafeRes = await this._rpcRequest('requestAirdrop', [to.toBase58(), lamports]);
+	    const res = create$1(unsafeRes, RequestAirdropRpcResult);
+	    if ('error' in res) {
+	      throw new SolanaJSONRPCError(res.error, `airdrop to ${to.toBase58()} failed`);
+	    }
+	    return res.result;
+	  }
+
+	  /**
+	   * @internal
+	   */
+	  async _blockhashWithExpiryBlockHeight(disableCache) {
+	    if (!disableCache) {
+	      // Wait for polling to finish
+	      while (this._pollingBlockhash) {
+	        await sleep(100);
+	      }
+	      const timeSinceFetch = Date.now() - this._blockhashInfo.lastFetch;
+	      const expired = timeSinceFetch >= BLOCKHASH_CACHE_TIMEOUT_MS;
+	      if (this._blockhashInfo.latestBlockhash !== null && !expired) {
+	        return this._blockhashInfo.latestBlockhash;
+	      }
+	    }
+	    return await this._pollNewBlockhash();
+	  }
+
+	  /**
+	   * @internal
+	   */
+	  async _pollNewBlockhash() {
+	    this._pollingBlockhash = true;
+	    try {
+	      const startTime = Date.now();
+	      const cachedLatestBlockhash = this._blockhashInfo.latestBlockhash;
+	      const cachedBlockhash = cachedLatestBlockhash ? cachedLatestBlockhash.blockhash : null;
+	      for (let i = 0; i < 50; i++) {
+	        const latestBlockhash = await this.getLatestBlockhash('finalized');
+	        if (cachedBlockhash !== latestBlockhash.blockhash) {
+	          this._blockhashInfo = {
+	            latestBlockhash,
+	            lastFetch: Date.now(),
+	            transactionSignatures: [],
+	            simulatedSignatures: []
+	          };
+	          return latestBlockhash;
+	        }
+
+	        // Sleep for approximately half a slot
+	        await sleep(MS_PER_SLOT / 2);
+	      }
+	      throw new Error(`Unable to obtain a new blockhash after ${Date.now() - startTime}ms`);
+	    } finally {
+	      this._pollingBlockhash = false;
+	    }
+	  }
+
+	  /**
+	   * get the stake minimum delegation
+	   */
+	  async getStakeMinimumDelegation(config) {
+	    const {
+	      commitment,
+	      config: configArg
+	    } = extractCommitmentFromConfig(config);
+	    const args = this._buildArgs([], commitment, 'base64', configArg);
+	    const unsafeRes = await this._rpcRequest('getStakeMinimumDelegation', args);
+	    const res = create$1(unsafeRes, jsonRpcResultAndContext(number$1()));
+	    if ('error' in res) {
+	      throw new SolanaJSONRPCError(res.error, `failed to get stake minimum delegation`);
+	    }
+	    return res.result;
+	  }
+
+	  /**
+	   * Simulate a transaction
+	   *
+	   * @deprecated Instead, call {@link simulateTransaction} with {@link
+	   * VersionedTransaction} and {@link SimulateTransactionConfig} parameters
+	   */
+
+	  /**
+	   * Simulate a transaction
+	   */ // eslint-disable-next-line no-dupe-class-members
+	  /**
+	   * Simulate a transaction
+	   */ // eslint-disable-next-line no-dupe-class-members
+	  async simulateTransaction(transactionOrMessage, configOrSigners, includeAccounts) {
+	    if ('message' in transactionOrMessage) {
+	      const versionedTx = transactionOrMessage;
+	      const wireTransaction = versionedTx.serialize();
+	      const encodedTransaction = buffer.Buffer.from(wireTransaction).toString('base64');
+	      if (Array.isArray(configOrSigners) || includeAccounts !== undefined) {
+	        throw new Error('Invalid arguments');
+	      }
+	      const config = configOrSigners || {};
+	      config.encoding = 'base64';
+	      if (!('commitment' in config)) {
+	        config.commitment = this.commitment;
+	      }
+	      const args = [encodedTransaction, config];
+	      const unsafeRes = await this._rpcRequest('simulateTransaction', args);
+	      const res = create$1(unsafeRes, SimulatedTransactionResponseStruct);
+	      if ('error' in res) {
+	        throw new Error('failed to simulate transaction: ' + res.error.message);
+	      }
+	      return res.result;
+	    }
+	    let transaction;
+	    if (transactionOrMessage instanceof Transaction) {
+	      let originalTx = transactionOrMessage;
+	      transaction = new Transaction();
+	      transaction.feePayer = originalTx.feePayer;
+	      transaction.instructions = transactionOrMessage.instructions;
+	      transaction.nonceInfo = originalTx.nonceInfo;
+	      transaction.signatures = originalTx.signatures;
+	    } else {
+	      transaction = Transaction.populate(transactionOrMessage);
+	      // HACK: this function relies on mutating the populated transaction
+	      transaction._message = transaction._json = undefined;
+	    }
+	    if (configOrSigners !== undefined && !Array.isArray(configOrSigners)) {
+	      throw new Error('Invalid arguments');
+	    }
+	    const signers = configOrSigners;
+	    if (transaction.nonceInfo && signers) {
+	      transaction.sign(...signers);
+	    } else {
+	      let disableCache = this._disableBlockhashCaching;
+	      for (;;) {
+	        const latestBlockhash = await this._blockhashWithExpiryBlockHeight(disableCache);
+	        transaction.lastValidBlockHeight = latestBlockhash.lastValidBlockHeight;
+	        transaction.recentBlockhash = latestBlockhash.blockhash;
+	        if (!signers) break;
+	        transaction.sign(...signers);
+	        if (!transaction.signature) {
+	          throw new Error('!signature'); // should never happen
+	        }
+
+	        const signature = transaction.signature.toString('base64');
+	        if (!this._blockhashInfo.simulatedSignatures.includes(signature) && !this._blockhashInfo.transactionSignatures.includes(signature)) {
+	          // The signature of this transaction has not been seen before with the
+	          // current recentBlockhash, all done. Let's break
+	          this._blockhashInfo.simulatedSignatures.push(signature);
+	          break;
+	        } else {
+	          // This transaction would be treated as duplicate (its derived signature
+	          // matched to one of already recorded signatures).
+	          // So, we must fetch a new blockhash for a different signature by disabling
+	          // our cache not to wait for the cache expiration (BLOCKHASH_CACHE_TIMEOUT_MS).
+	          disableCache = true;
+	        }
+	      }
+	    }
+	    const message = transaction._compile();
+	    const signData = message.serialize();
+	    const wireTransaction = transaction._serialize(signData);
+	    const encodedTransaction = wireTransaction.toString('base64');
+	    const config = {
+	      encoding: 'base64',
+	      commitment: this.commitment
+	    };
+	    if (includeAccounts) {
+	      const addresses = (Array.isArray(includeAccounts) ? includeAccounts : message.nonProgramIds()).map(key => key.toBase58());
+	      config['accounts'] = {
+	        encoding: 'base64',
+	        addresses
+	      };
+	    }
+	    if (signers) {
+	      config.sigVerify = true;
+	    }
+	    const args = [encodedTransaction, config];
+	    const unsafeRes = await this._rpcRequest('simulateTransaction', args);
+	    const res = create$1(unsafeRes, SimulatedTransactionResponseStruct);
+	    if ('error' in res) {
+	      let logs;
+	      if ('data' in res.error) {
+	        logs = res.error.data.logs;
+	        if (logs && Array.isArray(logs)) {
+	          const traceIndent = '\n    ';
+	          const logTrace = traceIndent + logs.join(traceIndent);
+	          console.error(res.error.message, logTrace);
+	        }
+	      }
+	      throw new SendTransactionError('failed to simulate transaction: ' + res.error.message, logs);
+	    }
+	    return res.result;
+	  }
+
+	  /**
+	   * Sign and send a transaction
+	   *
+	   * @deprecated Instead, call {@link sendTransaction} with a {@link
+	   * VersionedTransaction}
+	   */
+
+	  /**
+	   * Send a signed transaction
+	   */ // eslint-disable-next-line no-dupe-class-members
+	  /**
+	   * Sign and send a transaction
+	   */ // eslint-disable-next-line no-dupe-class-members
+	  async sendTransaction(transaction, signersOrOptions, options) {
+	    if ('version' in transaction) {
+	      if (signersOrOptions && Array.isArray(signersOrOptions)) {
+	        throw new Error('Invalid arguments');
+	      }
+	      const wireTransaction = transaction.serialize();
+	      return await this.sendRawTransaction(wireTransaction, signersOrOptions);
+	    }
+	    if (signersOrOptions === undefined || !Array.isArray(signersOrOptions)) {
+	      throw new Error('Invalid arguments');
+	    }
+	    const signers = signersOrOptions;
+	    if (transaction.nonceInfo) {
+	      transaction.sign(...signers);
+	    } else {
+	      let disableCache = this._disableBlockhashCaching;
+	      for (;;) {
+	        const latestBlockhash = await this._blockhashWithExpiryBlockHeight(disableCache);
+	        transaction.lastValidBlockHeight = latestBlockhash.lastValidBlockHeight;
+	        transaction.recentBlockhash = latestBlockhash.blockhash;
+	        transaction.sign(...signers);
+	        if (!transaction.signature) {
+	          throw new Error('!signature'); // should never happen
+	        }
+
+	        const signature = transaction.signature.toString('base64');
+	        if (!this._blockhashInfo.transactionSignatures.includes(signature)) {
+	          // The signature of this transaction has not been seen before with the
+	          // current recentBlockhash, all done. Let's break
+	          this._blockhashInfo.transactionSignatures.push(signature);
+	          break;
+	        } else {
+	          // This transaction would be treated as duplicate (its derived signature
+	          // matched to one of already recorded signatures).
+	          // So, we must fetch a new blockhash for a different signature by disabling
+	          // our cache not to wait for the cache expiration (BLOCKHASH_CACHE_TIMEOUT_MS).
+	          disableCache = true;
+	        }
+	      }
+	    }
+	    const wireTransaction = transaction.serialize();
+	    return await this.sendRawTransaction(wireTransaction, options);
+	  }
+
+	  /**
+	   * Send a transaction that has already been signed and serialized into the
+	   * wire format
+	   */
+	  async sendRawTransaction(rawTransaction, options) {
+	    const encodedTransaction = toBuffer(rawTransaction).toString('base64');
+	    const result = await this.sendEncodedTransaction(encodedTransaction, options);
+	    return result;
+	  }
+
+	  /**
+	   * Send a transaction that has already been signed, serialized into the
+	   * wire format, and encoded as a base64 string
+	   */
+	  async sendEncodedTransaction(encodedTransaction, options) {
+	    const config = {
+	      encoding: 'base64'
+	    };
+	    const skipPreflight = options && options.skipPreflight;
+	    const preflightCommitment = options && options.preflightCommitment || this.commitment;
+	    if (options && options.maxRetries != null) {
+	      config.maxRetries = options.maxRetries;
+	    }
+	    if (options && options.minContextSlot != null) {
+	      config.minContextSlot = options.minContextSlot;
+	    }
+	    if (skipPreflight) {
+	      config.skipPreflight = skipPreflight;
+	    }
+	    if (preflightCommitment) {
+	      config.preflightCommitment = preflightCommitment;
+	    }
+	    const args = [encodedTransaction, config];
+	    const unsafeRes = await this._rpcRequest('sendTransaction', args);
+	    const res = create$1(unsafeRes, SendTransactionRpcResult);
+	    if ('error' in res) {
+	      let logs;
+	      if ('data' in res.error) {
+	        logs = res.error.data.logs;
+	      }
+	      throw new SendTransactionError('failed to send transaction: ' + res.error.message, logs);
+	    }
+	    return res.result;
+	  }
+
+	  /**
+	   * @internal
+	   */
+	  _wsOnOpen() {
+	    this._rpcWebSocketConnected = true;
+	    this._rpcWebSocketHeartbeat = setInterval(() => {
+	      // Ping server every 5s to prevent idle timeouts
+	      (async () => {
+	        try {
+	          await this._rpcWebSocket.notify('ping');
+	          // eslint-disable-next-line no-empty
+	        } catch {}
+	      })();
+	    }, 5000);
+	    this._updateSubscriptions();
+	  }
+
+	  /**
+	   * @internal
+	   */
+	  _wsOnError(err) {
+	    this._rpcWebSocketConnected = false;
+	    console.error('ws error:', err.message);
+	  }
+
+	  /**
+	   * @internal
+	   */
+	  _wsOnClose(code) {
+	    this._rpcWebSocketConnected = false;
+	    this._rpcWebSocketGeneration = (this._rpcWebSocketGeneration + 1) % Number.MAX_SAFE_INTEGER;
+	    if (this._rpcWebSocketIdleTimeout) {
+	      clearTimeout(this._rpcWebSocketIdleTimeout);
+	      this._rpcWebSocketIdleTimeout = null;
+	    }
+	    if (this._rpcWebSocketHeartbeat) {
+	      clearInterval(this._rpcWebSocketHeartbeat);
+	      this._rpcWebSocketHeartbeat = null;
+	    }
+	    if (code === 1000) {
+	      // explicit close, check if any subscriptions have been made since close
+	      this._updateSubscriptions();
+	      return;
+	    }
+
+	    // implicit close, prepare subscriptions for auto-reconnect
+	    this._subscriptionCallbacksByServerSubscriptionId = {};
+	    Object.entries(this._subscriptionsByHash).forEach(([hash, subscription]) => {
+	      this._setSubscription(hash, {
+	        ...subscription,
+	        state: 'pending'
+	      });
+	    });
+	  }
+
+	  /**
+	   * @internal
+	   */
+	  _setSubscription(hash, nextSubscription) {
+	    const prevState = this._subscriptionsByHash[hash]?.state;
+	    this._subscriptionsByHash[hash] = nextSubscription;
+	    if (prevState !== nextSubscription.state) {
+	      const stateChangeCallbacks = this._subscriptionStateChangeCallbacksByHash[hash];
+	      if (stateChangeCallbacks) {
+	        stateChangeCallbacks.forEach(cb => {
+	          try {
+	            cb(nextSubscription.state);
+	            // eslint-disable-next-line no-empty
+	          } catch {}
+	        });
+	      }
+	    }
+	  }
+
+	  /**
+	   * @internal
+	   */
+	  _onSubscriptionStateChange(clientSubscriptionId, callback) {
+	    const hash = this._subscriptionHashByClientSubscriptionId[clientSubscriptionId];
+	    if (hash == null) {
+	      return () => {};
+	    }
+	    const stateChangeCallbacks = this._subscriptionStateChangeCallbacksByHash[hash] ||= new Set();
+	    stateChangeCallbacks.add(callback);
+	    return () => {
+	      stateChangeCallbacks.delete(callback);
+	      if (stateChangeCallbacks.size === 0) {
+	        delete this._subscriptionStateChangeCallbacksByHash[hash];
+	      }
+	    };
+	  }
+
+	  /**
+	   * @internal
+	   */
+	  async _updateSubscriptions() {
+	    if (Object.keys(this._subscriptionsByHash).length === 0) {
+	      if (this._rpcWebSocketConnected) {
+	        this._rpcWebSocketConnected = false;
+	        this._rpcWebSocketIdleTimeout = setTimeout(() => {
+	          this._rpcWebSocketIdleTimeout = null;
+	          try {
+	            this._rpcWebSocket.close();
+	          } catch (err) {
+	            // swallow error if socket has already been closed.
+	            if (err instanceof Error) {
+	              console.log(`Error when closing socket connection: ${err.message}`);
+	            }
+	          }
+	        }, 500);
+	      }
+	      return;
+	    }
+	    if (this._rpcWebSocketIdleTimeout !== null) {
+	      clearTimeout(this._rpcWebSocketIdleTimeout);
+	      this._rpcWebSocketIdleTimeout = null;
+	      this._rpcWebSocketConnected = true;
+	    }
+	    if (!this._rpcWebSocketConnected) {
+	      this._rpcWebSocket.connect();
+	      return;
+	    }
+	    const activeWebSocketGeneration = this._rpcWebSocketGeneration;
+	    const isCurrentConnectionStillActive = () => {
+	      return activeWebSocketGeneration === this._rpcWebSocketGeneration;
+	    };
+	    await Promise.all(
+	    // Don't be tempted to change this to `Object.entries`. We call
+	    // `_updateSubscriptions` recursively when processing the state,
+	    // so it's important that we look up the *current* version of
+	    // each subscription, every time we process a hash.
+	    Object.keys(this._subscriptionsByHash).map(async hash => {
+	      const subscription = this._subscriptionsByHash[hash];
+	      if (subscription === undefined) {
+	        // This entry has since been deleted. Skip.
+	        return;
+	      }
+	      switch (subscription.state) {
+	        case 'pending':
+	        case 'unsubscribed':
+	          if (subscription.callbacks.size === 0) {
+	            /**
+	             * You can end up here when:
+	             *
+	             * - a subscription has recently unsubscribed
+	             *   without having new callbacks added to it
+	             *   while the unsubscribe was in flight, or
+	             * - when a pending subscription has its
+	             *   listeners removed before a request was
+	             *   sent to the server.
+	             *
+	             * Being that nobody is interested in this
+	             * subscription any longer, delete it.
+	             */
+	            delete this._subscriptionsByHash[hash];
+	            if (subscription.state === 'unsubscribed') {
+	              delete this._subscriptionCallbacksByServerSubscriptionId[subscription.serverSubscriptionId];
+	            }
+	            await this._updateSubscriptions();
+	            return;
+	          }
+	          await (async () => {
+	            const {
+	              args,
+	              method
+	            } = subscription;
+	            try {
+	              this._setSubscription(hash, {
+	                ...subscription,
+	                state: 'subscribing'
+	              });
+	              const serverSubscriptionId = await this._rpcWebSocket.call(method, args);
+	              this._setSubscription(hash, {
+	                ...subscription,
+	                serverSubscriptionId,
+	                state: 'subscribed'
+	              });
+	              this._subscriptionCallbacksByServerSubscriptionId[serverSubscriptionId] = subscription.callbacks;
+	              await this._updateSubscriptions();
+	            } catch (e) {
+	              if (e instanceof Error) {
+	                console.error(`${method} error for argument`, args, e.message);
+	              }
+	              if (!isCurrentConnectionStillActive()) {
+	                return;
+	              }
+	              // TODO: Maybe add an 'errored' state or a retry limit?
+	              this._setSubscription(hash, {
+	                ...subscription,
+	                state: 'pending'
+	              });
+	              await this._updateSubscriptions();
+	            }
+	          })();
+	          break;
+	        case 'subscribed':
+	          if (subscription.callbacks.size === 0) {
+	            // By the time we successfully set up a subscription
+	            // with the server, the client stopped caring about it.
+	            // Tear it down now.
+	            await (async () => {
+	              const {
+	                serverSubscriptionId,
+	                unsubscribeMethod
+	              } = subscription;
+	              if (this._subscriptionsAutoDisposedByRpc.has(serverSubscriptionId)) {
+	                /**
+	                 * Special case.
+	                 * If we're dealing with a subscription that has been auto-
+	                 * disposed by the RPC, then we can skip the RPC call to
+	                 * tear down the subscription here.
+	                 *
+	                 * NOTE: There is a proposal to eliminate this special case, here:
+	                 * https://github.com/solana-labs/solana/issues/18892
+	                 */
+	                this._subscriptionsAutoDisposedByRpc.delete(serverSubscriptionId);
+	              } else {
+	                this._setSubscription(hash, {
+	                  ...subscription,
+	                  state: 'unsubscribing'
+	                });
+	                this._setSubscription(hash, {
+	                  ...subscription,
+	                  state: 'unsubscribing'
+	                });
+	                try {
+	                  await this._rpcWebSocket.call(unsubscribeMethod, [serverSubscriptionId]);
+	                } catch (e) {
+	                  if (e instanceof Error) {
+	                    console.error(`${unsubscribeMethod} error:`, e.message);
+	                  }
+	                  if (!isCurrentConnectionStillActive()) {
+	                    return;
+	                  }
+	                  // TODO: Maybe add an 'errored' state or a retry limit?
+	                  this._setSubscription(hash, {
+	                    ...subscription,
+	                    state: 'subscribed'
+	                  });
+	                  await this._updateSubscriptions();
+	                  return;
+	                }
+	              }
+	              this._setSubscription(hash, {
+	                ...subscription,
+	                state: 'unsubscribed'
+	              });
+	              await this._updateSubscriptions();
+	            })();
+	          }
+	          break;
+	      }
+	    }));
+	  }
+
+	  /**
+	   * @internal
+	   */
+	  _handleServerNotification(serverSubscriptionId, callbackArgs) {
+	    const callbacks = this._subscriptionCallbacksByServerSubscriptionId[serverSubscriptionId];
+	    if (callbacks === undefined) {
+	      return;
+	    }
+	    callbacks.forEach(cb => {
+	      try {
+	        cb(
+	        // I failed to find a way to convince TypeScript that `cb` is of type
+	        // `TCallback` which is certainly compatible with `Parameters<TCallback>`.
+	        // See https://github.com/microsoft/TypeScript/issues/47615
+	        // @ts-ignore
+	        ...callbackArgs);
+	      } catch (e) {
+	        console.error(e);
+	      }
+	    });
+	  }
+
+	  /**
+	   * @internal
+	   */
+	  _wsOnAccountNotification(notification) {
+	    const {
+	      result,
+	      subscription
+	    } = create$1(notification, AccountNotificationResult);
+	    this._handleServerNotification(subscription, [result.value, result.context]);
+	  }
+
+	  /**
+	   * @internal
+	   */
+	  _makeSubscription(subscriptionConfig,
+	  /**
+	   * When preparing `args` for a call to `_makeSubscription`, be sure
+	   * to carefully apply a default `commitment` property, if necessary.
+	   *
+	   * - If the user supplied a `commitment` use that.
+	   * - Otherwise, if the `Connection::commitment` is set, use that.
+	   * - Otherwise, set it to the RPC server default: `finalized`.
+	   *
+	   * This is extremely important to ensure that these two fundamentally
+	   * identical subscriptions produce the same identifying hash:
+	   *
+	   * - A subscription made without specifying a commitment.
+	   * - A subscription made where the commitment specified is the same
+	   *   as the default applied to the subscription above.
+	   *
+	   * Example; these two subscriptions must produce the same hash:
+	   *
+	   * - An `accountSubscribe` subscription for `'PUBKEY'`
+	   * - An `accountSubscribe` subscription for `'PUBKEY'` with commitment
+	   *   `'finalized'`.
+	   *
+	   * See the 'making a subscription with defaulted params omitted' test
+	   * in `connection-subscriptions.ts` for more.
+	   */
+	  args) {
+	    const clientSubscriptionId = this._nextClientSubscriptionId++;
+	    const hash = fastStableStringify$1([subscriptionConfig.method, args], true /* isArrayProp */);
+
+	    const existingSubscription = this._subscriptionsByHash[hash];
+	    if (existingSubscription === undefined) {
+	      this._subscriptionsByHash[hash] = {
+	        ...subscriptionConfig,
+	        args,
+	        callbacks: new Set([subscriptionConfig.callback]),
+	        state: 'pending'
+	      };
+	    } else {
+	      existingSubscription.callbacks.add(subscriptionConfig.callback);
+	    }
+	    this._subscriptionHashByClientSubscriptionId[clientSubscriptionId] = hash;
+	    this._subscriptionDisposeFunctionsByClientSubscriptionId[clientSubscriptionId] = async () => {
+	      delete this._subscriptionDisposeFunctionsByClientSubscriptionId[clientSubscriptionId];
+	      delete this._subscriptionHashByClientSubscriptionId[clientSubscriptionId];
+	      const subscription = this._subscriptionsByHash[hash];
+	      assert$1(subscription !== undefined, `Could not find a \`Subscription\` when tearing down client subscription #${clientSubscriptionId}`);
+	      subscription.callbacks.delete(subscriptionConfig.callback);
+	      await this._updateSubscriptions();
+	    };
+	    this._updateSubscriptions();
+	    return clientSubscriptionId;
+	  }
+
+	  /**
+	   * Register a callback to be invoked whenever the specified account changes
+	   *
+	   * @param publicKey Public key of the account to monitor
+	   * @param callback Function to invoke whenever the account is changed
+	   * @param commitment Specify the commitment level account changes must reach before notification
+	   * @return subscription id
+	   */
+	  onAccountChange(publicKey, callback, commitment) {
+	    const args = this._buildArgs([publicKey.toBase58()], commitment || this._commitment || 'finalized',
+	    // Apply connection/server default.
+	    'base64');
+	    return this._makeSubscription({
+	      callback,
+	      method: 'accountSubscribe',
+	      unsubscribeMethod: 'accountUnsubscribe'
+	    }, args);
+	  }
+
+	  /**
+	   * Deregister an account notification callback
+	   *
+	   * @param id client subscription id to deregister
+	   */
+	  async removeAccountChangeListener(clientSubscriptionId) {
+	    await this._unsubscribeClientSubscription(clientSubscriptionId, 'account change');
+	  }
+
+	  /**
+	   * @internal
+	   */
+	  _wsOnProgramAccountNotification(notification) {
+	    const {
+	      result,
+	      subscription
+	    } = create$1(notification, ProgramAccountNotificationResult);
+	    this._handleServerNotification(subscription, [{
+	      accountId: result.value.pubkey,
+	      accountInfo: result.value.account
+	    }, result.context]);
+	  }
+
+	  /**
+	   * Register a callback to be invoked whenever accounts owned by the
+	   * specified program change
+	   *
+	   * @param programId Public key of the program to monitor
+	   * @param callback Function to invoke whenever the account is changed
+	   * @param commitment Specify the commitment level account changes must reach before notification
+	   * @param filters The program account filters to pass into the RPC method
+	   * @return subscription id
+	   */
+	  onProgramAccountChange(programId, callback, commitment, filters) {
+	    const args = this._buildArgs([programId.toBase58()], commitment || this._commitment || 'finalized',
+	    // Apply connection/server default.
+	    'base64' /* encoding */, filters ? {
+	      filters: filters
+	    } : undefined /* extra */);
+
+	    return this._makeSubscription({
+	      callback,
+	      method: 'programSubscribe',
+	      unsubscribeMethod: 'programUnsubscribe'
+	    }, args);
+	  }
+
+	  /**
+	   * Deregister an account notification callback
+	   *
+	   * @param id client subscription id to deregister
+	   */
+	  async removeProgramAccountChangeListener(clientSubscriptionId) {
+	    await this._unsubscribeClientSubscription(clientSubscriptionId, 'program account change');
+	  }
+
+	  /**
+	   * Registers a callback to be invoked whenever logs are emitted.
+	   */
+	  onLogs(filter, callback, commitment) {
+	    const args = this._buildArgs([typeof filter === 'object' ? {
+	      mentions: [filter.toString()]
+	    } : filter], commitment || this._commitment || 'finalized' // Apply connection/server default.
+	    );
+
+	    return this._makeSubscription({
+	      callback,
+	      method: 'logsSubscribe',
+	      unsubscribeMethod: 'logsUnsubscribe'
+	    }, args);
+	  }
+
+	  /**
+	   * Deregister a logs callback.
+	   *
+	   * @param id client subscription id to deregister.
+	   */
+	  async removeOnLogsListener(clientSubscriptionId) {
+	    await this._unsubscribeClientSubscription(clientSubscriptionId, 'logs');
+	  }
+
+	  /**
+	   * @internal
+	   */
+	  _wsOnLogsNotification(notification) {
+	    const {
+	      result,
+	      subscription
+	    } = create$1(notification, LogsNotificationResult);
+	    this._handleServerNotification(subscription, [result.value, result.context]);
+	  }
+
+	  /**
+	   * @internal
+	   */
+	  _wsOnSlotNotification(notification) {
+	    const {
+	      result,
+	      subscription
+	    } = create$1(notification, SlotNotificationResult);
+	    this._handleServerNotification(subscription, [result]);
+	  }
+
+	  /**
+	   * Register a callback to be invoked upon slot changes
+	   *
+	   * @param callback Function to invoke whenever the slot changes
+	   * @return subscription id
+	   */
+	  onSlotChange(callback) {
+	    return this._makeSubscription({
+	      callback,
+	      method: 'slotSubscribe',
+	      unsubscribeMethod: 'slotUnsubscribe'
+	    }, [] /* args */);
+	  }
+
+	  /**
+	   * Deregister a slot notification callback
+	   *
+	   * @param id client subscription id to deregister
+	   */
+	  async removeSlotChangeListener(clientSubscriptionId) {
+	    await this._unsubscribeClientSubscription(clientSubscriptionId, 'slot change');
+	  }
+
+	  /**
+	   * @internal
+	   */
+	  _wsOnSlotUpdatesNotification(notification) {
+	    const {
+	      result,
+	      subscription
+	    } = create$1(notification, SlotUpdateNotificationResult);
+	    this._handleServerNotification(subscription, [result]);
+	  }
+
+	  /**
+	   * Register a callback to be invoked upon slot updates. {@link SlotUpdate}'s
+	   * may be useful to track live progress of a cluster.
+	   *
+	   * @param callback Function to invoke whenever the slot updates
+	   * @return subscription id
+	   */
+	  onSlotUpdate(callback) {
+	    return this._makeSubscription({
+	      callback,
+	      method: 'slotsUpdatesSubscribe',
+	      unsubscribeMethod: 'slotsUpdatesUnsubscribe'
+	    }, [] /* args */);
+	  }
+
+	  /**
+	   * Deregister a slot update notification callback
+	   *
+	   * @param id client subscription id to deregister
+	   */
+	  async removeSlotUpdateListener(clientSubscriptionId) {
+	    await this._unsubscribeClientSubscription(clientSubscriptionId, 'slot update');
+	  }
+
+	  /**
+	   * @internal
+	   */
+
+	  async _unsubscribeClientSubscription(clientSubscriptionId, subscriptionName) {
+	    const dispose = this._subscriptionDisposeFunctionsByClientSubscriptionId[clientSubscriptionId];
+	    if (dispose) {
+	      await dispose();
+	    } else {
+	      console.warn('Ignored unsubscribe request because an active subscription with id ' + `\`${clientSubscriptionId}\` for '${subscriptionName}' events ` + 'could not be found.');
+	    }
+	  }
+	  _buildArgs(args, override, encoding, extra) {
+	    const commitment = override || this._commitment;
+	    if (commitment || encoding || extra) {
+	      let options = {};
+	      if (encoding) {
+	        options.encoding = encoding;
+	      }
+	      if (commitment) {
+	        options.commitment = commitment;
+	      }
+	      if (extra) {
+	        options = Object.assign(options, extra);
+	      }
+	      args.push(options);
+	    }
+	    return args;
+	  }
+
+	  /**
+	   * @internal
+	   */
+	  _buildArgsAtLeastConfirmed(args, override, encoding, extra) {
+	    const commitment = override || this._commitment;
+	    if (commitment && !['confirmed', 'finalized'].includes(commitment)) {
+	      throw new Error('Using Connection with default commitment: `' + this._commitment + '`, but method requires at least `confirmed`');
+	    }
+	    return this._buildArgs(args, override, encoding, extra);
+	  }
+
+	  /**
+	   * @internal
+	   */
+	  _wsOnSignatureNotification(notification) {
+	    const {
+	      result,
+	      subscription
+	    } = create$1(notification, SignatureNotificationResult);
+	    if (result.value !== 'receivedSignature') {
+	      /**
+	       * Special case.
+	       * After a signature is processed, RPCs automatically dispose of the
+	       * subscription on the server side. We need to track which of these
+	       * subscriptions have been disposed in such a way, so that we know
+	       * whether the client is dealing with a not-yet-processed signature
+	       * (in which case we must tear down the server subscription) or an
+	       * already-processed signature (in which case the client can simply
+	       * clear out the subscription locally without telling the server).
+	       *
+	       * NOTE: There is a proposal to eliminate this special case, here:
+	       * https://github.com/solana-labs/solana/issues/18892
+	       */
+	      this._subscriptionsAutoDisposedByRpc.add(subscription);
+	    }
+	    this._handleServerNotification(subscription, result.value === 'receivedSignature' ? [{
+	      type: 'received'
+	    }, result.context] : [{
+	      type: 'status',
+	      result: result.value
+	    }, result.context]);
+	  }
+
+	  /**
+	   * Register a callback to be invoked upon signature updates
+	   *
+	   * @param signature Transaction signature string in base 58
+	   * @param callback Function to invoke on signature notifications
+	   * @param commitment Specify the commitment level signature must reach before notification
+	   * @return subscription id
+	   */
+	  onSignature(signature, callback, commitment) {
+	    const args = this._buildArgs([signature], commitment || this._commitment || 'finalized' // Apply connection/server default.
+	    );
+
+	    const clientSubscriptionId = this._makeSubscription({
+	      callback: (notification, context) => {
+	        if (notification.type === 'status') {
+	          callback(notification.result, context);
+	          // Signatures subscriptions are auto-removed by the RPC service
+	          // so no need to explicitly send an unsubscribe message.
+	          try {
+	            this.removeSignatureListener(clientSubscriptionId);
+	            // eslint-disable-next-line no-empty
+	          } catch (_err) {
+	            // Already removed.
+	          }
+	        }
+	      },
+	      method: 'signatureSubscribe',
+	      unsubscribeMethod: 'signatureUnsubscribe'
+	    }, args);
+	    return clientSubscriptionId;
+	  }
+
+	  /**
+	   * Register a callback to be invoked when a transaction is
+	   * received and/or processed.
+	   *
+	   * @param signature Transaction signature string in base 58
+	   * @param callback Function to invoke on signature notifications
+	   * @param options Enable received notifications and set the commitment
+	   *   level that signature must reach before notification
+	   * @return subscription id
+	   */
+	  onSignatureWithOptions(signature, callback, options) {
+	    const {
+	      commitment,
+	      ...extra
+	    } = {
+	      ...options,
+	      commitment: options && options.commitment || this._commitment || 'finalized' // Apply connection/server default.
+	    };
+
+	    const args = this._buildArgs([signature], commitment, undefined /* encoding */, extra);
+	    const clientSubscriptionId = this._makeSubscription({
+	      callback: (notification, context) => {
+	        callback(notification, context);
+	        // Signatures subscriptions are auto-removed by the RPC service
+	        // so no need to explicitly send an unsubscribe message.
+	        try {
+	          this.removeSignatureListener(clientSubscriptionId);
+	          // eslint-disable-next-line no-empty
+	        } catch (_err) {
+	          // Already removed.
+	        }
+	      },
+	      method: 'signatureSubscribe',
+	      unsubscribeMethod: 'signatureUnsubscribe'
+	    }, args);
+	    return clientSubscriptionId;
+	  }
+
+	  /**
+	   * Deregister a signature notification callback
+	   *
+	   * @param id client subscription id to deregister
+	   */
+	  async removeSignatureListener(clientSubscriptionId) {
+	    await this._unsubscribeClientSubscription(clientSubscriptionId, 'signature result');
+	  }
+
+	  /**
+	   * @internal
+	   */
+	  _wsOnRootNotification(notification) {
+	    const {
+	      result,
+	      subscription
+	    } = create$1(notification, RootNotificationResult);
+	    this._handleServerNotification(subscription, [result]);
+	  }
+
+	  /**
+	   * Register a callback to be invoked upon root changes
+	   *
+	   * @param callback Function to invoke whenever the root changes
+	   * @return subscription id
+	   */
+	  onRootChange(callback) {
+	    return this._makeSubscription({
+	      callback,
+	      method: 'rootSubscribe',
+	      unsubscribeMethod: 'rootUnsubscribe'
+	    }, [] /* args */);
+	  }
+
+	  /**
+	   * Deregister a root notification callback
+	   *
+	   * @param id client subscription id to deregister
+	   */
+	  async removeRootChangeListener(clientSubscriptionId) {
+	    await this._unsubscribeClientSubscription(clientSubscriptionId, 'root change');
+	  }
+	}
 
 	/**
 	 * Keypair signer interface
@@ -16631,7 +23525,7 @@ var solanaStakePool = (function (exports) {
 	   * Create a new keypair instance.
 	   * Generate random keypair if no {@link Ed25519Keypair} is provided.
 	   *
-	   * @param keypair ed25519 keypair
+	   * @param {Ed25519Keypair} keypair ed25519 keypair
 	   */
 	  constructor(keypair) {
 	    this._keypair = void 0;
@@ -16640,6 +23534,8 @@ var solanaStakePool = (function (exports) {
 
 	  /**
 	   * Generate a new random keypair
+	   *
+	   * @returns {Keypair} Keypair
 	   */
 	  static generate() {
 	    return new Keypair(generateKeypair());
@@ -16655,7 +23551,9 @@ var solanaStakePool = (function (exports) {
 	   * @throws error if the provided secret key is invalid and validation is not skipped.
 	   *
 	   * @param secretKey secret key byte array
-	   * @param options: skip secret key validation
+	   * @param options skip secret key validation
+	   *
+	   * @returns {Keypair} Keypair
 	   */
 	  static fromSecretKey(secretKey, options) {
 	    if (secretKey.byteLength !== 64) {
@@ -16681,6 +23579,8 @@ var solanaStakePool = (function (exports) {
 	   * Generate a keypair from a 32 byte seed.
 	   *
 	   * @param seed seed byte array
+	   *
+	   * @returns {Keypair} Keypair
 	   */
 	  static fromSeed(seed) {
 	    const publicKey = getPublicKey(seed);
@@ -16695,6 +23595,8 @@ var solanaStakePool = (function (exports) {
 
 	  /**
 	   * The public key for this keypair
+	   *
+	   * @returns {PublicKey} PublicKey
 	   */
 	  get publicKey() {
 	    return new PublicKey(this._keypair.publicKey);
@@ -16702,6 +23604,7 @@ var solanaStakePool = (function (exports) {
 
 	  /**
 	   * The raw secret key for this keypair
+	   * @returns {Uint8Array} Secret key in an array of Uint8 bytes
 	   */
 	  get secretKey() {
 	    return new Uint8Array(this._keypair.secretKey);
@@ -16709,13 +23612,17 @@ var solanaStakePool = (function (exports) {
 	}
 
 	/**
+	 * An enumeration of valid LookupTableInstructionType's
+	 */
+
+	/**
 	 * An enumeration of valid address lookup table InstructionType's
 	 * @internal
 	 */
-	Object.freeze({
+	const LOOKUP_TABLE_INSTRUCTION_LAYOUTS = Object.freeze({
 	  CreateLookupTable: {
 	    index: 0,
-	    layout: struct([u32('instruction'), u64$2('recentSlot'), u8('bumpSeed')])
+	    layout: struct([u32('instruction'), u64$1('recentSlot'), u8('bumpSeed')])
 	  },
 	  FreezeLookupTable: {
 	    index: 1,
@@ -16723,7 +23630,7 @@ var solanaStakePool = (function (exports) {
 	  },
 	  ExtendLookupTable: {
 	    index: 2,
-	    layout: struct([u32('instruction'), u64$2(), seq(publicKey$2(), offset(u32(), -8), 'addresses')])
+	    layout: struct([u32('instruction'), u64$1(), seq(publicKey$1(), offset(u32(), -8), 'addresses')])
 	  },
 	  DeactivateLookupTable: {
 	    index: 3,
@@ -16734,17 +23641,342 @@ var solanaStakePool = (function (exports) {
 	    layout: struct([u32('instruction')])
 	  }
 	});
-	new PublicKey('AddressLookupTab1e1111111111111111111111111');
+	class AddressLookupTableInstruction {
+	  /**
+	   * @internal
+	   */
+	  constructor() {}
+	  static decodeInstructionType(instruction) {
+	    this.checkProgramId(instruction.programId);
+	    const instructionTypeLayout = u32('instruction');
+	    const index = instructionTypeLayout.decode(instruction.data);
+	    let type;
+	    for (const [layoutType, layout] of Object.entries(LOOKUP_TABLE_INSTRUCTION_LAYOUTS)) {
+	      if (layout.index == index) {
+	        type = layoutType;
+	        break;
+	      }
+	    }
+	    if (!type) {
+	      throw new Error('Invalid Instruction. Should be a LookupTable Instruction');
+	    }
+	    return type;
+	  }
+	  static decodeCreateLookupTable(instruction) {
+	    this.checkProgramId(instruction.programId);
+	    this.checkKeysLength(instruction.keys, 4);
+	    const {
+	      recentSlot
+	    } = decodeData$1(LOOKUP_TABLE_INSTRUCTION_LAYOUTS.CreateLookupTable, instruction.data);
+	    return {
+	      authority: instruction.keys[1].pubkey,
+	      payer: instruction.keys[2].pubkey,
+	      recentSlot: Number(recentSlot)
+	    };
+	  }
+	  static decodeExtendLookupTable(instruction) {
+	    this.checkProgramId(instruction.programId);
+	    if (instruction.keys.length < 2) {
+	      throw new Error(`invalid instruction; found ${instruction.keys.length} keys, expected at least 2`);
+	    }
+	    const {
+	      addresses
+	    } = decodeData$1(LOOKUP_TABLE_INSTRUCTION_LAYOUTS.ExtendLookupTable, instruction.data);
+	    return {
+	      lookupTable: instruction.keys[0].pubkey,
+	      authority: instruction.keys[1].pubkey,
+	      payer: instruction.keys.length > 2 ? instruction.keys[2].pubkey : undefined,
+	      addresses: addresses.map(buffer => new PublicKey(buffer))
+	    };
+	  }
+	  static decodeCloseLookupTable(instruction) {
+	    this.checkProgramId(instruction.programId);
+	    this.checkKeysLength(instruction.keys, 3);
+	    return {
+	      lookupTable: instruction.keys[0].pubkey,
+	      authority: instruction.keys[1].pubkey,
+	      recipient: instruction.keys[2].pubkey
+	    };
+	  }
+	  static decodeFreezeLookupTable(instruction) {
+	    this.checkProgramId(instruction.programId);
+	    this.checkKeysLength(instruction.keys, 2);
+	    return {
+	      lookupTable: instruction.keys[0].pubkey,
+	      authority: instruction.keys[1].pubkey
+	    };
+	  }
+	  static decodeDeactivateLookupTable(instruction) {
+	    this.checkProgramId(instruction.programId);
+	    this.checkKeysLength(instruction.keys, 2);
+	    return {
+	      lookupTable: instruction.keys[0].pubkey,
+	      authority: instruction.keys[1].pubkey
+	    };
+	  }
+
+	  /**
+	   * @internal
+	   */
+	  static checkProgramId(programId) {
+	    if (!programId.equals(AddressLookupTableProgram.programId)) {
+	      throw new Error('invalid instruction; programId is not AddressLookupTable Program');
+	    }
+	  }
+	  /**
+	   * @internal
+	   */
+	  static checkKeysLength(keys, expectedLength) {
+	    if (keys.length < expectedLength) {
+	      throw new Error(`invalid instruction; found ${keys.length} keys, expected at least ${expectedLength}`);
+	    }
+	  }
+	}
+	class AddressLookupTableProgram {
+	  /**
+	   * @internal
+	   */
+	  constructor() {}
+	  static createLookupTable(params) {
+	    const [lookupTableAddress, bumpSeed] = PublicKey.findProgramAddressSync([params.authority.toBuffer(), toBufferLE_1(BigInt(params.recentSlot), 8)], this.programId);
+	    const type = LOOKUP_TABLE_INSTRUCTION_LAYOUTS.CreateLookupTable;
+	    const data = encodeData$1(type, {
+	      recentSlot: BigInt(params.recentSlot),
+	      bumpSeed: bumpSeed
+	    });
+	    const keys = [{
+	      pubkey: lookupTableAddress,
+	      isSigner: false,
+	      isWritable: true
+	    }, {
+	      pubkey: params.authority,
+	      isSigner: true,
+	      isWritable: false
+	    }, {
+	      pubkey: params.payer,
+	      isSigner: true,
+	      isWritable: true
+	    }, {
+	      pubkey: SystemProgram.programId,
+	      isSigner: false,
+	      isWritable: false
+	    }];
+	    return [new TransactionInstruction({
+	      programId: this.programId,
+	      keys: keys,
+	      data: data
+	    }), lookupTableAddress];
+	  }
+	  static freezeLookupTable(params) {
+	    const type = LOOKUP_TABLE_INSTRUCTION_LAYOUTS.FreezeLookupTable;
+	    const data = encodeData$1(type);
+	    const keys = [{
+	      pubkey: params.lookupTable,
+	      isSigner: false,
+	      isWritable: true
+	    }, {
+	      pubkey: params.authority,
+	      isSigner: true,
+	      isWritable: false
+	    }];
+	    return new TransactionInstruction({
+	      programId: this.programId,
+	      keys: keys,
+	      data: data
+	    });
+	  }
+	  static extendLookupTable(params) {
+	    const type = LOOKUP_TABLE_INSTRUCTION_LAYOUTS.ExtendLookupTable;
+	    const data = encodeData$1(type, {
+	      addresses: params.addresses.map(addr => addr.toBytes())
+	    });
+	    const keys = [{
+	      pubkey: params.lookupTable,
+	      isSigner: false,
+	      isWritable: true
+	    }, {
+	      pubkey: params.authority,
+	      isSigner: true,
+	      isWritable: false
+	    }];
+	    if (params.payer) {
+	      keys.push({
+	        pubkey: params.payer,
+	        isSigner: true,
+	        isWritable: true
+	      }, {
+	        pubkey: SystemProgram.programId,
+	        isSigner: false,
+	        isWritable: false
+	      });
+	    }
+	    return new TransactionInstruction({
+	      programId: this.programId,
+	      keys: keys,
+	      data: data
+	    });
+	  }
+	  static deactivateLookupTable(params) {
+	    const type = LOOKUP_TABLE_INSTRUCTION_LAYOUTS.DeactivateLookupTable;
+	    const data = encodeData$1(type);
+	    const keys = [{
+	      pubkey: params.lookupTable,
+	      isSigner: false,
+	      isWritable: true
+	    }, {
+	      pubkey: params.authority,
+	      isSigner: true,
+	      isWritable: false
+	    }];
+	    return new TransactionInstruction({
+	      programId: this.programId,
+	      keys: keys,
+	      data: data
+	    });
+	  }
+	  static closeLookupTable(params) {
+	    const type = LOOKUP_TABLE_INSTRUCTION_LAYOUTS.CloseLookupTable;
+	    const data = encodeData$1(type);
+	    const keys = [{
+	      pubkey: params.lookupTable,
+	      isSigner: false,
+	      isWritable: true
+	    }, {
+	      pubkey: params.authority,
+	      isSigner: true,
+	      isWritable: false
+	    }, {
+	      pubkey: params.recipient,
+	      isSigner: false,
+	      isWritable: true
+	    }];
+	    return new TransactionInstruction({
+	      programId: this.programId,
+	      keys: keys,
+	      data: data
+	    });
+	  }
+	}
+	AddressLookupTableProgram.programId = new PublicKey('AddressLookupTab1e1111111111111111111111111');
+
+	/**
+	 * Compute Budget Instruction class
+	 */
+	class ComputeBudgetInstruction {
+	  /**
+	   * @internal
+	   */
+	  constructor() {}
+
+	  /**
+	   * Decode a compute budget instruction and retrieve the instruction type.
+	   */
+	  static decodeInstructionType(instruction) {
+	    this.checkProgramId(instruction.programId);
+	    const instructionTypeLayout = u8('instruction');
+	    const typeIndex = instructionTypeLayout.decode(instruction.data);
+	    let type;
+	    for (const [ixType, layout] of Object.entries(COMPUTE_BUDGET_INSTRUCTION_LAYOUTS)) {
+	      if (layout.index == typeIndex) {
+	        type = ixType;
+	        break;
+	      }
+	    }
+	    if (!type) {
+	      throw new Error('Instruction type incorrect; not a ComputeBudgetInstruction');
+	    }
+	    return type;
+	  }
+
+	  /**
+	   * Decode request units compute budget instruction and retrieve the instruction params.
+	   */
+	  static decodeRequestUnits(instruction) {
+	    this.checkProgramId(instruction.programId);
+	    const {
+	      units,
+	      additionalFee
+	    } = decodeData$1(COMPUTE_BUDGET_INSTRUCTION_LAYOUTS.RequestUnits, instruction.data);
+	    return {
+	      units,
+	      additionalFee
+	    };
+	  }
+
+	  /**
+	   * Decode request heap frame compute budget instruction and retrieve the instruction params.
+	   */
+	  static decodeRequestHeapFrame(instruction) {
+	    this.checkProgramId(instruction.programId);
+	    const {
+	      bytes
+	    } = decodeData$1(COMPUTE_BUDGET_INSTRUCTION_LAYOUTS.RequestHeapFrame, instruction.data);
+	    return {
+	      bytes
+	    };
+	  }
+
+	  /**
+	   * Decode set compute unit limit compute budget instruction and retrieve the instruction params.
+	   */
+	  static decodeSetComputeUnitLimit(instruction) {
+	    this.checkProgramId(instruction.programId);
+	    const {
+	      units
+	    } = decodeData$1(COMPUTE_BUDGET_INSTRUCTION_LAYOUTS.SetComputeUnitLimit, instruction.data);
+	    return {
+	      units
+	    };
+	  }
+
+	  /**
+	   * Decode set compute unit price compute budget instruction and retrieve the instruction params.
+	   */
+	  static decodeSetComputeUnitPrice(instruction) {
+	    this.checkProgramId(instruction.programId);
+	    const {
+	      microLamports
+	    } = decodeData$1(COMPUTE_BUDGET_INSTRUCTION_LAYOUTS.SetComputeUnitPrice, instruction.data);
+	    return {
+	      microLamports
+	    };
+	  }
+
+	  /**
+	   * @internal
+	   */
+	  static checkProgramId(programId) {
+	    if (!programId.equals(ComputeBudgetProgram.programId)) {
+	      throw new Error('invalid instruction; programId is not ComputeBudgetProgram');
+	    }
+	  }
+	}
 
 	/**
 	 * An enumeration of valid ComputeBudgetInstructionType's
 	 */
 
 	/**
+	 * Request units instruction params
+	 */
+
+	/**
+	 * Request heap frame instruction params
+	 */
+
+	/**
+	 * Set compute unit limit instruction params
+	 */
+
+	/**
+	 * Set compute unit price instruction params
+	 */
+
+	/**
 	 * An enumeration of valid ComputeBudget InstructionType's
 	 * @internal
 	 */
-	Object.freeze({
+	const COMPUTE_BUDGET_INSTRUCTION_LAYOUTS = Object.freeze({
 	  RequestUnits: {
 	    index: 0,
 	    layout: struct([u8('instruction'), u32('units'), u32('additionalFee')])
@@ -16759,48 +23991,348 @@ var solanaStakePool = (function (exports) {
 	  },
 	  SetComputeUnitPrice: {
 	    index: 3,
-	    layout: struct([u8('instruction'), u64$2('microLamports')])
+	    layout: struct([u8('instruction'), u64$1('microLamports')])
 	  }
 	});
-	new PublicKey('ComputeBudget111111111111111111111111111111');
+
+	/**
+	 * Factory class for transaction instructions to interact with the Compute Budget program
+	 */
+	class ComputeBudgetProgram {
+	  /**
+	   * @internal
+	   */
+	  constructor() {}
+
+	  /**
+	   * Public key that identifies the Compute Budget program
+	   */
+
+	  /**
+	   * @deprecated Instead, call {@link setComputeUnitLimit} and/or {@link setComputeUnitPrice}
+	   */
+	  static requestUnits(params) {
+	    const type = COMPUTE_BUDGET_INSTRUCTION_LAYOUTS.RequestUnits;
+	    const data = encodeData$1(type, params);
+	    return new TransactionInstruction({
+	      keys: [],
+	      programId: this.programId,
+	      data
+	    });
+	  }
+	  static requestHeapFrame(params) {
+	    const type = COMPUTE_BUDGET_INSTRUCTION_LAYOUTS.RequestHeapFrame;
+	    const data = encodeData$1(type, params);
+	    return new TransactionInstruction({
+	      keys: [],
+	      programId: this.programId,
+	      data
+	    });
+	  }
+	  static setComputeUnitLimit(params) {
+	    const type = COMPUTE_BUDGET_INSTRUCTION_LAYOUTS.SetComputeUnitLimit;
+	    const data = encodeData$1(type, params);
+	    return new TransactionInstruction({
+	      keys: [],
+	      programId: this.programId,
+	      data
+	    });
+	  }
+	  static setComputeUnitPrice(params) {
+	    const type = COMPUTE_BUDGET_INSTRUCTION_LAYOUTS.SetComputeUnitPrice;
+	    const data = encodeData$1(type, {
+	      microLamports: BigInt(params.microLamports)
+	    });
+	    return new TransactionInstruction({
+	      keys: [],
+	      programId: this.programId,
+	      data
+	    });
+	  }
+	}
+	ComputeBudgetProgram.programId = new PublicKey('ComputeBudget111111111111111111111111111111');
+
+	const PRIVATE_KEY_BYTES$1 = 64;
+	const PUBLIC_KEY_BYTES$1 = 32;
+	const SIGNATURE_BYTES = 64;
 
 	/**
 	 * Params for creating an ed25519 instruction using a public key
 	 */
 
-	struct([u8('numSignatures'), u8('padding'), u16('signatureOffset'), u16('signatureInstructionIndex'), u16('publicKeyOffset'), u16('publicKeyInstructionIndex'), u16('messageDataOffset'), u16('messageDataSize'), u16('messageInstructionIndex')]);
-	new PublicKey('Ed25519SigVerify111111111111111111111111111');
+	/**
+	 * Params for creating an ed25519 instruction using a private key
+	 */
+
+	const ED25519_INSTRUCTION_LAYOUT = struct([u8('numSignatures'), u8('padding'), u16('signatureOffset'), u16('signatureInstructionIndex'), u16('publicKeyOffset'), u16('publicKeyInstructionIndex'), u16('messageDataOffset'), u16('messageDataSize'), u16('messageInstructionIndex')]);
+	class Ed25519Program {
+	  /**
+	   * @internal
+	   */
+	  constructor() {}
+
+	  /**
+	   * Public key that identifies the ed25519 program
+	   */
+
+	  /**
+	   * Create an ed25519 instruction with a public key and signature. The
+	   * public key must be a buffer that is 32 bytes long, and the signature
+	   * must be a buffer of 64 bytes.
+	   */
+	  static createInstructionWithPublicKey(params) {
+	    const {
+	      publicKey,
+	      message,
+	      signature,
+	      instructionIndex
+	    } = params;
+	    assert$1(publicKey.length === PUBLIC_KEY_BYTES$1, `Public Key must be ${PUBLIC_KEY_BYTES$1} bytes but received ${publicKey.length} bytes`);
+	    assert$1(signature.length === SIGNATURE_BYTES, `Signature must be ${SIGNATURE_BYTES} bytes but received ${signature.length} bytes`);
+	    const publicKeyOffset = ED25519_INSTRUCTION_LAYOUT.span;
+	    const signatureOffset = publicKeyOffset + publicKey.length;
+	    const messageDataOffset = signatureOffset + signature.length;
+	    const numSignatures = 1;
+	    const instructionData = buffer.Buffer.alloc(messageDataOffset + message.length);
+	    const index = instructionIndex == null ? 0xffff // An index of `u16::MAX` makes it default to the current instruction.
+	    : instructionIndex;
+	    ED25519_INSTRUCTION_LAYOUT.encode({
+	      numSignatures,
+	      padding: 0,
+	      signatureOffset,
+	      signatureInstructionIndex: index,
+	      publicKeyOffset,
+	      publicKeyInstructionIndex: index,
+	      messageDataOffset,
+	      messageDataSize: message.length,
+	      messageInstructionIndex: index
+	    }, instructionData);
+	    instructionData.fill(publicKey, publicKeyOffset);
+	    instructionData.fill(signature, signatureOffset);
+	    instructionData.fill(message, messageDataOffset);
+	    return new TransactionInstruction({
+	      keys: [],
+	      programId: Ed25519Program.programId,
+	      data: instructionData
+	    });
+	  }
+
+	  /**
+	   * Create an ed25519 instruction with a private key. The private key
+	   * must be a buffer that is 64 bytes long.
+	   */
+	  static createInstructionWithPrivateKey(params) {
+	    const {
+	      privateKey,
+	      message,
+	      instructionIndex
+	    } = params;
+	    assert$1(privateKey.length === PRIVATE_KEY_BYTES$1, `Private key must be ${PRIVATE_KEY_BYTES$1} bytes but received ${privateKey.length} bytes`);
+	    try {
+	      const keypair = Keypair.fromSecretKey(privateKey);
+	      const publicKey = keypair.publicKey.toBytes();
+	      const signature = sign(message, keypair.secretKey);
+	      return this.createInstructionWithPublicKey({
+	        publicKey,
+	        message,
+	        signature,
+	        instructionIndex
+	      });
+	    } catch (error) {
+	      throw new Error(`Error creating instruction; ${error}`);
+	    }
+	  }
+	}
+	Ed25519Program.programId = new PublicKey('Ed25519SigVerify111111111111111111111111111');
+
+	const ecdsaSign = (msgHash, privKey) => {
+	  const signature = secp256k1.sign(msgHash, privKey);
+	  return [signature.toCompactRawBytes(), signature.recovery];
+	};
 	secp256k1.utils.isValidPrivateKey;
-	secp256k1.getPublicKey;
+	const publicKeyCreate = secp256k1.getPublicKey;
+
+	const PRIVATE_KEY_BYTES = 32;
+	const ETHEREUM_ADDRESS_BYTES = 20;
+	const PUBLIC_KEY_BYTES = 64;
+	const SIGNATURE_OFFSETS_SERIALIZED_SIZE = 11;
 
 	/**
 	 * Params for creating an secp256k1 instruction using a public key
 	 */
 
-	struct([u8('numSignatures'), u16('signatureOffset'), u8('signatureInstructionIndex'), u16('ethAddressOffset'), u8('ethAddressInstructionIndex'), u16('messageDataOffset'), u16('messageDataSize'), u8('messageInstructionIndex'), blob(20, 'ethAddress'), blob(64, 'signature'), u8('recoveryId')]);
-	new PublicKey('KeccakSecp256k11111111111111111111111111111');
+	/**
+	 * Params for creating an secp256k1 instruction using an Ethereum address
+	 */
+
+	/**
+	 * Params for creating an secp256k1 instruction using a private key
+	 */
+
+	const SECP256K1_INSTRUCTION_LAYOUT = struct([u8('numSignatures'), u16('signatureOffset'), u8('signatureInstructionIndex'), u16('ethAddressOffset'), u8('ethAddressInstructionIndex'), u16('messageDataOffset'), u16('messageDataSize'), u8('messageInstructionIndex'), blob(20, 'ethAddress'), blob(64, 'signature'), u8('recoveryId')]);
+	class Secp256k1Program {
+	  /**
+	   * @internal
+	   */
+	  constructor() {}
+
+	  /**
+	   * Public key that identifies the secp256k1 program
+	   */
+
+	  /**
+	   * Construct an Ethereum address from a secp256k1 public key buffer.
+	   * @param {Buffer} publicKey a 64 byte secp256k1 public key buffer
+	   */
+	  static publicKeyToEthAddress(publicKey) {
+	    assert$1(publicKey.length === PUBLIC_KEY_BYTES, `Public key must be ${PUBLIC_KEY_BYTES} bytes but received ${publicKey.length} bytes`);
+	    try {
+	      return buffer.Buffer.from(keccak_256(toBuffer(publicKey))).slice(-ETHEREUM_ADDRESS_BYTES);
+	    } catch (error) {
+	      throw new Error(`Error constructing Ethereum address: ${error}`);
+	    }
+	  }
+
+	  /**
+	   * Create an secp256k1 instruction with a public key. The public key
+	   * must be a buffer that is 64 bytes long.
+	   */
+	  static createInstructionWithPublicKey(params) {
+	    const {
+	      publicKey,
+	      message,
+	      signature,
+	      recoveryId,
+	      instructionIndex
+	    } = params;
+	    return Secp256k1Program.createInstructionWithEthAddress({
+	      ethAddress: Secp256k1Program.publicKeyToEthAddress(publicKey),
+	      message,
+	      signature,
+	      recoveryId,
+	      instructionIndex
+	    });
+	  }
+
+	  /**
+	   * Create an secp256k1 instruction with an Ethereum address. The address
+	   * must be a hex string or a buffer that is 20 bytes long.
+	   */
+	  static createInstructionWithEthAddress(params) {
+	    const {
+	      ethAddress: rawAddress,
+	      message,
+	      signature,
+	      recoveryId,
+	      instructionIndex = 0
+	    } = params;
+	    let ethAddress;
+	    if (typeof rawAddress === 'string') {
+	      if (rawAddress.startsWith('0x')) {
+	        ethAddress = buffer.Buffer.from(rawAddress.substr(2), 'hex');
+	      } else {
+	        ethAddress = buffer.Buffer.from(rawAddress, 'hex');
+	      }
+	    } else {
+	      ethAddress = rawAddress;
+	    }
+	    assert$1(ethAddress.length === ETHEREUM_ADDRESS_BYTES, `Address must be ${ETHEREUM_ADDRESS_BYTES} bytes but received ${ethAddress.length} bytes`);
+	    const dataStart = 1 + SIGNATURE_OFFSETS_SERIALIZED_SIZE;
+	    const ethAddressOffset = dataStart;
+	    const signatureOffset = dataStart + ethAddress.length;
+	    const messageDataOffset = signatureOffset + signature.length + 1;
+	    const numSignatures = 1;
+	    const instructionData = buffer.Buffer.alloc(SECP256K1_INSTRUCTION_LAYOUT.span + message.length);
+	    SECP256K1_INSTRUCTION_LAYOUT.encode({
+	      numSignatures,
+	      signatureOffset,
+	      signatureInstructionIndex: instructionIndex,
+	      ethAddressOffset,
+	      ethAddressInstructionIndex: instructionIndex,
+	      messageDataOffset,
+	      messageDataSize: message.length,
+	      messageInstructionIndex: instructionIndex,
+	      signature: toBuffer(signature),
+	      ethAddress: toBuffer(ethAddress),
+	      recoveryId
+	    }, instructionData);
+	    instructionData.fill(toBuffer(message), SECP256K1_INSTRUCTION_LAYOUT.span);
+	    return new TransactionInstruction({
+	      keys: [],
+	      programId: Secp256k1Program.programId,
+	      data: instructionData
+	    });
+	  }
+
+	  /**
+	   * Create an secp256k1 instruction with a private key. The private key
+	   * must be a buffer that is 32 bytes long.
+	   */
+	  static createInstructionWithPrivateKey(params) {
+	    const {
+	      privateKey: pkey,
+	      message,
+	      instructionIndex
+	    } = params;
+	    assert$1(pkey.length === PRIVATE_KEY_BYTES, `Private key must be ${PRIVATE_KEY_BYTES} bytes but received ${pkey.length} bytes`);
+	    try {
+	      const privateKey = toBuffer(pkey);
+	      const publicKey = publicKeyCreate(privateKey, false /* isCompressed */).slice(1); // throw away leading byte
+	      const messageHash = buffer.Buffer.from(keccak_256(toBuffer(message)));
+	      const [signature, recoveryId] = ecdsaSign(messageHash, privateKey);
+	      return this.createInstructionWithPublicKey({
+	        publicKey,
+	        message,
+	        signature,
+	        recoveryId,
+	        instructionIndex
+	      });
+	    } catch (error) {
+	      throw new Error(`Error creating instruction; ${error}`);
+	    }
+	  }
+	}
+	Secp256k1Program.programId = new PublicKey('KeccakSecp256k11111111111111111111111111111');
+
+	var _class2;
 
 	/**
 	 * Address of the stake config account which configures the rate
 	 * of stake warmup and cooldown as well as the slashing penalty.
 	 */
 	const STAKE_CONFIG_ID = new PublicKey('StakeConfig11111111111111111111111111111111');
+
+	/**
+	 * Stake account authority info
+	 */
+	class Authorized {
+	  /**
+	   * Create a new Authorized object
+	   * @param staker the stake authority
+	   * @param withdrawer the withdraw authority
+	   */
+	  constructor(staker, withdrawer) {
+	    /** stake authority */
+	    this.staker = void 0;
+	    /** withdraw authority */
+	    this.withdrawer = void 0;
+	    this.staker = staker;
+	    this.withdrawer = withdrawer;
+	  }
+	}
 	/**
 	 * Stake account lockup info
 	 */
 	class Lockup {
-	  /** Unix timestamp of lockup expiration */
-
-	  /** Epoch of lockup expiration */
-
-	  /** Lockup custodian authority */
-
 	  /**
 	   * Create a new Lockup object
 	   */
 	  constructor(unixTimestamp, epoch, custodian) {
+	    /** Unix timestamp of lockup expiration */
 	    this.unixTimestamp = void 0;
+	    /** Epoch of lockup expiration */
 	    this.epoch = void 0;
+	    /** Lockup custodian authority */
 	    this.custodian = void 0;
 	    this.unixTimestamp = unixTimestamp;
 	    this.epoch = epoch;
@@ -16811,7 +24343,236 @@ var solanaStakePool = (function (exports) {
 	   * Default, inactive Lockup value
 	   */
 	}
-	Lockup.default = new Lockup(0, 0, PublicKey.default);
+	_class2 = Lockup;
+	Lockup.default = new _class2(0, 0, PublicKey.default);
+	/**
+	 * Create stake account transaction params
+	 */
+	/**
+	 * Create stake account with seed transaction params
+	 */
+	/**
+	 * Initialize stake instruction params
+	 */
+	/**
+	 * Delegate stake instruction params
+	 */
+	/**
+	 * Authorize stake instruction params
+	 */
+	/**
+	 * Authorize stake instruction params using a derived key
+	 */
+	/**
+	 * Split stake instruction params
+	 */
+	/**
+	 * Split with seed transaction params
+	 */
+	/**
+	 * Withdraw stake instruction params
+	 */
+	/**
+	 * Deactivate stake instruction params
+	 */
+	/**
+	 * Merge stake instruction params
+	 */
+	/**
+	 * Stake Instruction class
+	 */
+	class StakeInstruction {
+	  /**
+	   * @internal
+	   */
+	  constructor() {}
+
+	  /**
+	   * Decode a stake instruction and retrieve the instruction type.
+	   */
+	  static decodeInstructionType(instruction) {
+	    this.checkProgramId(instruction.programId);
+	    const instructionTypeLayout = u32('instruction');
+	    const typeIndex = instructionTypeLayout.decode(instruction.data);
+	    let type;
+	    for (const [ixType, layout] of Object.entries(STAKE_INSTRUCTION_LAYOUTS)) {
+	      if (layout.index == typeIndex) {
+	        type = ixType;
+	        break;
+	      }
+	    }
+	    if (!type) {
+	      throw new Error('Instruction type incorrect; not a StakeInstruction');
+	    }
+	    return type;
+	  }
+
+	  /**
+	   * Decode a initialize stake instruction and retrieve the instruction params.
+	   */
+	  static decodeInitialize(instruction) {
+	    this.checkProgramId(instruction.programId);
+	    this.checkKeyLength(instruction.keys, 2);
+	    const {
+	      authorized,
+	      lockup
+	    } = decodeData$1(STAKE_INSTRUCTION_LAYOUTS.Initialize, instruction.data);
+	    return {
+	      stakePubkey: instruction.keys[0].pubkey,
+	      authorized: new Authorized(new PublicKey(authorized.staker), new PublicKey(authorized.withdrawer)),
+	      lockup: new Lockup(lockup.unixTimestamp, lockup.epoch, new PublicKey(lockup.custodian))
+	    };
+	  }
+
+	  /**
+	   * Decode a delegate stake instruction and retrieve the instruction params.
+	   */
+	  static decodeDelegate(instruction) {
+	    this.checkProgramId(instruction.programId);
+	    this.checkKeyLength(instruction.keys, 6);
+	    decodeData$1(STAKE_INSTRUCTION_LAYOUTS.Delegate, instruction.data);
+	    return {
+	      stakePubkey: instruction.keys[0].pubkey,
+	      votePubkey: instruction.keys[1].pubkey,
+	      authorizedPubkey: instruction.keys[5].pubkey
+	    };
+	  }
+
+	  /**
+	   * Decode an authorize stake instruction and retrieve the instruction params.
+	   */
+	  static decodeAuthorize(instruction) {
+	    this.checkProgramId(instruction.programId);
+	    this.checkKeyLength(instruction.keys, 3);
+	    const {
+	      newAuthorized,
+	      stakeAuthorizationType
+	    } = decodeData$1(STAKE_INSTRUCTION_LAYOUTS.Authorize, instruction.data);
+	    const o = {
+	      stakePubkey: instruction.keys[0].pubkey,
+	      authorizedPubkey: instruction.keys[2].pubkey,
+	      newAuthorizedPubkey: new PublicKey(newAuthorized),
+	      stakeAuthorizationType: {
+	        index: stakeAuthorizationType
+	      }
+	    };
+	    if (instruction.keys.length > 3) {
+	      o.custodianPubkey = instruction.keys[3].pubkey;
+	    }
+	    return o;
+	  }
+
+	  /**
+	   * Decode an authorize-with-seed stake instruction and retrieve the instruction params.
+	   */
+	  static decodeAuthorizeWithSeed(instruction) {
+	    this.checkProgramId(instruction.programId);
+	    this.checkKeyLength(instruction.keys, 2);
+	    const {
+	      newAuthorized,
+	      stakeAuthorizationType,
+	      authoritySeed,
+	      authorityOwner
+	    } = decodeData$1(STAKE_INSTRUCTION_LAYOUTS.AuthorizeWithSeed, instruction.data);
+	    const o = {
+	      stakePubkey: instruction.keys[0].pubkey,
+	      authorityBase: instruction.keys[1].pubkey,
+	      authoritySeed: authoritySeed,
+	      authorityOwner: new PublicKey(authorityOwner),
+	      newAuthorizedPubkey: new PublicKey(newAuthorized),
+	      stakeAuthorizationType: {
+	        index: stakeAuthorizationType
+	      }
+	    };
+	    if (instruction.keys.length > 3) {
+	      o.custodianPubkey = instruction.keys[3].pubkey;
+	    }
+	    return o;
+	  }
+
+	  /**
+	   * Decode a split stake instruction and retrieve the instruction params.
+	   */
+	  static decodeSplit(instruction) {
+	    this.checkProgramId(instruction.programId);
+	    this.checkKeyLength(instruction.keys, 3);
+	    const {
+	      lamports
+	    } = decodeData$1(STAKE_INSTRUCTION_LAYOUTS.Split, instruction.data);
+	    return {
+	      stakePubkey: instruction.keys[0].pubkey,
+	      splitStakePubkey: instruction.keys[1].pubkey,
+	      authorizedPubkey: instruction.keys[2].pubkey,
+	      lamports
+	    };
+	  }
+
+	  /**
+	   * Decode a merge stake instruction and retrieve the instruction params.
+	   */
+	  static decodeMerge(instruction) {
+	    this.checkProgramId(instruction.programId);
+	    this.checkKeyLength(instruction.keys, 3);
+	    decodeData$1(STAKE_INSTRUCTION_LAYOUTS.Merge, instruction.data);
+	    return {
+	      stakePubkey: instruction.keys[0].pubkey,
+	      sourceStakePubKey: instruction.keys[1].pubkey,
+	      authorizedPubkey: instruction.keys[4].pubkey
+	    };
+	  }
+
+	  /**
+	   * Decode a withdraw stake instruction and retrieve the instruction params.
+	   */
+	  static decodeWithdraw(instruction) {
+	    this.checkProgramId(instruction.programId);
+	    this.checkKeyLength(instruction.keys, 5);
+	    const {
+	      lamports
+	    } = decodeData$1(STAKE_INSTRUCTION_LAYOUTS.Withdraw, instruction.data);
+	    const o = {
+	      stakePubkey: instruction.keys[0].pubkey,
+	      toPubkey: instruction.keys[1].pubkey,
+	      authorizedPubkey: instruction.keys[4].pubkey,
+	      lamports
+	    };
+	    if (instruction.keys.length > 5) {
+	      o.custodianPubkey = instruction.keys[5].pubkey;
+	    }
+	    return o;
+	  }
+
+	  /**
+	   * Decode a deactivate stake instruction and retrieve the instruction params.
+	   */
+	  static decodeDeactivate(instruction) {
+	    this.checkProgramId(instruction.programId);
+	    this.checkKeyLength(instruction.keys, 3);
+	    decodeData$1(STAKE_INSTRUCTION_LAYOUTS.Deactivate, instruction.data);
+	    return {
+	      stakePubkey: instruction.keys[0].pubkey,
+	      authorizedPubkey: instruction.keys[2].pubkey
+	    };
+	  }
+
+	  /**
+	   * @internal
+	   */
+	  static checkProgramId(programId) {
+	    if (!programId.equals(StakeProgram.programId)) {
+	      throw new Error('invalid instruction; programId is not StakeProgram');
+	    }
+	  }
+
+	  /**
+	   * @internal
+	   */
+	  static checkKeyLength(keys, expectedLength) {
+	    if (keys.length < expectedLength) {
+	      throw new Error(`invalid instruction; found ${keys.length} keys, expected at least ${expectedLength}`);
+	    }
+	  }
+	}
 
 	/**
 	 * An enumeration of valid StakeInstructionType's
@@ -16828,7 +24589,7 @@ var solanaStakePool = (function (exports) {
 	  },
 	  Authorize: {
 	    index: 1,
-	    layout: struct([u32('instruction'), publicKey$2('newAuthorized'), u32('stakeAuthorizationType')])
+	    layout: struct([u32('instruction'), publicKey$1('newAuthorized'), u32('stakeAuthorizationType')])
 	  },
 	  Delegate: {
 	    index: 2,
@@ -16852,7 +24613,7 @@ var solanaStakePool = (function (exports) {
 	  },
 	  AuthorizeWithSeed: {
 	    index: 8,
-	    layout: struct([u32('instruction'), publicKey$2('newAuthorized'), u32('stakeAuthorizationType'), rustString('authoritySeed'), publicKey$2('authorityOwner')])
+	    layout: struct([u32('instruction'), publicKey$1('newAuthorized'), u32('stakeAuthorizationType'), rustString('authoritySeed'), publicKey$1('authorityOwner')])
 	  }
 	});
 
@@ -17305,20 +25066,194 @@ var solanaStakePool = (function (exports) {
 	  }
 	}
 	StakeProgram.programId = new PublicKey('Stake11111111111111111111111111111111111111');
+	/**
+	 * Max space of a Stake account
+	 *
+	 * This is generated from the solana-stake-program StakeState struct as
+	 * `StakeState::size_of()`:
+	 * https://docs.rs/solana-stake-program/latest/solana_stake_program/stake_state/enum.StakeState.html
+	 */
 	StakeProgram.space = 200;
+
+	/**
+	 * Vote account info
+	 */
+	class VoteInit {
+	  /** [0, 100] */
+
+	  constructor(nodePubkey, authorizedVoter, authorizedWithdrawer, commission) {
+	    this.nodePubkey = void 0;
+	    this.authorizedVoter = void 0;
+	    this.authorizedWithdrawer = void 0;
+	    this.commission = void 0;
+	    this.nodePubkey = nodePubkey;
+	    this.authorizedVoter = authorizedVoter;
+	    this.authorizedWithdrawer = authorizedWithdrawer;
+	    this.commission = commission;
+	  }
+	}
+
+	/**
+	 * Create vote account transaction params
+	 */
+
+	/**
+	 * InitializeAccount instruction params
+	 */
+
+	/**
+	 * Authorize instruction params
+	 */
+
+	/**
+	 * AuthorizeWithSeed instruction params
+	 */
+
+	/**
+	 * Withdraw from vote account transaction params
+	 */
+
+	/**
+	 * Vote Instruction class
+	 */
+	class VoteInstruction {
+	  /**
+	   * @internal
+	   */
+	  constructor() {}
+
+	  /**
+	   * Decode a vote instruction and retrieve the instruction type.
+	   */
+	  static decodeInstructionType(instruction) {
+	    this.checkProgramId(instruction.programId);
+	    const instructionTypeLayout = u32('instruction');
+	    const typeIndex = instructionTypeLayout.decode(instruction.data);
+	    let type;
+	    for (const [ixType, layout] of Object.entries(VOTE_INSTRUCTION_LAYOUTS)) {
+	      if (layout.index == typeIndex) {
+	        type = ixType;
+	        break;
+	      }
+	    }
+	    if (!type) {
+	      throw new Error('Instruction type incorrect; not a VoteInstruction');
+	    }
+	    return type;
+	  }
+
+	  /**
+	   * Decode an initialize vote instruction and retrieve the instruction params.
+	   */
+	  static decodeInitializeAccount(instruction) {
+	    this.checkProgramId(instruction.programId);
+	    this.checkKeyLength(instruction.keys, 4);
+	    const {
+	      voteInit
+	    } = decodeData$1(VOTE_INSTRUCTION_LAYOUTS.InitializeAccount, instruction.data);
+	    return {
+	      votePubkey: instruction.keys[0].pubkey,
+	      nodePubkey: instruction.keys[3].pubkey,
+	      voteInit: new VoteInit(new PublicKey(voteInit.nodePubkey), new PublicKey(voteInit.authorizedVoter), new PublicKey(voteInit.authorizedWithdrawer), voteInit.commission)
+	    };
+	  }
+
+	  /**
+	   * Decode an authorize instruction and retrieve the instruction params.
+	   */
+	  static decodeAuthorize(instruction) {
+	    this.checkProgramId(instruction.programId);
+	    this.checkKeyLength(instruction.keys, 3);
+	    const {
+	      newAuthorized,
+	      voteAuthorizationType
+	    } = decodeData$1(VOTE_INSTRUCTION_LAYOUTS.Authorize, instruction.data);
+	    return {
+	      votePubkey: instruction.keys[0].pubkey,
+	      authorizedPubkey: instruction.keys[2].pubkey,
+	      newAuthorizedPubkey: new PublicKey(newAuthorized),
+	      voteAuthorizationType: {
+	        index: voteAuthorizationType
+	      }
+	    };
+	  }
+
+	  /**
+	   * Decode an authorize instruction and retrieve the instruction params.
+	   */
+	  static decodeAuthorizeWithSeed(instruction) {
+	    this.checkProgramId(instruction.programId);
+	    this.checkKeyLength(instruction.keys, 3);
+	    const {
+	      voteAuthorizeWithSeedArgs: {
+	        currentAuthorityDerivedKeyOwnerPubkey,
+	        currentAuthorityDerivedKeySeed,
+	        newAuthorized,
+	        voteAuthorizationType
+	      }
+	    } = decodeData$1(VOTE_INSTRUCTION_LAYOUTS.AuthorizeWithSeed, instruction.data);
+	    return {
+	      currentAuthorityDerivedKeyBasePubkey: instruction.keys[2].pubkey,
+	      currentAuthorityDerivedKeyOwnerPubkey: new PublicKey(currentAuthorityDerivedKeyOwnerPubkey),
+	      currentAuthorityDerivedKeySeed: currentAuthorityDerivedKeySeed,
+	      newAuthorizedPubkey: new PublicKey(newAuthorized),
+	      voteAuthorizationType: {
+	        index: voteAuthorizationType
+	      },
+	      votePubkey: instruction.keys[0].pubkey
+	    };
+	  }
+
+	  /**
+	   * Decode a withdraw instruction and retrieve the instruction params.
+	   */
+	  static decodeWithdraw(instruction) {
+	    this.checkProgramId(instruction.programId);
+	    this.checkKeyLength(instruction.keys, 3);
+	    const {
+	      lamports
+	    } = decodeData$1(VOTE_INSTRUCTION_LAYOUTS.Withdraw, instruction.data);
+	    return {
+	      votePubkey: instruction.keys[0].pubkey,
+	      authorizedWithdrawerPubkey: instruction.keys[2].pubkey,
+	      lamports,
+	      toPubkey: instruction.keys[1].pubkey
+	    };
+	  }
+
+	  /**
+	   * @internal
+	   */
+	  static checkProgramId(programId) {
+	    if (!programId.equals(VoteProgram.programId)) {
+	      throw new Error('invalid instruction; programId is not VoteProgram');
+	    }
+	  }
+
+	  /**
+	   * @internal
+	   */
+	  static checkKeyLength(keys, expectedLength) {
+	    if (keys.length < expectedLength) {
+	      throw new Error(`invalid instruction; found ${keys.length} keys, expected at least ${expectedLength}`);
+	    }
+	  }
+	}
 
 	/**
 	 * An enumeration of valid VoteInstructionType's
 	 */
 
-	Object.freeze({
+	/** @internal */
+
+	const VOTE_INSTRUCTION_LAYOUTS = Object.freeze({
 	  InitializeAccount: {
 	    index: 0,
 	    layout: struct([u32('instruction'), voteInit()])
 	  },
 	  Authorize: {
 	    index: 1,
-	    layout: struct([u32('instruction'), publicKey$2('newAuthorized'), u32('voteAuthorizationType')])
+	    layout: struct([u32('instruction'), publicKey$1('newAuthorized'), u32('voteAuthorizationType')])
 	  },
 	  Withdraw: {
 	    index: 3,
@@ -17337,7 +25272,7 @@ var solanaStakePool = (function (exports) {
 	/**
 	 * An enumeration of valid VoteAuthorization layouts.
 	 */
-	Object.freeze({
+	const VoteAuthorizationLayout = Object.freeze({
 	  Voter: {
 	    index: 0
 	  },
@@ -17345,39 +25280,555 @@ var solanaStakePool = (function (exports) {
 	    index: 1
 	  }
 	});
-	new PublicKey('Vote111111111111111111111111111111111111111');
 
-	new PublicKey('Va1idator1nfo111111111111111111111111111111');
+	/**
+	 * Factory class for transactions to interact with the Vote program
+	 */
+	class VoteProgram {
+	  /**
+	   * @internal
+	   */
+	  constructor() {}
+
+	  /**
+	   * Public key that identifies the Vote program
+	   */
+
+	  /**
+	   * Generate an Initialize instruction.
+	   */
+	  static initializeAccount(params) {
+	    const {
+	      votePubkey,
+	      nodePubkey,
+	      voteInit
+	    } = params;
+	    const type = VOTE_INSTRUCTION_LAYOUTS.InitializeAccount;
+	    const data = encodeData$1(type, {
+	      voteInit: {
+	        nodePubkey: toBuffer(voteInit.nodePubkey.toBuffer()),
+	        authorizedVoter: toBuffer(voteInit.authorizedVoter.toBuffer()),
+	        authorizedWithdrawer: toBuffer(voteInit.authorizedWithdrawer.toBuffer()),
+	        commission: voteInit.commission
+	      }
+	    });
+	    const instructionData = {
+	      keys: [{
+	        pubkey: votePubkey,
+	        isSigner: false,
+	        isWritable: true
+	      }, {
+	        pubkey: SYSVAR_RENT_PUBKEY,
+	        isSigner: false,
+	        isWritable: false
+	      }, {
+	        pubkey: SYSVAR_CLOCK_PUBKEY,
+	        isSigner: false,
+	        isWritable: false
+	      }, {
+	        pubkey: nodePubkey,
+	        isSigner: true,
+	        isWritable: false
+	      }],
+	      programId: this.programId,
+	      data
+	    };
+	    return new TransactionInstruction(instructionData);
+	  }
+
+	  /**
+	   * Generate a transaction that creates a new Vote account.
+	   */
+	  static createAccount(params) {
+	    const transaction = new Transaction();
+	    transaction.add(SystemProgram.createAccount({
+	      fromPubkey: params.fromPubkey,
+	      newAccountPubkey: params.votePubkey,
+	      lamports: params.lamports,
+	      space: this.space,
+	      programId: this.programId
+	    }));
+	    return transaction.add(this.initializeAccount({
+	      votePubkey: params.votePubkey,
+	      nodePubkey: params.voteInit.nodePubkey,
+	      voteInit: params.voteInit
+	    }));
+	  }
+
+	  /**
+	   * Generate a transaction that authorizes a new Voter or Withdrawer on the Vote account.
+	   */
+	  static authorize(params) {
+	    const {
+	      votePubkey,
+	      authorizedPubkey,
+	      newAuthorizedPubkey,
+	      voteAuthorizationType
+	    } = params;
+	    const type = VOTE_INSTRUCTION_LAYOUTS.Authorize;
+	    const data = encodeData$1(type, {
+	      newAuthorized: toBuffer(newAuthorizedPubkey.toBuffer()),
+	      voteAuthorizationType: voteAuthorizationType.index
+	    });
+	    const keys = [{
+	      pubkey: votePubkey,
+	      isSigner: false,
+	      isWritable: true
+	    }, {
+	      pubkey: SYSVAR_CLOCK_PUBKEY,
+	      isSigner: false,
+	      isWritable: false
+	    }, {
+	      pubkey: authorizedPubkey,
+	      isSigner: true,
+	      isWritable: false
+	    }];
+	    return new Transaction().add({
+	      keys,
+	      programId: this.programId,
+	      data
+	    });
+	  }
+
+	  /**
+	   * Generate a transaction that authorizes a new Voter or Withdrawer on the Vote account
+	   * where the current Voter or Withdrawer authority is a derived key.
+	   */
+	  static authorizeWithSeed(params) {
+	    const {
+	      currentAuthorityDerivedKeyBasePubkey,
+	      currentAuthorityDerivedKeyOwnerPubkey,
+	      currentAuthorityDerivedKeySeed,
+	      newAuthorizedPubkey,
+	      voteAuthorizationType,
+	      votePubkey
+	    } = params;
+	    const type = VOTE_INSTRUCTION_LAYOUTS.AuthorizeWithSeed;
+	    const data = encodeData$1(type, {
+	      voteAuthorizeWithSeedArgs: {
+	        currentAuthorityDerivedKeyOwnerPubkey: toBuffer(currentAuthorityDerivedKeyOwnerPubkey.toBuffer()),
+	        currentAuthorityDerivedKeySeed: currentAuthorityDerivedKeySeed,
+	        newAuthorized: toBuffer(newAuthorizedPubkey.toBuffer()),
+	        voteAuthorizationType: voteAuthorizationType.index
+	      }
+	    });
+	    const keys = [{
+	      pubkey: votePubkey,
+	      isSigner: false,
+	      isWritable: true
+	    }, {
+	      pubkey: SYSVAR_CLOCK_PUBKEY,
+	      isSigner: false,
+	      isWritable: false
+	    }, {
+	      pubkey: currentAuthorityDerivedKeyBasePubkey,
+	      isSigner: true,
+	      isWritable: false
+	    }];
+	    return new Transaction().add({
+	      keys,
+	      programId: this.programId,
+	      data
+	    });
+	  }
+
+	  /**
+	   * Generate a transaction to withdraw from a Vote account.
+	   */
+	  static withdraw(params) {
+	    const {
+	      votePubkey,
+	      authorizedWithdrawerPubkey,
+	      lamports,
+	      toPubkey
+	    } = params;
+	    const type = VOTE_INSTRUCTION_LAYOUTS.Withdraw;
+	    const data = encodeData$1(type, {
+	      lamports
+	    });
+	    const keys = [{
+	      pubkey: votePubkey,
+	      isSigner: false,
+	      isWritable: true
+	    }, {
+	      pubkey: toPubkey,
+	      isSigner: false,
+	      isWritable: true
+	    }, {
+	      pubkey: authorizedWithdrawerPubkey,
+	      isSigner: true,
+	      isWritable: false
+	    }];
+	    return new Transaction().add({
+	      keys,
+	      programId: this.programId,
+	      data
+	    });
+	  }
+
+	  /**
+	   * Generate a transaction to withdraw safely from a Vote account.
+	   *
+	   * This function was created as a safeguard for vote accounts running validators, `safeWithdraw`
+	   * checks that the withdraw amount will not exceed the specified balance while leaving enough left
+	   * to cover rent. If you wish to close the vote account by withdrawing the full amount, call the
+	   * `withdraw` method directly.
+	   */
+	  static safeWithdraw(params, currentVoteAccountBalance, rentExemptMinimum) {
+	    if (params.lamports > currentVoteAccountBalance - rentExemptMinimum) {
+	      throw new Error('Withdraw will leave vote account with insuffcient funds.');
+	    }
+	    return VoteProgram.withdraw(params);
+	  }
+	}
+	VoteProgram.programId = new PublicKey('Vote111111111111111111111111111111111111111');
+	/**
+	 * Max space of a Vote account
+	 *
+	 * This is generated from the solana-vote-program VoteState struct as
+	 * `VoteState::size_of()`:
+	 * https://docs.rs/solana-vote-program/1.9.5/solana_vote_program/vote_state/struct.VoteState.html#method.size_of
+	 *
+	 * KEEP IN SYNC WITH `VoteState::size_of()` in https://github.com/solana-labs/solana/blob/a474cb24b9238f5edcc982f65c0b37d4a1046f7e/sdk/program/src/vote/state/mod.rs#L340-L342
+	 */
+	VoteProgram.space = 3731;
+
+	const VALIDATOR_INFO_KEY = new PublicKey('Va1idator1nfo111111111111111111111111111111');
 
 	/**
 	 * @internal
 	 */
 
-	type({
-	  name: string(),
-	  website: optional(string()),
-	  details: optional(string()),
-	  keybaseUsername: optional(string())
+	/**
+	 * Info used to identity validators.
+	 */
+
+	const InfoString = type$1({
+	  name: string$1(),
+	  website: optional$1(string$1()),
+	  details: optional$1(string$1()),
+	  keybaseUsername: optional$1(string$1())
 	});
 
-	new PublicKey('Vote111111111111111111111111111111111111111');
+	/**
+	 * ValidatorInfo class
+	 */
+	class ValidatorInfo {
+	  /**
+	   * Construct a valid ValidatorInfo
+	   *
+	   * @param key validator public key
+	   * @param info validator information
+	   */
+	  constructor(key, info) {
+	    /**
+	     * validator public key
+	     */
+	    this.key = void 0;
+	    /**
+	     * validator information
+	     */
+	    this.info = void 0;
+	    this.key = key;
+	    this.info = info;
+	  }
+
+	  /**
+	   * Deserialize ValidatorInfo from the config account data. Exactly two config
+	   * keys are required in the data.
+	   *
+	   * @param buffer config account data
+	   * @return null if info was not found
+	   */
+	  static fromConfigData(buffer$1) {
+	    let byteArray = [...buffer$1];
+	    const configKeyCount = decodeLength(byteArray);
+	    if (configKeyCount !== 2) return null;
+	    const configKeys = [];
+	    for (let i = 0; i < 2; i++) {
+	      const publicKey = new PublicKey(byteArray.slice(0, PUBLIC_KEY_LENGTH));
+	      byteArray = byteArray.slice(PUBLIC_KEY_LENGTH);
+	      const isSigner = byteArray.slice(0, 1)[0] === 1;
+	      byteArray = byteArray.slice(1);
+	      configKeys.push({
+	        publicKey,
+	        isSigner
+	      });
+	    }
+	    if (configKeys[0].publicKey.equals(VALIDATOR_INFO_KEY)) {
+	      if (configKeys[1].isSigner) {
+	        const rawInfo = rustString().decode(buffer.Buffer.from(byteArray));
+	        const info = JSON.parse(rawInfo);
+	        assert$2(info, InfoString);
+	        return new ValidatorInfo(configKeys[1].publicKey, info);
+	      }
+	    }
+	    return null;
+	  }
+	}
+
+	const VOTE_PROGRAM_ID = new PublicKey('Vote111111111111111111111111111111111111111');
+
+	/**
+	 * History of how many credits earned by the end of each epoch
+	 */
+
 	/**
 	 * See https://github.com/solana-labs/solana/blob/8a12ed029cfa38d4a45400916c2463fb82bbec8c/programs/vote_api/src/vote_state.rs#L68-L88
 	 *
 	 * @internal
 	 */
-	struct([publicKey$2('nodePubkey'), publicKey$2('authorizedWithdrawer'), u8('commission'), nu64(),
+	const VoteAccountLayout = struct([publicKey$1('nodePubkey'), publicKey$1('authorizedWithdrawer'), u8('commission'), nu64(),
 	// votes.length
 	seq(struct([nu64('slot'), u32('confirmationCount')]), offset(u32(), -8), 'votes'), u8('rootSlotValid'), nu64('rootSlot'), nu64(),
 	// authorizedVoters.length
-	seq(struct([nu64('epoch'), publicKey$2('authorizedVoter')]), offset(u32(), -8), 'authorizedVoters'), struct([seq(struct([publicKey$2('authorizedPubkey'), nu64('epochOfLastAuthorizedSwitch'), nu64('targetEpoch')]), 32, 'buf'), nu64('idx'), u8('isEmpty')], 'priorVoters'), nu64(),
+	seq(struct([nu64('epoch'), publicKey$1('authorizedVoter')]), offset(u32(), -8), 'authorizedVoters'), struct([seq(struct([publicKey$1('authorizedPubkey'), nu64('epochOfLastAuthorizedSwitch'), nu64('targetEpoch')]), 32, 'buf'), nu64('idx'), u8('isEmpty')], 'priorVoters'), nu64(),
 	// epochCredits.length
 	seq(struct([nu64('epoch'), nu64('credits'), nu64('prevCredits')]), offset(u32(), -8), 'epochCredits'), struct([nu64('slot'), nu64('timestamp')], 'lastTimestamp')]);
+	/**
+	 * VoteAccount class
+	 */
+	class VoteAccount {
+	  /**
+	   * @internal
+	   */
+	  constructor(args) {
+	    this.nodePubkey = void 0;
+	    this.authorizedWithdrawer = void 0;
+	    this.commission = void 0;
+	    this.rootSlot = void 0;
+	    this.votes = void 0;
+	    this.authorizedVoters = void 0;
+	    this.priorVoters = void 0;
+	    this.epochCredits = void 0;
+	    this.lastTimestamp = void 0;
+	    this.nodePubkey = args.nodePubkey;
+	    this.authorizedWithdrawer = args.authorizedWithdrawer;
+	    this.commission = args.commission;
+	    this.rootSlot = args.rootSlot;
+	    this.votes = args.votes;
+	    this.authorizedVoters = args.authorizedVoters;
+	    this.priorVoters = args.priorVoters;
+	    this.epochCredits = args.epochCredits;
+	    this.lastTimestamp = args.lastTimestamp;
+	  }
+
+	  /**
+	   * Deserialize VoteAccount from the account data.
+	   *
+	   * @param buffer account data
+	   * @return VoteAccount
+	   */
+	  static fromAccountData(buffer) {
+	    const versionOffset = 4;
+	    const va = VoteAccountLayout.decode(toBuffer(buffer), versionOffset);
+	    let rootSlot = va.rootSlot;
+	    if (!va.rootSlotValid) {
+	      rootSlot = null;
+	    }
+	    return new VoteAccount({
+	      nodePubkey: new PublicKey(va.nodePubkey),
+	      authorizedWithdrawer: new PublicKey(va.authorizedWithdrawer),
+	      commission: va.commission,
+	      votes: va.votes,
+	      rootSlot,
+	      authorizedVoters: va.authorizedVoters.map(parseAuthorizedVoter),
+	      priorVoters: getPriorVoters(va.priorVoters),
+	      epochCredits: va.epochCredits,
+	      lastTimestamp: va.lastTimestamp
+	    });
+	  }
+	}
+	function parseAuthorizedVoter({
+	  authorizedVoter,
+	  epoch
+	}) {
+	  return {
+	    epoch,
+	    authorizedVoter: new PublicKey(authorizedVoter)
+	  };
+	}
+	function parsePriorVoters({
+	  authorizedPubkey,
+	  epochOfLastAuthorizedSwitch,
+	  targetEpoch
+	}) {
+	  return {
+	    authorizedPubkey: new PublicKey(authorizedPubkey),
+	    epochOfLastAuthorizedSwitch,
+	    targetEpoch
+	  };
+	}
+	function getPriorVoters({
+	  buf,
+	  idx,
+	  isEmpty
+	}) {
+	  if (isEmpty) {
+	    return [];
+	  }
+	  return [...buf.slice(idx + 1).map(parsePriorVoters), ...buf.slice(0, idx).map(parsePriorVoters)];
+	}
+
+	const endpoint = {
+	  http: {
+	    devnet: 'http://api.devnet.solana.com',
+	    testnet: 'http://api.testnet.solana.com',
+	    'mainnet-beta': 'http://api.mainnet-beta.solana.com/'
+	  },
+	  https: {
+	    devnet: 'https://api.devnet.solana.com',
+	    testnet: 'https://api.testnet.solana.com',
+	    'mainnet-beta': 'https://api.mainnet-beta.solana.com/'
+	  }
+	};
+	/**
+	 * Retrieves the RPC API URL for the specified cluster
+	 * @param {Cluster} [cluster="devnet"] - The cluster name of the RPC API URL to use. Possible options: 'devnet' | 'testnet' | 'mainnet-beta'
+	 * @param {boolean} [tls="http"] - Use TLS when connecting to cluster.
+	 *
+	 * @returns {string} URL string of the RPC endpoint
+	 */
+	function clusterApiUrl(cluster, tls) {
+	  const key = tls === false ? 'http' : 'https';
+	  if (!cluster) {
+	    return endpoint[key]['devnet'];
+	  }
+	  const url = endpoint[key][cluster];
+	  if (!url) {
+	    throw new Error(`Unknown ${key} cluster: ${cluster}`);
+	  }
+	  return url;
+	}
+
+	/**
+	 * Send and confirm a raw transaction
+	 *
+	 * If `commitment` option is not specified, defaults to 'max' commitment.
+	 *
+	 * @param {Connection} connection
+	 * @param {Buffer} rawTransaction
+	 * @param {TransactionConfirmationStrategy} confirmationStrategy
+	 * @param {ConfirmOptions} [options]
+	 * @returns {Promise<TransactionSignature>}
+	 */
+
+	/**
+	 * @deprecated Calling `sendAndConfirmRawTransaction()` without a `confirmationStrategy`
+	 * is no longer supported and will be removed in a future version.
+	 */ // eslint-disable-next-line no-redeclare
+	// eslint-disable-next-line no-redeclare
+	async function sendAndConfirmRawTransaction(connection, rawTransaction, confirmationStrategyOrConfirmOptions, maybeConfirmOptions) {
+	  let confirmationStrategy;
+	  let options;
+	  if (confirmationStrategyOrConfirmOptions && Object.prototype.hasOwnProperty.call(confirmationStrategyOrConfirmOptions, 'lastValidBlockHeight')) {
+	    confirmationStrategy = confirmationStrategyOrConfirmOptions;
+	    options = maybeConfirmOptions;
+	  } else if (confirmationStrategyOrConfirmOptions && Object.prototype.hasOwnProperty.call(confirmationStrategyOrConfirmOptions, 'nonceValue')) {
+	    confirmationStrategy = confirmationStrategyOrConfirmOptions;
+	    options = maybeConfirmOptions;
+	  } else {
+	    options = confirmationStrategyOrConfirmOptions;
+	  }
+	  const sendOptions = options && {
+	    skipPreflight: options.skipPreflight,
+	    preflightCommitment: options.preflightCommitment || options.commitment,
+	    minContextSlot: options.minContextSlot
+	  };
+	  const signature = await connection.sendRawTransaction(rawTransaction, sendOptions);
+	  const commitment = options && options.commitment;
+	  const confirmationPromise = confirmationStrategy ? connection.confirmTransaction(confirmationStrategy, commitment) : connection.confirmTransaction(signature, commitment);
+	  const status = (await confirmationPromise).value;
+	  if (status.err) {
+	    throw new Error(`Raw transaction ${signature} failed (${JSON.stringify(status)})`);
+	  }
+	  return signature;
+	}
 
 	/**
 	 * There are 1-billion lamports in one SOL
 	 */
 	const LAMPORTS_PER_SOL = 1000000000;
+
+	var index_browser_esm = /*#__PURE__*/Object.freeze({
+		__proto__: null,
+		Account: Account,
+		AddressLookupTableAccount: AddressLookupTableAccount,
+		AddressLookupTableInstruction: AddressLookupTableInstruction,
+		AddressLookupTableProgram: AddressLookupTableProgram,
+		Authorized: Authorized,
+		BLOCKHASH_CACHE_TIMEOUT_MS: BLOCKHASH_CACHE_TIMEOUT_MS,
+		BPF_LOADER_DEPRECATED_PROGRAM_ID: BPF_LOADER_DEPRECATED_PROGRAM_ID,
+		BPF_LOADER_PROGRAM_ID: BPF_LOADER_PROGRAM_ID,
+		BpfLoader: BpfLoader,
+		COMPUTE_BUDGET_INSTRUCTION_LAYOUTS: COMPUTE_BUDGET_INSTRUCTION_LAYOUTS,
+		ComputeBudgetInstruction: ComputeBudgetInstruction,
+		ComputeBudgetProgram: ComputeBudgetProgram,
+		Connection: Connection,
+		Ed25519Program: Ed25519Program,
+		Enum: Enum,
+		EpochSchedule: EpochSchedule,
+		FeeCalculatorLayout: FeeCalculatorLayout,
+		Keypair: Keypair,
+		LAMPORTS_PER_SOL: LAMPORTS_PER_SOL,
+		LOOKUP_TABLE_INSTRUCTION_LAYOUTS: LOOKUP_TABLE_INSTRUCTION_LAYOUTS,
+		Loader: Loader,
+		Lockup: Lockup,
+		MAX_SEED_LENGTH: MAX_SEED_LENGTH,
+		Message: Message,
+		MessageAccountKeys: MessageAccountKeys,
+		MessageV0: MessageV0,
+		NONCE_ACCOUNT_LENGTH: NONCE_ACCOUNT_LENGTH,
+		NonceAccount: NonceAccount,
+		PACKET_DATA_SIZE: PACKET_DATA_SIZE,
+		PUBLIC_KEY_LENGTH: PUBLIC_KEY_LENGTH,
+		PublicKey: PublicKey,
+		SIGNATURE_LENGTH_IN_BYTES: SIGNATURE_LENGTH_IN_BYTES,
+		SOLANA_SCHEMA: SOLANA_SCHEMA,
+		STAKE_CONFIG_ID: STAKE_CONFIG_ID,
+		STAKE_INSTRUCTION_LAYOUTS: STAKE_INSTRUCTION_LAYOUTS,
+		SYSTEM_INSTRUCTION_LAYOUTS: SYSTEM_INSTRUCTION_LAYOUTS,
+		SYSVAR_CLOCK_PUBKEY: SYSVAR_CLOCK_PUBKEY,
+		SYSVAR_EPOCH_SCHEDULE_PUBKEY: SYSVAR_EPOCH_SCHEDULE_PUBKEY,
+		SYSVAR_INSTRUCTIONS_PUBKEY: SYSVAR_INSTRUCTIONS_PUBKEY,
+		SYSVAR_RECENT_BLOCKHASHES_PUBKEY: SYSVAR_RECENT_BLOCKHASHES_PUBKEY,
+		SYSVAR_RENT_PUBKEY: SYSVAR_RENT_PUBKEY,
+		SYSVAR_REWARDS_PUBKEY: SYSVAR_REWARDS_PUBKEY,
+		SYSVAR_SLOT_HASHES_PUBKEY: SYSVAR_SLOT_HASHES_PUBKEY,
+		SYSVAR_SLOT_HISTORY_PUBKEY: SYSVAR_SLOT_HISTORY_PUBKEY,
+		SYSVAR_STAKE_HISTORY_PUBKEY: SYSVAR_STAKE_HISTORY_PUBKEY,
+		Secp256k1Program: Secp256k1Program,
+		SendTransactionError: SendTransactionError,
+		SolanaJSONRPCError: SolanaJSONRPCError,
+		SolanaJSONRPCErrorCode: SolanaJSONRPCErrorCode,
+		StakeAuthorizationLayout: StakeAuthorizationLayout,
+		StakeInstruction: StakeInstruction,
+		StakeProgram: StakeProgram,
+		Struct: Struct$1,
+		SystemInstruction: SystemInstruction,
+		SystemProgram: SystemProgram,
+		Transaction: Transaction,
+		TransactionExpiredBlockheightExceededError: TransactionExpiredBlockheightExceededError,
+		TransactionExpiredNonceInvalidError: TransactionExpiredNonceInvalidError,
+		TransactionExpiredTimeoutError: TransactionExpiredTimeoutError,
+		TransactionInstruction: TransactionInstruction,
+		TransactionMessage: TransactionMessage,
+		TransactionStatus: TransactionStatus,
+		VALIDATOR_INFO_KEY: VALIDATOR_INFO_KEY,
+		VERSION_PREFIX_MASK: VERSION_PREFIX_MASK,
+		VOTE_PROGRAM_ID: VOTE_PROGRAM_ID,
+		ValidatorInfo: ValidatorInfo,
+		VersionedMessage: VersionedMessage,
+		VersionedTransaction: VersionedTransaction,
+		VoteAccount: VoteAccount,
+		VoteAuthorizationLayout: VoteAuthorizationLayout,
+		VoteInit: VoteInit,
+		VoteInstruction: VoteInstruction,
+		VoteProgram: VoteProgram,
+		clusterApiUrl: clusterApiUrl,
+		sendAndConfirmRawTransaction: sendAndConfirmRawTransaction,
+		sendAndConfirmTransaction: sendAndConfirmTransaction
+	});
 
 	/** Address of the SPL Token program */
 	const TOKEN_PROGRAM_ID = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
@@ -17410,7 +25861,7 @@ var solanaStakePool = (function (exports) {
 	    };
 	    return bigIntLayout;
 	};
-	const u64$1 = bigInt(8);
+	const u64 = bigInt(8);
 
 	const bool = (property) => {
 	    const layout = u8(property);
@@ -17427,7 +25878,7 @@ var solanaStakePool = (function (exports) {
 	    return boolLayout;
 	};
 
-	const publicKey$1 = (property) => {
+	const publicKey = (property) => {
 	    const layout = blob(32, property);
 	    const { encode, decode } = encodeDecode(layout);
 	    const publicKeyLayout = layout;
@@ -17523,6 +25974,10 @@ var solanaStakePool = (function (exports) {
 	    TokenInstruction[TokenInstruction["InterestBearingMintExtension"] = 33] = "InterestBearingMintExtension";
 	    TokenInstruction[TokenInstruction["CpiGuardExtension"] = 34] = "CpiGuardExtension";
 	    TokenInstruction[TokenInstruction["InitializePermanentDelegate"] = 35] = "InitializePermanentDelegate";
+	    TokenInstruction[TokenInstruction["TransferHookExtension"] = 36] = "TransferHookExtension";
+	    // ConfidentialTransferFeeExtension = 37,
+	    // WithdrawalExcessLamports = 38,
+	    TokenInstruction[TokenInstruction["MetadataPointerExtension"] = 39] = "MetadataPointerExtension";
 	})(TokenInstruction || (TokenInstruction = {}));
 
 	/** @internal */
@@ -17544,7 +25999,7 @@ var solanaStakePool = (function (exports) {
 	}
 
 	/** TODO: docs */
-	const approveInstructionData = struct([u8('instruction'), u64$1('amount')]);
+	const approveInstructionData = struct([u8('instruction'), u64('amount')]);
 	/**
 	 * Construct an Approve instruction
 	 *
@@ -17583,17 +26038,17 @@ var solanaStakePool = (function (exports) {
 	    u8('m'),
 	    u8('n'),
 	    bool('isInitialized'),
-	    publicKey$1('signer1'),
-	    publicKey$1('signer2'),
-	    publicKey$1('signer3'),
-	    publicKey$1('signer4'),
-	    publicKey$1('signer5'),
-	    publicKey$1('signer6'),
-	    publicKey$1('signer7'),
-	    publicKey$1('signer8'),
-	    publicKey$1('signer9'),
-	    publicKey$1('signer10'),
-	    publicKey$1('signer11'),
+	    publicKey('signer1'),
+	    publicKey('signer2'),
+	    publicKey('signer3'),
+	    publicKey('signer4'),
+	    publicKey('signer5'),
+	    publicKey('signer6'),
+	    publicKey('signer7'),
+	    publicKey('signer8'),
+	    publicKey('signer9'),
+	    publicKey('signer10'),
+	    publicKey('signer11'),
 	]);
 	/** Byte length of a multisig */
 	const MULTISIG_SIZE = MultisigLayout.span;
@@ -17607,17 +26062,17 @@ var solanaStakePool = (function (exports) {
 	})(AccountState || (AccountState = {}));
 	/** Buffer layout for de/serializing a token account */
 	const AccountLayout = struct([
-	    publicKey$1('mint'),
-	    publicKey$1('owner'),
-	    u64$1('amount'),
+	    publicKey('mint'),
+	    publicKey('owner'),
+	    u64('amount'),
 	    u32('delegateOption'),
-	    publicKey$1('delegate'),
+	    publicKey('delegate'),
 	    u8('state'),
 	    u32('isNativeOption'),
-	    u64$1('isNative'),
-	    u64$1('delegatedAmount'),
+	    u64('isNative'),
+	    u64('delegatedAmount'),
 	    u32('closeAuthorityOption'),
-	    publicKey$1('closeAuthority'),
+	    publicKey('closeAuthority'),
 	]);
 	/** Byte length of a token account */
 	const ACCOUNT_SIZE = AccountLayout.span;
@@ -17679,12 +26134,12 @@ var solanaStakePool = (function (exports) {
 	/** Buffer layout for de/serializing a mint */
 	const MintLayout = struct([
 	    u32('mintAuthorityOption'),
-	    publicKey$1('mintAuthority'),
-	    u64$1('supply'),
+	    publicKey('mintAuthority'),
+	    u64('supply'),
 	    u8('decimals'),
 	    bool('isInitialized'),
 	    u32('freezeAuthorityOption'),
-	    publicKey$1('freezeAuthority'),
+	    publicKey('freezeAuthority'),
 	]);
 	/** Byte length of a mint */
 	MintLayout.span;
@@ -17737,75 +26192,418 @@ var solanaStakePool = (function (exports) {
 	    });
 	}
 
-	class SignedNumberLayout extends Layout_2 {
-	    constructor(span, property) {
-	        super(span, property);
-	    }
-	    decode(b, offset) {
-	        const start = offset !== null && offset !== void 0 ? offset : 0;
-	        const data = b.slice(start, start + this.span);
-	        return new BN(data, undefined, 'le').fromTwos(this.span * 8);
-	    }
-	    encode(src, b, offset) {
-	        const start = offset !== null && offset !== void 0 ? offset : 0;
-	        b.set(src.toTwos(this.span * 8).toArray('le'), start);
-	        return this.span;
-	    }
-	}
-	function u64(property) {
-	    return new SignedNumberLayout(8, property);
-	}
-	class WrappedLayout extends Layout_2 {
-	    constructor(layout, decoder, encoder, property) {
-	        super(layout.span, property);
-	        this.layout = layout;
-	        this.decoder = decoder;
-	        this.encoder = encoder;
-	    }
-	    decode(b, offset) {
-	        return this.decoder(this.layout.decode(b, offset));
-	    }
-	    encode(src, b, offset) {
-	        return this.layout.encode(this.encoder(src), b, offset);
-	    }
-	    getSpan(b, offset) {
-	        return this.layout.getSpan(b, offset);
+	/**
+	 * A `StructFailure` represents a single specific failure in validation.
+	 */
+	/**
+	 * `StructError` objects are thrown (or returned) when validation fails.
+	 *
+	 * Validation logic is design to exit early for maximum performance. The error
+	 * represents the first error encountered during validation. For more detail,
+	 * the `error.failures` property is a generator function that can be run to
+	 * continue validation and receive all the failures in the data.
+	 */
+	class StructError extends TypeError {
+	    constructor(failure, failures) {
+	        let cached;
+	        const { message, explanation, ...rest } = failure;
+	        const { path } = failure;
+	        const msg = path.length === 0 ? message : `At path: ${path.join('.')} -- ${message}`;
+	        super(explanation ?? msg);
+	        if (explanation != null)
+	            this.cause = msg;
+	        Object.assign(this, rest);
+	        this.name = this.constructor.name;
+	        this.failures = () => {
+	            return (cached ?? (cached = [failure, ...failures()]));
+	        };
 	    }
 	}
-	function publicKey(property) {
-	    return new WrappedLayout(blob(32), (b) => new PublicKey(b), (key) => key.toBuffer(), property);
+
+	/**
+	 * Check if a value is an iterator.
+	 */
+	function isIterable(x) {
+	    return isObject(x) && typeof x[Symbol.iterator] === 'function';
 	}
-	function vec(elementLayout, property) {
-	    const length = u32('length');
-	    const layout = struct([
-	        length,
-	        seq(elementLayout, offset(length, -length.span), 'values'),
-	    ]);
-	    return new WrappedLayout(layout, ({ values }) => values, (values) => ({ values }), property);
+	/**
+	 * Check if a value is a plain object.
+	 */
+	function isObject(x) {
+	    return typeof x === 'object' && x != null;
 	}
-	class OptionLayout extends Layout_2 {
-	    constructor(layout) {
-	        super(layout.span + 1, layout.property);
-	        this.layout = layout;
-	        this.discriminator = u8();
+	/**
+	 * Return a value as a printable string.
+	 */
+	function print(value) {
+	    if (typeof value === 'symbol') {
+	        return value.toString();
 	    }
-	    encode(src, b, offset) {
-	        if (src === null || src === undefined) {
-	            return this.layout.encode(0, b, offset);
+	    return typeof value === 'string' ? JSON.stringify(value) : `${value}`;
+	}
+	/**
+	 * Shifts (removes and returns) the first value from the `input` iterator.
+	 * Like `Array.prototype.shift()` but for an `Iterator`.
+	 */
+	function shiftIterator(input) {
+	    const { done, value } = input.next();
+	    return done ? undefined : value;
+	}
+	/**
+	 * Convert a single validation result to a failure.
+	 */
+	function toFailure(result, context, struct, value) {
+	    if (result === true) {
+	        return;
+	    }
+	    else if (result === false) {
+	        result = {};
+	    }
+	    else if (typeof result === 'string') {
+	        result = { message: result };
+	    }
+	    const { path, branch } = context;
+	    const { type } = struct;
+	    const { refinement, message = `Expected a value of type \`${type}\`${refinement ? ` with refinement \`${refinement}\`` : ''}, but received: \`${print(value)}\``, } = result;
+	    return {
+	        value,
+	        type,
+	        refinement,
+	        key: path[path.length - 1],
+	        path,
+	        branch,
+	        ...result,
+	        message,
+	    };
+	}
+	/**
+	 * Convert a validation result to an iterable of failures.
+	 */
+	function* toFailures(result, context, struct, value) {
+	    if (!isIterable(result)) {
+	        result = [result];
+	    }
+	    for (const r of result) {
+	        const failure = toFailure(r, context, struct, value);
+	        if (failure) {
+	            yield failure;
 	        }
-	        this.discriminator.encode(1, b, offset);
-	        return this.layout.encode(src, b, (offset !== null && offset !== void 0 ? offset : 0) + 1) + 1;
-	    }
-	    decode(b, offset) {
-	        const discriminator = this.discriminator.decode(b, offset);
-	        if (!discriminator) {
-	            return undefined;
-	        }
-	        return this.layout.decode(b, (offset !== null && offset !== void 0 ? offset : 0) + 1);
 	    }
 	}
-	function option(layout) {
-	    return new OptionLayout(layout);
+	/**
+	 * Check a value against a struct, traversing deeply into nested values, and
+	 * returning an iterator of failures or success.
+	 */
+	function* run(value, struct, options = {}) {
+	    const { path = [], branch = [value], coerce = false, mask = false } = options;
+	    const ctx = { path, branch };
+	    if (coerce) {
+	        value = struct.coercer(value, ctx);
+	        if (mask &&
+	            struct.type !== 'type' &&
+	            isObject(struct.schema) &&
+	            isObject(value) &&
+	            !Array.isArray(value)) {
+	            for (const key in value) {
+	                if (struct.schema[key] === undefined) {
+	                    delete value[key];
+	                }
+	            }
+	        }
+	    }
+	    let status = 'valid';
+	    for (const failure of struct.validator(value, ctx)) {
+	        failure.explanation = options.message;
+	        status = 'not_valid';
+	        yield [failure, undefined];
+	    }
+	    for (let [k, v, s] of struct.entries(value, ctx)) {
+	        const ts = run(v, s, {
+	            path: k === undefined ? path : [...path, k],
+	            branch: k === undefined ? branch : [...branch, v],
+	            coerce,
+	            mask,
+	            message: options.message,
+	        });
+	        for (const t of ts) {
+	            if (t[0]) {
+	                status = t[0].refinement != null ? 'not_refined' : 'not_valid';
+	                yield [t[0], undefined];
+	            }
+	            else if (coerce) {
+	                v = t[1];
+	                if (k === undefined) {
+	                    value = v;
+	                }
+	                else if (value instanceof Map) {
+	                    value.set(k, v);
+	                }
+	                else if (value instanceof Set) {
+	                    value.add(v);
+	                }
+	                else if (isObject(value)) {
+	                    if (v !== undefined || k in value)
+	                        value[k] = v;
+	                }
+	            }
+	        }
+	    }
+	    if (status !== 'not_valid') {
+	        for (const failure of struct.refiner(value, ctx)) {
+	            failure.explanation = options.message;
+	            status = 'not_refined';
+	            yield [failure, undefined];
+	        }
+	    }
+	    if (status === 'valid') {
+	        yield [undefined, value];
+	    }
+	}
+
+	/**
+	 * `Struct` objects encapsulate the validation logic for a specific type of
+	 * values. Once constructed, you use the `assert`, `is` or `validate` helpers to
+	 * validate unknown input data against the struct.
+	 */
+	class Struct {
+	    constructor(props) {
+	        const { type, schema, validator, refiner, coercer = (value) => value, entries = function* () { }, } = props;
+	        this.type = type;
+	        this.schema = schema;
+	        this.entries = entries;
+	        this.coercer = coercer;
+	        if (validator) {
+	            this.validator = (value, context) => {
+	                const result = validator(value, context);
+	                return toFailures(result, context, this, value);
+	            };
+	        }
+	        else {
+	            this.validator = () => [];
+	        }
+	        if (refiner) {
+	            this.refiner = (value, context) => {
+	                const result = refiner(value, context);
+	                return toFailures(result, context, this, value);
+	            };
+	        }
+	        else {
+	            this.refiner = () => [];
+	        }
+	    }
+	    /**
+	     * Assert that a value passes the struct's validation, throwing if it doesn't.
+	     */
+	    assert(value, message) {
+	        return assert(value, this, message);
+	    }
+	    /**
+	     * Create a value with the struct's coercion logic, then validate it.
+	     */
+	    create(value, message) {
+	        return create(value, this, message);
+	    }
+	    /**
+	     * Check if a value passes the struct's validation.
+	     */
+	    is(value) {
+	        return is(value, this);
+	    }
+	    /**
+	     * Mask a value, coercing and validating it, but returning only the subset of
+	     * properties defined by the struct's schema.
+	     */
+	    mask(value, message) {
+	        return mask(value, this, message);
+	    }
+	    /**
+	     * Validate a value with the struct's validation logic, returning a tuple
+	     * representing the result.
+	     *
+	     * You may optionally pass `true` for the `withCoercion` argument to coerce
+	     * the value before attempting to validate it. If you do, the result will
+	     * contain the coerced result when successful.
+	     */
+	    validate(value, options = {}) {
+	        return validate(value, this, options);
+	    }
+	}
+	/**
+	 * Assert that a value passes a struct, throwing if it doesn't.
+	 */
+	function assert(value, struct, message) {
+	    const result = validate(value, struct, { message });
+	    if (result[0]) {
+	        throw result[0];
+	    }
+	}
+	/**
+	 * Create a value with the coercion logic of struct and validate it.
+	 */
+	function create(value, struct, message) {
+	    const result = validate(value, struct, { coerce: true, message });
+	    if (result[0]) {
+	        throw result[0];
+	    }
+	    else {
+	        return result[1];
+	    }
+	}
+	/**
+	 * Mask a value, returning only the subset of properties defined by a struct.
+	 */
+	function mask(value, struct, message) {
+	    const result = validate(value, struct, { coerce: true, mask: true, message });
+	    if (result[0]) {
+	        throw result[0];
+	    }
+	    else {
+	        return result[1];
+	    }
+	}
+	/**
+	 * Check if a value passes a struct.
+	 */
+	function is(value, struct) {
+	    const result = validate(value, struct);
+	    return !result[0];
+	}
+	/**
+	 * Validate a value against a struct, returning an error if invalid, or the
+	 * value (with potential coercion) if valid.
+	 */
+	function validate(value, struct, options = {}) {
+	    const tuples = run(value, struct, options);
+	    const tuple = shiftIterator(tuples);
+	    if (tuple[0]) {
+	        const error = new StructError(tuple[0], function* () {
+	            for (const t of tuples) {
+	                if (t[0]) {
+	                    yield t[0];
+	                }
+	            }
+	        });
+	        return [error, undefined];
+	    }
+	    else {
+	        const v = tuple[1];
+	        return [undefined, v];
+	    }
+	}
+	/**
+	 * Define a new struct type with a custom validation function.
+	 */
+	function define(name, validator) {
+	    return new Struct({ type: name, schema: null, validator });
+	}
+	function enums(values) {
+	    const schema = {};
+	    const description = values.map((v) => print(v)).join();
+	    for (const key of values) {
+	        schema[key] = key;
+	    }
+	    return new Struct({
+	        type: 'enums',
+	        schema,
+	        validator(value) {
+	            return (values.includes(value) ||
+	                `Expected one of \`${description}\`, but received: ${print(value)}`);
+	        },
+	    });
+	}
+	/**
+	 * Ensure that a value is an instance of a specific class.
+	 */
+	function instance(Class) {
+	    return define('instance', (value) => {
+	        return (value instanceof Class ||
+	            `Expected a \`${Class.name}\` instance, but received: ${print(value)}`);
+	    });
+	}
+	/**
+	 * Augment an existing struct to allow `null` values.
+	 */
+	function nullable(struct) {
+	    return new Struct({
+	        ...struct,
+	        validator: (value, ctx) => value === null || struct.validator(value, ctx),
+	        refiner: (value, ctx) => value === null || struct.refiner(value, ctx),
+	    });
+	}
+	/**
+	 * Ensure that a value is a number.
+	 */
+	function number() {
+	    return define('number', (value) => {
+	        return ((typeof value === 'number' && !isNaN(value)) ||
+	            `Expected a number, but received: ${print(value)}`);
+	    });
+	}
+	/**
+	 * Augment a struct to allow `undefined` values.
+	 */
+	function optional(struct) {
+	    return new Struct({
+	        ...struct,
+	        validator: (value, ctx) => value === undefined || struct.validator(value, ctx),
+	        refiner: (value, ctx) => value === undefined || struct.refiner(value, ctx),
+	    });
+	}
+	/**
+	 * Ensure that a value is a string.
+	 */
+	function string() {
+	    return define('string', (value) => {
+	        return (typeof value === 'string' ||
+	            `Expected a string, but received: ${print(value)}`);
+	    });
+	}
+	/**
+	 * Ensure that a value has a set of known properties of specific types.
+	 *
+	 * Note: Unrecognized properties are allowed and untouched. This is similar to
+	 * how TypeScript's structural typing works.
+	 */
+	function type(schema) {
+	    const keys = Object.keys(schema);
+	    return new Struct({
+	        type: 'type',
+	        schema,
+	        *entries(value) {
+	            if (isObject(value)) {
+	                for (const k of keys) {
+	                    yield [k, value[k], schema[k]];
+	                }
+	            }
+	        },
+	        validator(value) {
+	            return (isObject(value) || `Expected an object, but received: ${print(value)}`);
+	        },
+	        coercer(value) {
+	            return isObject(value) ? { ...value } : value;
+	        },
+	    });
+	}
+
+	/**
+	 * Augment a `Struct` to add an additional coercion step to its input.
+	 *
+	 * This allows you to transform input data before validating it, to increase the
+	 * likelihood that it passes validation—for example for default values, parsing
+	 * different formats, etc.
+	 *
+	 * Note: You must use `create(value, Struct)` on the value to have the coercion
+	 * take effect! Using simply `assert()` or `is()` will not use coercion.
+	 */
+	function coerce(struct, condition, coercer) {
+	    return new Struct({
+	        ...struct,
+	        coercer: (value, ctx) => {
+	            return is(value, condition)
+	                ? struct.coercer(coercer(value, ctx), ctx)
+	                : struct.coercer(value, ctx);
+	        },
+	    });
 	}
 
 	function solToLamports(amount) {
@@ -17846,7 +26644,9 @@ var solanaStakePool = (function (exports) {
 	const TRANSIENT_STAKE_SEED_PREFIX = buffer.Buffer.from('transient');
 	// Minimum amount of staked SOL required in a validator stake account to allow
 	// for merges without a mismatch on credits observed
-	const MINIMUM_ACTIVE_STAKE = LAMPORTS_PER_SOL;
+	const MINIMUM_ACTIVE_STAKE = 1000000;
+	/// Current supported max by the program
+	const DEFAULT_MAX_VALIDATORS = 2950;
 
 	/**
 	 * Generates the withdraw authority program address for the stake pool
@@ -17884,13 +26684,2845 @@ var solanaStakePool = (function (exports) {
 	/**
 	 * Generates the token metadata address by {@link mint}
 	 */
-	function findTokenMetadataAddress(mint) {
+	function findMetadataAddress(mint) {
 	    const [publicKey] = PublicKey.findProgramAddressSync([buffer.Buffer.from('metadata'), METADATA_PROGRAM_ID.toBuffer(), mint.toBuffer()], METADATA_PROGRAM_ID);
 	    return publicKey;
 	}
 
-	const lockup = (property) => struct([u64('unixTimestamp'), u64('epoch'), publicKey('custodian')], property);
-	const fee = (property) => struct([u64('denominator'), u64('numerator')], property);
+	var dist = {};
+
+	var Layout$1 = {};
+
+	/* The MIT License (MIT)
+	 *
+	 * Copyright 2015-2018 Peter A. Bigot
+	 *
+	 * Permission is hereby granted, free of charge, to any person obtaining a copy
+	 * of this software and associated documentation files (the "Software"), to deal
+	 * in the Software without restriction, including without limitation the rights
+	 * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+	 * copies of the Software, and to permit persons to whom the Software is
+	 * furnished to do so, subject to the following conditions:
+	 *
+	 * The above copyright notice and this permission notice shall be included in
+	 * all copies or substantial portions of the Software.
+	 *
+	 * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+	 * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	 * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	 * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+	 * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+	 * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+	 * THE SOFTWARE.
+	 */
+
+	/**
+	 * Base class for layout objects.
+	 *
+	 * **NOTE** This is an abstract base class; you can create instances
+	 * if it amuses you, but they won't support the {@link
+	 * Layout#encode|encode} or {@link Layout#decode|decode} functions.
+	 *
+	 * @param {Number} span - Initializer for {@link Layout#span|span}.  The
+	 * parameter must be an integer; a negative value signifies that the
+	 * span is {@link Layout#getSpan|value-specific}.
+	 *
+	 * @param {string} [property] - Initializer for {@link
+	 * Layout#property|property}.
+	 *
+	 * @abstract
+	 */
+	class Layout {
+	  constructor(span, property) {
+	    if (!Number.isInteger(span)) {
+	      throw new TypeError('span must be an integer');
+	    }
+
+	    /** The span of the layout in bytes.
+	     *
+	     * Positive values are generally expected.
+	     *
+	     * Zero will only appear in {@link Constant}s and in {@link
+	     * Sequence}s where the {@link Sequence#count|count} is zero.
+	     *
+	     * A negative value indicates that the span is value-specific, and
+	     * must be obtained using {@link Layout#getSpan|getSpan}. */
+	    this.span = span;
+
+	    /** The property name used when this layout is represented in an
+	     * Object.
+	     *
+	     * Used only for layouts that {@link Layout#decode|decode} to Object
+	     * instances.  If left undefined the span of the unnamed layout will
+	     * be treated as padding: it will not be mutated by {@link
+	     * Layout#encode|encode} nor represented as a property in the
+	     * decoded Object. */
+	    this.property = property;
+	  }
+
+	  /** Function to create an Object into which decoded properties will
+	   * be written.
+	   *
+	   * Used only for layouts that {@link Layout#decode|decode} to Object
+	   * instances, which means:
+	   * * {@link Structure}
+	   * * {@link Union}
+	   * * {@link VariantLayout}
+	   * * {@link BitStructure}
+	   *
+	   * If left undefined the JavaScript representation of these layouts
+	   * will be Object instances.
+	   *
+	   * See {@link bindConstructorLayout}.
+	   */
+	  makeDestinationObject() {
+	    return {};
+	  }
+
+	  /**
+	   * Decode from a Buffer into an JavaScript value.
+	   *
+	   * @param {Buffer} b - the buffer from which encoded data is read.
+	   *
+	   * @param {Number} [offset] - the offset at which the encoded data
+	   * starts.  If absent a zero offset is inferred.
+	   *
+	   * @returns {(Number|Array|Object)} - the value of the decoded data.
+	   *
+	   * @abstract
+	   */
+	  decode(b, offset) {
+	    throw new Error('Layout is abstract');
+	  }
+
+	  /**
+	   * Encode a JavaScript value into a Buffer.
+	   *
+	   * @param {(Number|Array|Object)} src - the value to be encoded into
+	   * the buffer.  The type accepted depends on the (sub-)type of {@link
+	   * Layout}.
+	   *
+	   * @param {Buffer} b - the buffer into which encoded data will be
+	   * written.
+	   *
+	   * @param {Number} [offset] - the offset at which the encoded data
+	   * starts.  If absent a zero offset is inferred.
+	   *
+	   * @returns {Number} - the number of bytes encoded, including the
+	   * space skipped for internal padding, but excluding data such as
+	   * {@link Sequence#count|lengths} when stored {@link
+	   * ExternalLayout|externally}.  This is the adjustment to `offset`
+	   * producing the offset where data for the next layout would be
+	   * written.
+	   *
+	   * @abstract
+	   */
+	  encode(src, b, offset) {
+	    throw new Error('Layout is abstract');
+	  }
+
+	  /**
+	   * Calculate the span of a specific instance of a layout.
+	   *
+	   * @param {Buffer} b - the buffer that contains an encoded instance.
+	   *
+	   * @param {Number} [offset] - the offset at which the encoded instance
+	   * starts.  If absent a zero offset is inferred.
+	   *
+	   * @return {Number} - the number of bytes covered by the layout
+	   * instance.  If this method is not overridden in a subclass the
+	   * definition-time constant {@link Layout#span|span} will be
+	   * returned.
+	   *
+	   * @throws {RangeError} - if the length of the value cannot be
+	   * determined.
+	   */
+	  getSpan(b, offset) {
+	    if (0 > this.span) {
+	      throw new RangeError('indeterminate span');
+	    }
+	    return this.span;
+	  }
+
+	  /**
+	   * Replicate the layout using a new property.
+	   *
+	   * This function must be used to get a structurally-equivalent layout
+	   * with a different name since all {@link Layout} instances are
+	   * immutable.
+	   *
+	   * **NOTE** This is a shallow copy.  All fields except {@link
+	   * Layout#property|property} are strictly equal to the origin layout.
+	   *
+	   * @param {String} property - the value for {@link
+	   * Layout#property|property} in the replica.
+	   *
+	   * @returns {Layout} - the copy with {@link Layout#property|property}
+	   * set to `property`.
+	   */
+	  replicate(property) {
+	    const rv = Object.create(this.constructor.prototype);
+	    Object.assign(rv, this);
+	    rv.property = property;
+	    return rv;
+	  }
+
+	  /**
+	   * Create an object from layout properties and an array of values.
+	   *
+	   * **NOTE** This function returns `undefined` if invoked on a layout
+	   * that does not return its value as an Object.  Objects are
+	   * returned for things that are a {@link Structure}, which includes
+	   * {@link VariantLayout|variant layouts} if they are structures, and
+	   * excludes {@link Union}s.  If you want this feature for a union
+	   * you must use {@link Union.getVariant|getVariant} to select the
+	   * desired layout.
+	   *
+	   * @param {Array} values - an array of values that correspond to the
+	   * default order for properties.  As with {@link Layout#decode|decode}
+	   * layout elements that have no property name are skipped when
+	   * iterating over the array values.  Only the top-level properties are
+	   * assigned; arguments are not assigned to properties of contained
+	   * layouts.  Any unused values are ignored.
+	   *
+	   * @return {(Object|undefined)}
+	   */
+	  fromArray(values) {
+	    return undefined;
+	  }
+	}
+	Layout$1.Layout = Layout;
+
+	/* Provide text that carries a name (such as for a function that will
+	 * be throwing an error) annotated with the property of a given layout
+	 * (such as one for which the value was unacceptable).
+	 *
+	 * @ignore */
+	function nameWithProperty(name, lo) {
+	  if (lo.property) {
+	    return name + '[' + lo.property + ']';
+	  }
+	  return name;
+	}
+	Layout$1.nameWithProperty = nameWithProperty;
+
+	/**
+	 * Augment a class so that instances can be encoded/decoded using a
+	 * given layout.
+	 *
+	 * Calling this function couples `Class` with `layout` in several ways:
+	 *
+	 * * `Class.layout_` becomes a static member property equal to `layout`;
+	 * * `layout.boundConstructor_` becomes a static member property equal
+	 *    to `Class`;
+	 * * The {@link Layout#makeDestinationObject|makeDestinationObject()}
+	 *   property of `layout` is set to a function that returns a `new
+	 *   Class()`;
+	 * * `Class.decode(b, offset)` becomes a static member function that
+	 *   delegates to {@link Layout#decode|layout.decode}.  The
+	 *   synthesized function may be captured and extended.
+	 * * `Class.prototype.encode(b, offset)` provides an instance member
+	 *   function that delegates to {@link Layout#encode|layout.encode}
+	 *   with `src` set to `this`.  The synthesized function may be
+	 *   captured and extended, but when the extension is invoked `this`
+	 *   must be explicitly bound to the instance.
+	 *
+	 * @param {class} Class - a JavaScript class with a nullary
+	 * constructor.
+	 *
+	 * @param {Layout} layout - the {@link Layout} instance used to encode
+	 * instances of `Class`.
+	 */
+	function bindConstructorLayout(Class, layout) {
+	  if ('function' !== typeof Class) {
+	    throw new TypeError('Class must be constructor');
+	  }
+	  if (Class.hasOwnProperty('layout_')) {
+	    throw new Error('Class is already bound to a layout');
+	  }
+	  if (!(layout && (layout instanceof Layout))) {
+	    throw new TypeError('layout must be a Layout');
+	  }
+	  if (layout.hasOwnProperty('boundConstructor_')) {
+	    throw new Error('layout is already bound to a constructor');
+	  }
+	  Class.layout_ = layout;
+	  layout.boundConstructor_ = Class;
+	  layout.makeDestinationObject = (() => new Class());
+	  Object.defineProperty(Class.prototype, 'encode', {
+	    value: function(b, offset) {
+	      return layout.encode(this, b, offset);
+	    },
+	    writable: true,
+	  });
+	  Object.defineProperty(Class, 'decode', {
+	    value: function(b, offset) {
+	      return layout.decode(b, offset);
+	    },
+	    writable: true,
+	  });
+	}
+	Layout$1.bindConstructorLayout = bindConstructorLayout;
+
+	/**
+	 * An object that behaves like a layout but does not consume space
+	 * within its containing layout.
+	 *
+	 * This is primarily used to obtain metadata about a member, such as a
+	 * {@link OffsetLayout} that can provide data about a {@link
+	 * Layout#getSpan|value-specific span}.
+	 *
+	 * **NOTE** This is an abstract base class; you can create instances
+	 * if it amuses you, but they won't support {@link
+	 * ExternalLayout#isCount|isCount} or other {@link Layout} functions.
+	 *
+	 * @param {Number} span - initializer for {@link Layout#span|span}.
+	 * The parameter can range from 1 through 6.
+	 *
+	 * @param {string} [property] - initializer for {@link
+	 * Layout#property|property}.
+	 *
+	 * @abstract
+	 * @augments {Layout}
+	 */
+	class ExternalLayout extends Layout {
+	  /**
+	   * Return `true` iff the external layout decodes to an unsigned
+	   * integer layout.
+	   *
+	   * In that case it can be used as the source of {@link
+	   * Sequence#count|Sequence counts}, {@link Blob#length|Blob lengths},
+	   * or as {@link UnionLayoutDiscriminator#layout|external union
+	   * discriminators}.
+	   *
+	   * @abstract
+	   */
+	  isCount() {
+	    throw new Error('ExternalLayout is abstract');
+	  }
+	}
+
+	/**
+	 * An {@link ExternalLayout} that determines its {@link
+	 * Layout#decode|value} based on offset into and length of the buffer
+	 * on which it is invoked.
+	 *
+	 * *Factory*: {@link module:Layout.greedy|greedy}
+	 *
+	 * @param {Number} [elementSpan] - initializer for {@link
+	 * GreedyCount#elementSpan|elementSpan}.
+	 *
+	 * @param {string} [property] - initializer for {@link
+	 * Layout#property|property}.
+	 *
+	 * @augments {ExternalLayout}
+	 */
+	class GreedyCount extends ExternalLayout {
+	  constructor(elementSpan, property) {
+	    if (undefined === elementSpan) {
+	      elementSpan = 1;
+	    }
+	    if ((!Number.isInteger(elementSpan)) || (0 >= elementSpan)) {
+	      throw new TypeError('elementSpan must be a (positive) integer');
+	    }
+	    super(-1, property);
+
+	    /** The layout for individual elements of the sequence.  The value
+	     * must be a positive integer.  If not provided, the value will be
+	     * 1. */
+	    this.elementSpan = elementSpan;
+	  }
+
+	  /** @override */
+	  isCount() {
+	    return true;
+	  }
+
+	  /** @override */
+	  decode(b, offset) {
+	    if (undefined === offset) {
+	      offset = 0;
+	    }
+	    const rem = b.length - offset;
+	    return Math.floor(rem / this.elementSpan);
+	  }
+
+	  /** @override */
+	  encode(src, b, offset) {
+	    return 0;
+	  }
+	}
+
+	/**
+	 * An {@link ExternalLayout} that supports accessing a {@link Layout}
+	 * at a fixed offset from the start of another Layout.  The offset may
+	 * be before, within, or after the base layout.
+	 *
+	 * *Factory*: {@link module:Layout.offset|offset}
+	 *
+	 * @param {Layout} layout - initializer for {@link
+	 * OffsetLayout#layout|layout}, modulo `property`.
+	 *
+	 * @param {Number} [offset] - Initializes {@link
+	 * OffsetLayout#offset|offset}.  Defaults to zero.
+	 *
+	 * @param {string} [property] - Optional new property name for a
+	 * {@link Layout#replicate| replica} of `layout` to be used as {@link
+	 * OffsetLayout#layout|layout}.  If not provided the `layout` is used
+	 * unchanged.
+	 *
+	 * @augments {Layout}
+	 */
+	class OffsetLayout extends ExternalLayout {
+	  constructor(layout, offset, property) {
+	    if (!(layout instanceof Layout)) {
+	      throw new TypeError('layout must be a Layout');
+	    }
+
+	    if (undefined === offset) {
+	      offset = 0;
+	    } else if (!Number.isInteger(offset)) {
+	      throw new TypeError('offset must be integer or undefined');
+	    }
+
+	    super(layout.span, property || layout.property);
+
+	    /** The subordinated layout. */
+	    this.layout = layout;
+
+	    /** The location of {@link OffsetLayout#layout} relative to the
+	     * start of another layout.
+	     *
+	     * The value may be positive or negative, but an error will thrown
+	     * if at the point of use it goes outside the span of the Buffer
+	     * being accessed.  */
+	    this.offset = offset;
+	  }
+
+	  /** @override */
+	  isCount() {
+	    return ((this.layout instanceof UInt)
+	            || (this.layout instanceof UIntBE));
+	  }
+
+	  /** @override */
+	  decode(b, offset) {
+	    if (undefined === offset) {
+	      offset = 0;
+	    }
+	    return this.layout.decode(b, offset + this.offset);
+	  }
+
+	  /** @override */
+	  encode(src, b, offset) {
+	    if (undefined === offset) {
+	      offset = 0;
+	    }
+	    return this.layout.encode(src, b, offset + this.offset);
+	  }
+	}
+
+	/**
+	 * Represent an unsigned integer in little-endian format.
+	 *
+	 * *Factory*: {@link module:Layout.u8|u8}, {@link
+	 *  module:Layout.u16|u16}, {@link module:Layout.u24|u24}, {@link
+	 *  module:Layout.u32|u32}, {@link module:Layout.u40|u40}, {@link
+	 *  module:Layout.u48|u48}
+	 *
+	 * @param {Number} span - initializer for {@link Layout#span|span}.
+	 * The parameter can range from 1 through 6.
+	 *
+	 * @param {string} [property] - initializer for {@link
+	 * Layout#property|property}.
+	 *
+	 * @augments {Layout}
+	 */
+	class UInt extends Layout {
+	  constructor(span, property) {
+	    super(span, property);
+	    if (6 < this.span) {
+	      throw new RangeError('span must not exceed 6 bytes');
+	    }
+	  }
+
+	  /** @override */
+	  decode(b, offset) {
+	    if (undefined === offset) {
+	      offset = 0;
+	    }
+	    return b.readUIntLE(offset, this.span);
+	  }
+
+	  /** @override */
+	  encode(src, b, offset) {
+	    if (undefined === offset) {
+	      offset = 0;
+	    }
+	    b.writeUIntLE(src, offset, this.span);
+	    return this.span;
+	  }
+	}
+
+	/**
+	 * Represent an unsigned integer in big-endian format.
+	 *
+	 * *Factory*: {@link module:Layout.u8be|u8be}, {@link
+	 * module:Layout.u16be|u16be}, {@link module:Layout.u24be|u24be},
+	 * {@link module:Layout.u32be|u32be}, {@link
+	 * module:Layout.u40be|u40be}, {@link module:Layout.u48be|u48be}
+	 *
+	 * @param {Number} span - initializer for {@link Layout#span|span}.
+	 * The parameter can range from 1 through 6.
+	 *
+	 * @param {string} [property] - initializer for {@link
+	 * Layout#property|property}.
+	 *
+	 * @augments {Layout}
+	 */
+	class UIntBE extends Layout {
+	  constructor(span, property) {
+	    super( span, property);
+	    if (6 < this.span) {
+	      throw new RangeError('span must not exceed 6 bytes');
+	    }
+	  }
+
+	  /** @override */
+	  decode(b, offset) {
+	    if (undefined === offset) {
+	      offset = 0;
+	    }
+	    return b.readUIntBE(offset, this.span);
+	  }
+
+	  /** @override */
+	  encode(src, b, offset) {
+	    if (undefined === offset) {
+	      offset = 0;
+	    }
+	    b.writeUIntBE(src, offset, this.span);
+	    return this.span;
+	  }
+	}
+
+	/**
+	 * Represent a signed integer in little-endian format.
+	 *
+	 * *Factory*: {@link module:Layout.s8|s8}, {@link
+	 *  module:Layout.s16|s16}, {@link module:Layout.s24|s24}, {@link
+	 *  module:Layout.s32|s32}, {@link module:Layout.s40|s40}, {@link
+	 *  module:Layout.s48|s48}
+	 *
+	 * @param {Number} span - initializer for {@link Layout#span|span}.
+	 * The parameter can range from 1 through 6.
+	 *
+	 * @param {string} [property] - initializer for {@link
+	 * Layout#property|property}.
+	 *
+	 * @augments {Layout}
+	 */
+	class Int extends Layout {
+	  constructor(span, property) {
+	    super(span, property);
+	    if (6 < this.span) {
+	      throw new RangeError('span must not exceed 6 bytes');
+	    }
+	  }
+
+	  /** @override */
+	  decode(b, offset) {
+	    if (undefined === offset) {
+	      offset = 0;
+	    }
+	    return b.readIntLE(offset, this.span);
+	  }
+
+	  /** @override */
+	  encode(src, b, offset) {
+	    if (undefined === offset) {
+	      offset = 0;
+	    }
+	    b.writeIntLE(src, offset, this.span);
+	    return this.span;
+	  }
+	}
+
+	/**
+	 * Represent a signed integer in big-endian format.
+	 *
+	 * *Factory*: {@link module:Layout.s8be|s8be}, {@link
+	 * module:Layout.s16be|s16be}, {@link module:Layout.s24be|s24be},
+	 * {@link module:Layout.s32be|s32be}, {@link
+	 * module:Layout.s40be|s40be}, {@link module:Layout.s48be|s48be}
+	 *
+	 * @param {Number} span - initializer for {@link Layout#span|span}.
+	 * The parameter can range from 1 through 6.
+	 *
+	 * @param {string} [property] - initializer for {@link
+	 * Layout#property|property}.
+	 *
+	 * @augments {Layout}
+	 */
+	class IntBE extends Layout {
+	  constructor(span, property) {
+	    super(span, property);
+	    if (6 < this.span) {
+	      throw new RangeError('span must not exceed 6 bytes');
+	    }
+	  }
+
+	  /** @override */
+	  decode(b, offset) {
+	    if (undefined === offset) {
+	      offset = 0;
+	    }
+	    return b.readIntBE(offset, this.span);
+	  }
+
+	  /** @override */
+	  encode(src, b, offset) {
+	    if (undefined === offset) {
+	      offset = 0;
+	    }
+	    b.writeIntBE(src, offset, this.span);
+	    return this.span;
+	  }
+	}
+
+	const V2E32 = Math.pow(2, 32);
+
+	/* True modulus high and low 32-bit words, where low word is always
+	 * non-negative. */
+	function divmodInt64(src) {
+	  const hi32 = Math.floor(src / V2E32);
+	  const lo32 = src - (hi32 * V2E32);
+	  return {hi32, lo32};
+	}
+	/* Reconstruct Number from quotient and non-negative remainder */
+	function roundedInt64(hi32, lo32) {
+	  return hi32 * V2E32 + lo32;
+	}
+
+	/**
+	 * Represent an unsigned 64-bit integer in little-endian format when
+	 * encoded and as a near integral JavaScript Number when decoded.
+	 *
+	 * *Factory*: {@link module:Layout.nu64|nu64}
+	 *
+	 * **NOTE** Values with magnitude greater than 2^52 may not decode to
+	 * the exact value of the encoded representation.
+	 *
+	 * @augments {Layout}
+	 */
+	class NearUInt64 extends Layout {
+	  constructor(property) {
+	    super(8, property);
+	  }
+
+	  /** @override */
+	  decode(b, offset) {
+	    if (undefined === offset) {
+	      offset = 0;
+	    }
+	    const lo32 = b.readUInt32LE(offset);
+	    const hi32 = b.readUInt32LE(offset + 4);
+	    return roundedInt64(hi32, lo32);
+	  }
+
+	  /** @override */
+	  encode(src, b, offset) {
+	    if (undefined === offset) {
+	      offset = 0;
+	    }
+	    const split = divmodInt64(src);
+	    b.writeUInt32LE(split.lo32, offset);
+	    b.writeUInt32LE(split.hi32, offset + 4);
+	    return 8;
+	  }
+	}
+
+	/**
+	 * Represent an unsigned 64-bit integer in big-endian format when
+	 * encoded and as a near integral JavaScript Number when decoded.
+	 *
+	 * *Factory*: {@link module:Layout.nu64be|nu64be}
+	 *
+	 * **NOTE** Values with magnitude greater than 2^52 may not decode to
+	 * the exact value of the encoded representation.
+	 *
+	 * @augments {Layout}
+	 */
+	class NearUInt64BE extends Layout {
+	  constructor(property) {
+	    super(8, property);
+	  }
+
+	  /** @override */
+	  decode(b, offset) {
+	    if (undefined === offset) {
+	      offset = 0;
+	    }
+	    const hi32 = b.readUInt32BE(offset);
+	    const lo32 = b.readUInt32BE(offset + 4);
+	    return roundedInt64(hi32, lo32);
+	  }
+
+	  /** @override */
+	  encode(src, b, offset) {
+	    if (undefined === offset) {
+	      offset = 0;
+	    }
+	    const split = divmodInt64(src);
+	    b.writeUInt32BE(split.hi32, offset);
+	    b.writeUInt32BE(split.lo32, offset + 4);
+	    return 8;
+	  }
+	}
+
+	/**
+	 * Represent a signed 64-bit integer in little-endian format when
+	 * encoded and as a near integral JavaScript Number when decoded.
+	 *
+	 * *Factory*: {@link module:Layout.ns64|ns64}
+	 *
+	 * **NOTE** Values with magnitude greater than 2^52 may not decode to
+	 * the exact value of the encoded representation.
+	 *
+	 * @augments {Layout}
+	 */
+	class NearInt64 extends Layout {
+	  constructor(property) {
+	    super(8, property);
+	  }
+
+	  /** @override */
+	  decode(b, offset) {
+	    if (undefined === offset) {
+	      offset = 0;
+	    }
+	    const lo32 = b.readUInt32LE(offset);
+	    const hi32 = b.readInt32LE(offset + 4);
+	    return roundedInt64(hi32, lo32);
+	  }
+
+	  /** @override */
+	  encode(src, b, offset) {
+	    if (undefined === offset) {
+	      offset = 0;
+	    }
+	    const split = divmodInt64(src);
+	    b.writeUInt32LE(split.lo32, offset);
+	    b.writeInt32LE(split.hi32, offset + 4);
+	    return 8;
+	  }
+	}
+
+	/**
+	 * Represent a signed 64-bit integer in big-endian format when
+	 * encoded and as a near integral JavaScript Number when decoded.
+	 *
+	 * *Factory*: {@link module:Layout.ns64be|ns64be}
+	 *
+	 * **NOTE** Values with magnitude greater than 2^52 may not decode to
+	 * the exact value of the encoded representation.
+	 *
+	 * @augments {Layout}
+	 */
+	class NearInt64BE extends Layout {
+	  constructor(property) {
+	    super(8, property);
+	  }
+
+	  /** @override */
+	  decode(b, offset) {
+	    if (undefined === offset) {
+	      offset = 0;
+	    }
+	    const hi32 = b.readInt32BE(offset);
+	    const lo32 = b.readUInt32BE(offset + 4);
+	    return roundedInt64(hi32, lo32);
+	  }
+
+	  /** @override */
+	  encode(src, b, offset) {
+	    if (undefined === offset) {
+	      offset = 0;
+	    }
+	    const split = divmodInt64(src);
+	    b.writeInt32BE(split.hi32, offset);
+	    b.writeUInt32BE(split.lo32, offset + 4);
+	    return 8;
+	  }
+	}
+
+	/**
+	 * Represent a 32-bit floating point number in little-endian format.
+	 *
+	 * *Factory*: {@link module:Layout.f32|f32}
+	 *
+	 * @param {string} [property] - initializer for {@link
+	 * Layout#property|property}.
+	 *
+	 * @augments {Layout}
+	 */
+	class Float extends Layout {
+	  constructor(property) {
+	    super(4, property);
+	  }
+
+	  /** @override */
+	  decode(b, offset) {
+	    if (undefined === offset) {
+	      offset = 0;
+	    }
+	    return b.readFloatLE(offset);
+	  }
+
+	  /** @override */
+	  encode(src, b, offset) {
+	    if (undefined === offset) {
+	      offset = 0;
+	    }
+	    b.writeFloatLE(src, offset);
+	    return 4;
+	  }
+	}
+
+	/**
+	 * Represent a 32-bit floating point number in big-endian format.
+	 *
+	 * *Factory*: {@link module:Layout.f32be|f32be}
+	 *
+	 * @param {string} [property] - initializer for {@link
+	 * Layout#property|property}.
+	 *
+	 * @augments {Layout}
+	 */
+	class FloatBE extends Layout {
+	  constructor(property) {
+	    super(4, property);
+	  }
+
+	  /** @override */
+	  decode(b, offset) {
+	    if (undefined === offset) {
+	      offset = 0;
+	    }
+	    return b.readFloatBE(offset);
+	  }
+
+	  /** @override */
+	  encode(src, b, offset) {
+	    if (undefined === offset) {
+	      offset = 0;
+	    }
+	    b.writeFloatBE(src, offset);
+	    return 4;
+	  }
+	}
+
+	/**
+	 * Represent a 64-bit floating point number in little-endian format.
+	 *
+	 * *Factory*: {@link module:Layout.f64|f64}
+	 *
+	 * @param {string} [property] - initializer for {@link
+	 * Layout#property|property}.
+	 *
+	 * @augments {Layout}
+	 */
+	class Double extends Layout {
+	  constructor(property) {
+	    super(8, property);
+	  }
+
+	  /** @override */
+	  decode(b, offset) {
+	    if (undefined === offset) {
+	      offset = 0;
+	    }
+	    return b.readDoubleLE(offset);
+	  }
+
+	  /** @override */
+	  encode(src, b, offset) {
+	    if (undefined === offset) {
+	      offset = 0;
+	    }
+	    b.writeDoubleLE(src, offset);
+	    return 8;
+	  }
+	}
+
+	/**
+	 * Represent a 64-bit floating point number in big-endian format.
+	 *
+	 * *Factory*: {@link module:Layout.f64be|f64be}
+	 *
+	 * @param {string} [property] - initializer for {@link
+	 * Layout#property|property}.
+	 *
+	 * @augments {Layout}
+	 */
+	class DoubleBE extends Layout {
+	  constructor(property) {
+	    super(8, property);
+	  }
+
+	  /** @override */
+	  decode(b, offset) {
+	    if (undefined === offset) {
+	      offset = 0;
+	    }
+	    return b.readDoubleBE(offset);
+	  }
+
+	  /** @override */
+	  encode(src, b, offset) {
+	    if (undefined === offset) {
+	      offset = 0;
+	    }
+	    b.writeDoubleBE(src, offset);
+	    return 8;
+	  }
+	}
+
+	/**
+	 * Represent a contiguous sequence of a specific layout as an Array.
+	 *
+	 * *Factory*: {@link module:Layout.seq|seq}
+	 *
+	 * @param {Layout} elementLayout - initializer for {@link
+	 * Sequence#elementLayout|elementLayout}.
+	 *
+	 * @param {(Number|ExternalLayout)} count - initializer for {@link
+	 * Sequence#count|count}.  The parameter must be either a positive
+	 * integer or an instance of {@link ExternalLayout}.
+	 *
+	 * @param {string} [property] - initializer for {@link
+	 * Layout#property|property}.
+	 *
+	 * @augments {Layout}
+	 */
+	class Sequence extends Layout {
+	  constructor(elementLayout, count, property) {
+	    if (!(elementLayout instanceof Layout)) {
+	      throw new TypeError('elementLayout must be a Layout');
+	    }
+	    if (!(((count instanceof ExternalLayout) && count.isCount())
+	          || (Number.isInteger(count) && (0 <= count)))) {
+	      throw new TypeError('count must be non-negative integer '
+	                          + 'or an unsigned integer ExternalLayout');
+	    }
+	    let span = -1;
+	    if ((!(count instanceof ExternalLayout))
+	        && (0 < elementLayout.span)) {
+	      span = count * elementLayout.span;
+	    }
+
+	    super(span, property);
+
+	    /** The layout for individual elements of the sequence. */
+	    this.elementLayout = elementLayout;
+
+	    /** The number of elements in the sequence.
+	     *
+	     * This will be either a non-negative integer or an instance of
+	     * {@link ExternalLayout} for which {@link
+	     * ExternalLayout#isCount|isCount()} is `true`. */
+	    this.count = count;
+	  }
+
+	  /** @override */
+	  getSpan(b, offset) {
+	    if (0 <= this.span) {
+	      return this.span;
+	    }
+	    if (undefined === offset) {
+	      offset = 0;
+	    }
+	    let span = 0;
+	    let count = this.count;
+	    if (count instanceof ExternalLayout) {
+	      count = count.decode(b, offset);
+	    }
+	    if (0 < this.elementLayout.span) {
+	      span = count * this.elementLayout.span;
+	    } else {
+	      let idx = 0;
+	      while (idx < count) {
+	        span += this.elementLayout.getSpan(b, offset + span);
+	        ++idx;
+	      }
+	    }
+	    return span;
+	  }
+
+	  /** @override */
+	  decode(b, offset) {
+	    if (undefined === offset) {
+	      offset = 0;
+	    }
+	    const rv = [];
+	    let i = 0;
+	    let count = this.count;
+	    if (count instanceof ExternalLayout) {
+	      count = count.decode(b, offset);
+	    }
+	    while (i < count) {
+	      rv.push(this.elementLayout.decode(b, offset));
+	      offset += this.elementLayout.getSpan(b, offset);
+	      i += 1;
+	    }
+	    return rv;
+	  }
+
+	  /** Implement {@link Layout#encode|encode} for {@link Sequence}.
+	   *
+	   * **NOTE** If `src` is shorter than {@link Sequence#count|count} then
+	   * the unused space in the buffer is left unchanged.  If `src` is
+	   * longer than {@link Sequence#count|count} the unneeded elements are
+	   * ignored.
+	   *
+	   * **NOTE** If {@link Layout#count|count} is an instance of {@link
+	   * ExternalLayout} then the length of `src` will be encoded as the
+	   * count after `src` is encoded. */
+	  encode(src, b, offset) {
+	    if (undefined === offset) {
+	      offset = 0;
+	    }
+	    const elo = this.elementLayout;
+	    const span = src.reduce((span, v) => {
+	      return span + elo.encode(v, b, offset + span);
+	    }, 0);
+	    if (this.count instanceof ExternalLayout) {
+	      this.count.encode(src.length, b, offset);
+	    }
+	    return span;
+	  }
+	}
+
+	/**
+	 * Represent a contiguous sequence of arbitrary layout elements as an
+	 * Object.
+	 *
+	 * *Factory*: {@link module:Layout.struct|struct}
+	 *
+	 * **NOTE** The {@link Layout#span|span} of the structure is variable
+	 * if any layout in {@link Structure#fields|fields} has a variable
+	 * span.  When {@link Layout#encode|encoding} we must have a value for
+	 * all variable-length fields, or we wouldn't be able to figure out
+	 * how much space to use for storage.  We can only identify the value
+	 * for a field when it has a {@link Layout#property|property}.  As
+	 * such, although a structure may contain both unnamed fields and
+	 * variable-length fields, it cannot contain an unnamed
+	 * variable-length field.
+	 *
+	 * @param {Layout[]} fields - initializer for {@link
+	 * Structure#fields|fields}.  An error is raised if this contains a
+	 * variable-length field for which a {@link Layout#property|property}
+	 * is not defined.
+	 *
+	 * @param {string} [property] - initializer for {@link
+	 * Layout#property|property}.
+	 *
+	 * @param {Boolean} [decodePrefixes] - initializer for {@link
+	 * Structure#decodePrefixes|property}.
+	 *
+	 * @throws {Error} - if `fields` contains an unnamed variable-length
+	 * layout.
+	 *
+	 * @augments {Layout}
+	 */
+	class Structure extends Layout {
+	  constructor(fields, property, decodePrefixes) {
+	    if (!(Array.isArray(fields)
+	          && fields.reduce((acc, v) => acc && (v instanceof Layout), true))) {
+	      throw new TypeError('fields must be array of Layout instances');
+	    }
+	    if (('boolean' === typeof property)
+	        && (undefined === decodePrefixes)) {
+	      decodePrefixes = property;
+	      property = undefined;
+	    }
+
+	    /* Verify absence of unnamed variable-length fields. */
+	    for (const fd of fields) {
+	      if ((0 > fd.span)
+	          && (undefined === fd.property)) {
+	        throw new Error('fields cannot contain unnamed variable-length layout');
+	      }
+	    }
+
+	    let span = -1;
+	    try {
+	      span = fields.reduce((span, fd) => span + fd.getSpan(), 0);
+	    } catch (e) {
+	    }
+	    super(span, property);
+
+	    /** The sequence of {@link Layout} values that comprise the
+	     * structure.
+	     *
+	     * The individual elements need not be the same type, and may be
+	     * either scalar or aggregate layouts.  If a member layout leaves
+	     * its {@link Layout#property|property} undefined the
+	     * corresponding region of the buffer associated with the element
+	     * will not be mutated.
+	     *
+	     * @type {Layout[]} */
+	    this.fields = fields;
+
+	    /** Control behavior of {@link Layout#decode|decode()} given short
+	     * buffers.
+	     *
+	     * In some situations a structure many be extended with additional
+	     * fields over time, with older installations providing only a
+	     * prefix of the full structure.  If this property is `true`
+	     * decoding will accept those buffers and leave subsequent fields
+	     * undefined, as long as the buffer ends at a field boundary.
+	     * Defaults to `false`. */
+	    this.decodePrefixes = !!decodePrefixes;
+	  }
+
+	  /** @override */
+	  getSpan(b, offset) {
+	    if (0 <= this.span) {
+	      return this.span;
+	    }
+	    if (undefined === offset) {
+	      offset = 0;
+	    }
+	    let span = 0;
+	    try {
+	      span = this.fields.reduce((span, fd) => {
+	        const fsp = fd.getSpan(b, offset);
+	        offset += fsp;
+	        return span + fsp;
+	      }, 0);
+	    } catch (e) {
+	      throw new RangeError('indeterminate span');
+	    }
+	    return span;
+	  }
+
+	  /** @override */
+	  decode(b, offset) {
+	    if (undefined === offset) {
+	      offset = 0;
+	    }
+	    const dest = this.makeDestinationObject();
+	    for (const fd of this.fields) {
+	      if (undefined !== fd.property) {
+	        dest[fd.property] = fd.decode(b, offset);
+	      }
+	      offset += fd.getSpan(b, offset);
+	      if (this.decodePrefixes
+	          && (b.length === offset)) {
+	        break;
+	      }
+	    }
+	    return dest;
+	  }
+
+	  /** Implement {@link Layout#encode|encode} for {@link Structure}.
+	   *
+	   * If `src` is missing a property for a member with a defined {@link
+	   * Layout#property|property} the corresponding region of the buffer is
+	   * left unmodified. */
+	  encode(src, b, offset) {
+	    if (undefined === offset) {
+	      offset = 0;
+	    }
+	    const firstOffset = offset;
+	    let lastOffset = 0;
+	    let lastWrote = 0;
+	    for (const fd of this.fields) {
+	      let span = fd.span;
+	      lastWrote = (0 < span) ? span : 0;
+	      if (undefined !== fd.property) {
+	        const fv = src[fd.property];
+	        if (undefined !== fv) {
+	          lastWrote = fd.encode(fv, b, offset);
+	          if (0 > span) {
+	            /* Read the as-encoded span, which is not necessarily the
+	             * same as what we wrote. */
+	            span = fd.getSpan(b, offset);
+	          }
+	        }
+	      }
+	      lastOffset = offset;
+	      offset += span;
+	    }
+	    /* Use (lastOffset + lastWrote) instead of offset because the last
+	     * item may have had a dynamic length and we don't want to include
+	     * the padding between it and the end of the space reserved for
+	     * it. */
+	    return (lastOffset + lastWrote) - firstOffset;
+	  }
+
+	  /** @override */
+	  fromArray(values) {
+	    const dest = this.makeDestinationObject();
+	    for (const fd of this.fields) {
+	      if ((undefined !== fd.property)
+	          && (0 < values.length)) {
+	        dest[fd.property] = values.shift();
+	      }
+	    }
+	    return dest;
+	  }
+
+	  /**
+	   * Get access to the layout of a given property.
+	   *
+	   * @param {String} property - the structure member of interest.
+	   *
+	   * @return {Layout} - the layout associated with `property`, or
+	   * undefined if there is no such property.
+	   */
+	  layoutFor(property) {
+	    if ('string' !== typeof property) {
+	      throw new TypeError('property must be string');
+	    }
+	    for (const fd of this.fields) {
+	      if (fd.property === property) {
+	        return fd;
+	      }
+	    }
+	  }
+
+	  /**
+	   * Get the offset of a structure member.
+	   *
+	   * @param {String} property - the structure member of interest.
+	   *
+	   * @return {Number} - the offset in bytes to the start of `property`
+	   * within the structure, or undefined if `property` is not a field
+	   * within the structure.  If the property is a member but follows a
+	   * variable-length structure member a negative number will be
+	   * returned.
+	   */
+	  offsetOf(property) {
+	    if ('string' !== typeof property) {
+	      throw new TypeError('property must be string');
+	    }
+	    let offset = 0;
+	    for (const fd of this.fields) {
+	      if (fd.property === property) {
+	        return offset;
+	      }
+	      if (0 > fd.span) {
+	        offset = -1;
+	      } else if (0 <= offset) {
+	        offset += fd.span;
+	      }
+	    }
+	  }
+	}
+
+	/**
+	 * An object that can provide a {@link
+	 * Union#discriminator|discriminator} API for {@link Union}.
+	 *
+	 * **NOTE** This is an abstract base class; you can create instances
+	 * if it amuses you, but they won't support the {@link
+	 * UnionDiscriminator#encode|encode} or {@link
+	 * UnionDiscriminator#decode|decode} functions.
+	 *
+	 * @param {string} [property] - Default for {@link
+	 * UnionDiscriminator#property|property}.
+	 *
+	 * @abstract
+	 */
+	class UnionDiscriminator {
+	  constructor(property) {
+	    /** The {@link Layout#property|property} to be used when the
+	     * discriminator is referenced in isolation (generally when {@link
+	     * Union#decode|Union decode} cannot delegate to a specific
+	     * variant). */
+	    this.property = property;
+	  }
+
+	  /** Analog to {@link Layout#decode|Layout decode} for union discriminators.
+	   *
+	   * The implementation of this method need not reference the buffer if
+	   * variant information is available through other means. */
+	  decode() {
+	    throw new Error('UnionDiscriminator is abstract');
+	  }
+
+	  /** Analog to {@link Layout#decode|Layout encode} for union discriminators.
+	   *
+	   * The implementation of this method need not store the value if
+	   * variant information is maintained through other means. */
+	  encode() {
+	    throw new Error('UnionDiscriminator is abstract');
+	  }
+	}
+
+	/**
+	 * An object that can provide a {@link
+	 * UnionDiscriminator|discriminator API} for {@link Union} using an
+	 * unsigned integral {@link Layout} instance located either inside or
+	 * outside the union.
+	 *
+	 * @param {ExternalLayout} layout - initializes {@link
+	 * UnionLayoutDiscriminator#layout|layout}.  Must satisfy {@link
+	 * ExternalLayout#isCount|isCount()}.
+	 *
+	 * @param {string} [property] - Default for {@link
+	 * UnionDiscriminator#property|property}, superseding the property
+	 * from `layout`, but defaulting to `variant` if neither `property`
+	 * nor layout provide a property name.
+	 *
+	 * @augments {UnionDiscriminator}
+	 */
+	class UnionLayoutDiscriminator extends UnionDiscriminator {
+	  constructor(layout, property) {
+	    if (!((layout instanceof ExternalLayout)
+	          && layout.isCount())) {
+	      throw new TypeError('layout must be an unsigned integer ExternalLayout');
+	    }
+
+	    super(property || layout.property || 'variant');
+
+	    /** The {@link ExternalLayout} used to access the discriminator
+	     * value. */
+	    this.layout = layout;
+	  }
+
+	  /** Delegate decoding to {@link UnionLayoutDiscriminator#layout|layout}. */
+	  decode(b, offset) {
+	    return this.layout.decode(b, offset);
+	  }
+
+	  /** Delegate encoding to {@link UnionLayoutDiscriminator#layout|layout}. */
+	  encode(src, b, offset) {
+	    return this.layout.encode(src, b, offset);
+	  }
+	}
+
+	/**
+	 * Represent any number of span-compatible layouts.
+	 *
+	 * *Factory*: {@link module:Layout.union|union}
+	 *
+	 * If the union has a {@link Union#defaultLayout|default layout} that
+	 * layout must have a non-negative {@link Layout#span|span}.  The span
+	 * of a fixed-span union includes its {@link
+	 * Union#discriminator|discriminator} if the variant is a {@link
+	 * Union#usesPrefixDiscriminator|prefix of the union}, plus the span
+	 * of its {@link Union#defaultLayout|default layout}.
+	 *
+	 * If the union does not have a default layout then the encoded span
+	 * of the union depends on the encoded span of its variant (which may
+	 * be fixed or variable).
+	 *
+	 * {@link VariantLayout#layout|Variant layout}s are added through
+	 * {@link Union#addVariant|addVariant}.  If the union has a default
+	 * layout, the span of the {@link VariantLayout#layout|layout
+	 * contained by the variant} must not exceed the span of the {@link
+	 * Union#defaultLayout|default layout} (minus the span of a {@link
+	 * Union#usesPrefixDiscriminator|prefix disriminator}, if used).  The
+	 * span of the variant will equal the span of the union itself.
+	 *
+	 * The variant for a buffer can only be identified from the {@link
+	 * Union#discriminator|discriminator} {@link
+	 * UnionDiscriminator#property|property} (in the case of the {@link
+	 * Union#defaultLayout|default layout}), or by using {@link
+	 * Union#getVariant|getVariant} and examining the resulting {@link
+	 * VariantLayout} instance.
+	 *
+	 * A variant compatible with a JavaScript object can be identified
+	 * using {@link Union#getSourceVariant|getSourceVariant}.
+	 *
+	 * @param {(UnionDiscriminator|ExternalLayout|Layout)} discr - How to
+	 * identify the layout used to interpret the union contents.  The
+	 * parameter must be an instance of {@link UnionDiscriminator}, an
+	 * {@link ExternalLayout} that satisfies {@link
+	 * ExternalLayout#isCount|isCount()}, or {@link UInt} (or {@link
+	 * UIntBE}).  When a non-external layout element is passed the layout
+	 * appears at the start of the union.  In all cases the (synthesized)
+	 * {@link UnionDiscriminator} instance is recorded as {@link
+	 * Union#discriminator|discriminator}.
+	 *
+	 * @param {(Layout|null)} defaultLayout - initializer for {@link
+	 * Union#defaultLayout|defaultLayout}.  If absent defaults to `null`.
+	 * If `null` there is no default layout: the union has data-dependent
+	 * length and attempts to decode or encode unrecognized variants will
+	 * throw an exception.  A {@link Layout} instance must have a
+	 * non-negative {@link Layout#span|span}, and if it lacks a {@link
+	 * Layout#property|property} the {@link
+	 * Union#defaultLayout|defaultLayout} will be a {@link
+	 * Layout#replicate|replica} with property `content`.
+	 *
+	 * @param {string} [property] - initializer for {@link
+	 * Layout#property|property}.
+	 *
+	 * @augments {Layout}
+	 */
+	class Union extends Layout {
+	  constructor(discr, defaultLayout, property) {
+	    const upv = ((discr instanceof UInt)
+	               || (discr instanceof UIntBE));
+	    if (upv) {
+	      discr = new UnionLayoutDiscriminator(new OffsetLayout(discr));
+	    } else if ((discr instanceof ExternalLayout)
+	               && discr.isCount()) {
+	      discr = new UnionLayoutDiscriminator(discr);
+	    } else if (!(discr instanceof UnionDiscriminator)) {
+	      throw new TypeError('discr must be a UnionDiscriminator '
+	                          + 'or an unsigned integer layout');
+	    }
+	    if (undefined === defaultLayout) {
+	      defaultLayout = null;
+	    }
+	    if (!((null === defaultLayout)
+	          || (defaultLayout instanceof Layout))) {
+	      throw new TypeError('defaultLayout must be null or a Layout');
+	    }
+	    if (null !== defaultLayout) {
+	      if (0 > defaultLayout.span) {
+	        throw new Error('defaultLayout must have constant span');
+	      }
+	      if (undefined === defaultLayout.property) {
+	        defaultLayout = defaultLayout.replicate('content');
+	      }
+	    }
+
+	    /* The union span can be estimated only if there's a default
+	     * layout.  The union spans its default layout, plus any prefix
+	     * variant layout.  By construction both layouts, if present, have
+	     * non-negative span. */
+	    let span = -1;
+	    if (defaultLayout) {
+	      span = defaultLayout.span;
+	      if ((0 <= span) && upv) {
+	        span += discr.layout.span;
+	      }
+	    }
+	    super(span, property);
+
+	    /** The interface for the discriminator value in isolation.
+	     *
+	     * This a {@link UnionDiscriminator} either passed to the
+	     * constructor or synthesized from the `discr` constructor
+	     * argument.  {@link
+	     * Union#usesPrefixDiscriminator|usesPrefixDiscriminator} will be
+	     * `true` iff the `discr` parameter was a non-offset {@link
+	     * Layout} instance. */
+	    this.discriminator = discr;
+
+	    /** `true` if the {@link Union#discriminator|discriminator} is the
+	     * first field in the union.
+	     *
+	     * If `false` the discriminator is obtained from somewhere
+	     * else. */
+	    this.usesPrefixDiscriminator = upv;
+
+	    /** The layout for non-discriminator content when the value of the
+	     * discriminator is not recognized.
+	     *
+	     * This is the value passed to the constructor.  It is
+	     * structurally equivalent to the second component of {@link
+	     * Union#layout|layout} but may have a different property
+	     * name. */
+	    this.defaultLayout = defaultLayout;
+
+	    /** A registry of allowed variants.
+	     *
+	     * The keys are unsigned integers which should be compatible with
+	     * {@link Union.discriminator|discriminator}.  The property value
+	     * is the corresponding {@link VariantLayout} instances assigned
+	     * to this union by {@link Union#addVariant|addVariant}.
+	     *
+	     * **NOTE** The registry remains mutable so that variants can be
+	     * {@link Union#addVariant|added} at any time.  Users should not
+	     * manipulate the content of this property. */
+	    this.registry = {};
+
+	    /* Private variable used when invoking getSourceVariant */
+	    let boundGetSourceVariant = this.defaultGetSourceVariant.bind(this);
+
+	    /** Function to infer the variant selected by a source object.
+	     *
+	     * Defaults to {@link
+	     * Union#defaultGetSourceVariant|defaultGetSourceVariant} but may
+	     * be overridden using {@link
+	     * Union#configGetSourceVariant|configGetSourceVariant}.
+	     *
+	     * @param {Object} src - as with {@link
+	     * Union#defaultGetSourceVariant|defaultGetSourceVariant}.
+	     *
+	     * @returns {(undefined|VariantLayout)} The default variant
+	     * (`undefined`) or first registered variant that uses a property
+	     * available in `src`. */
+	    this.getSourceVariant = function(src) {
+	      return boundGetSourceVariant(src);
+	    };
+
+	    /** Function to override the implementation of {@link
+	     * Union#getSourceVariant|getSourceVariant}.
+	     *
+	     * Use this if the desired variant cannot be identified using the
+	     * algorithm of {@link
+	     * Union#defaultGetSourceVariant|defaultGetSourceVariant}.
+	     *
+	     * **NOTE** The provided function will be invoked bound to this
+	     * Union instance, providing local access to {@link
+	     * Union#registry|registry}.
+	     *
+	     * @param {Function} gsv - a function that follows the API of
+	     * {@link Union#defaultGetSourceVariant|defaultGetSourceVariant}. */
+	    this.configGetSourceVariant = function(gsv) {
+	      boundGetSourceVariant = gsv.bind(this);
+	    };
+	  }
+
+	  /** @override */
+	  getSpan(b, offset) {
+	    if (0 <= this.span) {
+	      return this.span;
+	    }
+	    if (undefined === offset) {
+	      offset = 0;
+	    }
+	    /* Default layouts always have non-negative span, so we don't have
+	     * one and we have to recognize the variant which will in turn
+	     * determine the span. */
+	    const vlo = this.getVariant(b, offset);
+	    if (!vlo) {
+	      throw new Error('unable to determine span for unrecognized variant');
+	    }
+	    return vlo.getSpan(b, offset);
+	  }
+
+	  /**
+	   * Method to infer a registered Union variant compatible with `src`.
+	   *
+	   * The first satisified rule in the following sequence defines the
+	   * return value:
+	   * * If `src` has properties matching the Union discriminator and
+	   *   the default layout, `undefined` is returned regardless of the
+	   *   value of the discriminator property (this ensures the default
+	   *   layout will be used);
+	   * * If `src` has a property matching the Union discriminator, the
+	   *   value of the discriminator identifies a registered variant, and
+	   *   either (a) the variant has no layout, or (b) `src` has the
+	   *   variant's property, then the variant is returned (because the
+	   *   source satisfies the constraints of the variant it identifies);
+	   * * If `src` does not have a property matching the Union
+	   *   discriminator, but does have a property matching a registered
+	   *   variant, then the variant is returned (because the source
+	   *   matches a variant without an explicit conflict);
+	   * * An error is thrown (because we either can't identify a variant,
+	   *   or we were explicitly told the variant but can't satisfy it).
+	   *
+	   * @param {Object} src - an object presumed to be compatible with
+	   * the content of the Union.
+	   *
+	   * @return {(undefined|VariantLayout)} - as described above.
+	   *
+	   * @throws {Error} - if `src` cannot be associated with a default or
+	   * registered variant.
+	   */
+	  defaultGetSourceVariant(src) {
+	    if (src.hasOwnProperty(this.discriminator.property)) {
+	      if (this.defaultLayout
+	          && src.hasOwnProperty(this.defaultLayout.property)) {
+	        return undefined;
+	      }
+	      const vlo = this.registry[src[this.discriminator.property]];
+	      if (vlo
+	          && ((!vlo.layout)
+	              || src.hasOwnProperty(vlo.property))) {
+	        return vlo;
+	      }
+	    } else {
+	      for (const tag in this.registry) {
+	        const vlo = this.registry[tag];
+	        if (src.hasOwnProperty(vlo.property)) {
+	          return vlo;
+	        }
+	      }
+	    }
+	    throw new Error('unable to infer src variant');
+	  }
+
+	  /** Implement {@link Layout#decode|decode} for {@link Union}.
+	   *
+	   * If the variant is {@link Union#addVariant|registered} the return
+	   * value is an instance of that variant, with no explicit
+	   * discriminator.  Otherwise the {@link Union#defaultLayout|default
+	   * layout} is used to decode the content. */
+	  decode(b, offset) {
+	    if (undefined === offset) {
+	      offset = 0;
+	    }
+	    let dest;
+	    const dlo = this.discriminator;
+	    const discr = dlo.decode(b, offset);
+	    let clo = this.registry[discr];
+	    if (undefined === clo) {
+	      let contentOffset = 0;
+	      clo = this.defaultLayout;
+	      if (this.usesPrefixDiscriminator) {
+	        contentOffset = dlo.layout.span;
+	      }
+	      dest = this.makeDestinationObject();
+	      dest[dlo.property] = discr;
+	      dest[clo.property] = this.defaultLayout.decode(b, offset + contentOffset);
+	    } else {
+	      dest = clo.decode(b, offset);
+	    }
+	    return dest;
+	  }
+
+	  /** Implement {@link Layout#encode|encode} for {@link Union}.
+	   *
+	   * This API assumes the `src` object is consistent with the union's
+	   * {@link Union#defaultLayout|default layout}.  To encode variants
+	   * use the appropriate variant-specific {@link VariantLayout#encode}
+	   * method. */
+	  encode(src, b, offset) {
+	    if (undefined === offset) {
+	      offset = 0;
+	    }
+	    const vlo = this.getSourceVariant(src);
+	    if (undefined === vlo) {
+	      const dlo = this.discriminator;
+	      const clo = this.defaultLayout;
+	      let contentOffset = 0;
+	      if (this.usesPrefixDiscriminator) {
+	        contentOffset = dlo.layout.span;
+	      }
+	      dlo.encode(src[dlo.property], b, offset);
+	      return contentOffset + clo.encode(src[clo.property], b,
+	                                        offset + contentOffset);
+	    }
+	    return vlo.encode(src, b, offset);
+	  }
+
+	  /** Register a new variant structure within a union.  The newly
+	   * created variant is returned.
+	   *
+	   * @param {Number} variant - initializer for {@link
+	   * VariantLayout#variant|variant}.
+	   *
+	   * @param {Layout} layout - initializer for {@link
+	   * VariantLayout#layout|layout}.
+	   *
+	   * @param {String} property - initializer for {@link
+	   * Layout#property|property}.
+	   *
+	   * @return {VariantLayout} */
+	  addVariant(variant, layout, property) {
+	    const rv = new VariantLayout(this, variant, layout, property);
+	    this.registry[variant] = rv;
+	    return rv;
+	  }
+
+	  /**
+	   * Get the layout associated with a registered variant.
+	   *
+	   * If `vb` does not produce a registered variant the function returns
+	   * `undefined`.
+	   *
+	   * @param {(Number|Buffer)} vb - either the variant number, or a
+	   * buffer from which the discriminator is to be read.
+	   *
+	   * @param {Number} offset - offset into `vb` for the start of the
+	   * union.  Used only when `vb` is an instance of {Buffer}.
+	   *
+	   * @return {({VariantLayout}|undefined)}
+	   */
+	  getVariant(vb, offset) {
+	    let variant = vb;
+	    if (Buffer.isBuffer(vb)) {
+	      if (undefined === offset) {
+	        offset = 0;
+	      }
+	      variant = this.discriminator.decode(vb, offset);
+	    }
+	    return this.registry[variant];
+	  }
+	}
+
+	/**
+	 * Represent a specific variant within a containing union.
+	 *
+	 * **NOTE** The {@link Layout#span|span} of the variant may include
+	 * the span of the {@link Union#discriminator|discriminator} used to
+	 * identify it, but values read and written using the variant strictly
+	 * conform to the content of {@link VariantLayout#layout|layout}.
+	 *
+	 * **NOTE** User code should not invoke this constructor directly.  Use
+	 * the union {@link Union#addVariant|addVariant} helper method.
+	 *
+	 * @param {Union} union - initializer for {@link
+	 * VariantLayout#union|union}.
+	 *
+	 * @param {Number} variant - initializer for {@link
+	 * VariantLayout#variant|variant}.
+	 *
+	 * @param {Layout} [layout] - initializer for {@link
+	 * VariantLayout#layout|layout}.  If absent the variant carries no
+	 * data.
+	 *
+	 * @param {String} [property] - initializer for {@link
+	 * Layout#property|property}.  Unlike many other layouts, variant
+	 * layouts normally include a property name so they can be identified
+	 * within their containing {@link Union}.  The property identifier may
+	 * be absent only if `layout` is is absent.
+	 *
+	 * @augments {Layout}
+	 */
+	class VariantLayout extends Layout {
+	  constructor(union, variant, layout, property) {
+	    if (!(union instanceof Union)) {
+	      throw new TypeError('union must be a Union');
+	    }
+	    if ((!Number.isInteger(variant)) || (0 > variant)) {
+	      throw new TypeError('variant must be a (non-negative) integer');
+	    }
+	    if (('string' === typeof layout)
+	        && (undefined === property)) {
+	      property = layout;
+	      layout = null;
+	    }
+	    if (layout) {
+	      if (!(layout instanceof Layout)) {
+	        throw new TypeError('layout must be a Layout');
+	      }
+	      if ((null !== union.defaultLayout)
+	          && (0 <= layout.span)
+	          && (layout.span > union.defaultLayout.span)) {
+	        throw new Error('variant span exceeds span of containing union');
+	      }
+	      if ('string' !== typeof property) {
+	        throw new TypeError('variant must have a String property');
+	      }
+	    }
+	    let span = union.span;
+	    if (0 > union.span) {
+	      span = layout ? layout.span : 0;
+	      if ((0 <= span) && union.usesPrefixDiscriminator) {
+	        span += union.discriminator.layout.span;
+	      }
+	    }
+	    super(span, property);
+
+	    /** The {@link Union} to which this variant belongs. */
+	    this.union = union;
+
+	    /** The unsigned integral value identifying this variant within
+	     * the {@link Union#discriminator|discriminator} of the containing
+	     * union. */
+	    this.variant = variant;
+
+	    /** The {@link Layout} to be used when reading/writing the
+	     * non-discriminator part of the {@link
+	     * VariantLayout#union|union}.  If `null` the variant carries no
+	     * data. */
+	    this.layout = layout || null;
+	  }
+
+	  /** @override */
+	  getSpan(b, offset) {
+	    if (0 <= this.span) {
+	      /* Will be equal to the containing union span if that is not
+	       * variable. */
+	      return this.span;
+	    }
+	    if (undefined === offset) {
+	      offset = 0;
+	    }
+	    let contentOffset = 0;
+	    if (this.union.usesPrefixDiscriminator) {
+	      contentOffset = this.union.discriminator.layout.span;
+	    }
+	    /* Span is defined solely by the variant (and prefix discriminator) */
+	    return contentOffset + this.layout.getSpan(b, offset + contentOffset);
+	  }
+
+	  /** @override */
+	  decode(b, offset) {
+	    const dest = this.makeDestinationObject();
+	    if (undefined === offset) {
+	      offset = 0;
+	    }
+	    if (this !== this.union.getVariant(b, offset)) {
+	      throw new Error('variant mismatch');
+	    }
+	    let contentOffset = 0;
+	    if (this.union.usesPrefixDiscriminator) {
+	      contentOffset = this.union.discriminator.layout.span;
+	    }
+	    if (this.layout) {
+	      dest[this.property] = this.layout.decode(b, offset + contentOffset);
+	    } else if (this.property) {
+	      dest[this.property] = true;
+	    } else if (this.union.usesPrefixDiscriminator) {
+	      dest[this.union.discriminator.property] = this.variant;
+	    }
+	    return dest;
+	  }
+
+	  /** @override */
+	  encode(src, b, offset) {
+	    if (undefined === offset) {
+	      offset = 0;
+	    }
+	    let contentOffset = 0;
+	    if (this.union.usesPrefixDiscriminator) {
+	      contentOffset = this.union.discriminator.layout.span;
+	    }
+	    if (this.layout
+	        && (!src.hasOwnProperty(this.property))) {
+	      throw new TypeError('variant lacks property ' + this.property);
+	    }
+	    this.union.discriminator.encode(this.variant, b, offset);
+	    let span = contentOffset;
+	    if (this.layout) {
+	      this.layout.encode(src[this.property], b, offset + contentOffset);
+	      span += this.layout.getSpan(b, offset + contentOffset);
+	      if ((0 <= this.union.span)
+	          && (span > this.union.span)) {
+	        throw new Error('encoded variant overruns containing union');
+	      }
+	    }
+	    return span;
+	  }
+
+	  /** Delegate {@link Layout#fromArray|fromArray} to {@link
+	   * VariantLayout#layout|layout}. */
+	  fromArray(values) {
+	    if (this.layout) {
+	      return this.layout.fromArray(values);
+	    }
+	  }
+	}
+
+	/** JavaScript chose to define bitwise operations as operating on
+	 * signed 32-bit values in 2's complement form, meaning any integer
+	 * with bit 31 set is going to look negative.  For right shifts that's
+	 * not a problem, because `>>>` is a logical shift, but for every
+	 * other bitwise operator we have to compensate for possible negative
+	 * results. */
+	function fixBitwiseResult(v) {
+	  if (0 > v) {
+	    v += 0x100000000;
+	  }
+	  return v;
+	}
+
+	/**
+	 * Contain a sequence of bit fields as an unsigned integer.
+	 *
+	 * *Factory*: {@link module:Layout.bits|bits}
+	 *
+	 * This is a container element; within it there are {@link BitField}
+	 * instances that provide the extracted properties.  The container
+	 * simply defines the aggregate representation and its bit ordering.
+	 * The representation is an object containing properties with numeric
+	 * or {@link Boolean} values.
+	 *
+	 * {@link BitField}s are added with the {@link
+	 * BitStructure#addField|addField} and {@link
+	 * BitStructure#addBoolean|addBoolean} methods.
+
+	 * @param {Layout} word - initializer for {@link
+	 * BitStructure#word|word}.  The parameter must be an instance of
+	 * {@link UInt} (or {@link UIntBE}) that is no more than 4 bytes wide.
+	 *
+	 * @param {bool} [msb] - `true` if the bit numbering starts at the
+	 * most significant bit of the containing word; `false` (default) if
+	 * it starts at the least significant bit of the containing word.  If
+	 * the parameter at this position is a string and `property` is
+	 * `undefined` the value of this argument will instead be used as the
+	 * value of `property`.
+	 *
+	 * @param {string} [property] - initializer for {@link
+	 * Layout#property|property}.
+	 *
+	 * @augments {Layout}
+	 */
+	class BitStructure extends Layout {
+	  constructor(word, msb, property) {
+	    if (!((word instanceof UInt)
+	          || (word instanceof UIntBE))) {
+	      throw new TypeError('word must be a UInt or UIntBE layout');
+	    }
+	    if (('string' === typeof msb)
+	        && (undefined === property)) {
+	      property = msb;
+	      msb = undefined;
+	    }
+	    if (4 < word.span) {
+	      throw new RangeError('word cannot exceed 32 bits');
+	    }
+	    super(word.span, property);
+
+	    /** The layout used for the packed value.  {@link BitField}
+	     * instances are packed sequentially depending on {@link
+	     * BitStructure#msb|msb}. */
+	    this.word = word;
+
+	    /** Whether the bit sequences are packed starting at the most
+	     * significant bit growing down (`true`), or the least significant
+	     * bit growing up (`false`).
+	     *
+	     * **NOTE** Regardless of this value, the least significant bit of
+	     * any {@link BitField} value is the least significant bit of the
+	     * corresponding section of the packed value. */
+	    this.msb = !!msb;
+
+	    /** The sequence of {@link BitField} layouts that comprise the
+	     * packed structure.
+	     *
+	     * **NOTE** The array remains mutable to allow fields to be {@link
+	     * BitStructure#addField|added} after construction.  Users should
+	     * not manipulate the content of this property.*/
+	    this.fields = [];
+
+	    /* Storage for the value.  Capture a variable instead of using an
+	     * instance property because we don't want anything to change the
+	     * value without going through the mutator. */
+	    let value = 0;
+	    this._packedSetValue = function(v) {
+	      value = fixBitwiseResult(v);
+	      return this;
+	    };
+	    this._packedGetValue = function() {
+	      return value;
+	    };
+	  }
+
+	  /** @override */
+	  decode(b, offset) {
+	    const dest = this.makeDestinationObject();
+	    if (undefined === offset) {
+	      offset = 0;
+	    }
+	    const value = this.word.decode(b, offset);
+	    this._packedSetValue(value);
+	    for (const fd of this.fields) {
+	      if (undefined !== fd.property) {
+	        dest[fd.property] = fd.decode(value);
+	      }
+	    }
+	    return dest;
+	  }
+
+	  /** Implement {@link Layout#encode|encode} for {@link BitStructure}.
+	   *
+	   * If `src` is missing a property for a member with a defined {@link
+	   * Layout#property|property} the corresponding region of the packed
+	   * value is left unmodified.  Unused bits are also left unmodified. */
+	  encode(src, b, offset) {
+	    if (undefined === offset) {
+	      offset = 0;
+	    }
+	    const value = this.word.decode(b, offset);
+	    this._packedSetValue(value);
+	    for (const fd of this.fields) {
+	      if (undefined !== fd.property) {
+	        const fv = src[fd.property];
+	        if (undefined !== fv) {
+	          fd.encode(fv);
+	        }
+	      }
+	    }
+	    return this.word.encode(this._packedGetValue(), b, offset);
+	  }
+
+	  /** Register a new bitfield with a containing bit structure.  The
+	   * resulting bitfield is returned.
+	   *
+	   * @param {Number} bits - initializer for {@link BitField#bits|bits}.
+	   *
+	   * @param {string} property - initializer for {@link
+	   * Layout#property|property}.
+	   *
+	   * @return {BitField} */
+	  addField(bits, property) {
+	    const bf = new BitField(this, bits, property);
+	    this.fields.push(bf);
+	    return bf;
+	  }
+
+	  /** As with {@link BitStructure#addField|addField} for single-bit
+	   * fields with `boolean` value representation.
+	   *
+	   * @param {string} property - initializer for {@link
+	   * Layout#property|property}.
+	   *
+	   * @return {Boolean} */
+	  addBoolean(property) {
+	    // This is my Boolean, not the Javascript one.
+	    // eslint-disable-next-line no-new-wrappers
+	    const bf = new Boolean$1(this, property);
+	    this.fields.push(bf);
+	    return bf;
+	  }
+
+	  /**
+	   * Get access to the bit field for a given property.
+	   *
+	   * @param {String} property - the bit field of interest.
+	   *
+	   * @return {BitField} - the field associated with `property`, or
+	   * undefined if there is no such property.
+	   */
+	  fieldFor(property) {
+	    if ('string' !== typeof property) {
+	      throw new TypeError('property must be string');
+	    }
+	    for (const fd of this.fields) {
+	      if (fd.property === property) {
+	        return fd;
+	      }
+	    }
+	  }
+	}
+
+	/**
+	 * Represent a sequence of bits within a {@link BitStructure}.
+	 *
+	 * All bit field values are represented as unsigned integers.
+	 *
+	 * **NOTE** User code should not invoke this constructor directly.
+	 * Use the container {@link BitStructure#addField|addField} helper
+	 * method.
+	 *
+	 * **NOTE** BitField instances are not instances of {@link Layout}
+	 * since {@link Layout#span|span} measures 8-bit units.
+	 *
+	 * @param {BitStructure} container - initializer for {@link
+	 * BitField#container|container}.
+	 *
+	 * @param {Number} bits - initializer for {@link BitField#bits|bits}.
+	 *
+	 * @param {string} [property] - initializer for {@link
+	 * Layout#property|property}.
+	 */
+	class BitField {
+	  constructor(container, bits, property) {
+	    if (!(container instanceof BitStructure)) {
+	      throw new TypeError('container must be a BitStructure');
+	    }
+	    if ((!Number.isInteger(bits)) || (0 >= bits)) {
+	      throw new TypeError('bits must be positive integer');
+	    }
+	    const totalBits = 8 * container.span;
+	    const usedBits = container.fields.reduce((sum, fd) => sum + fd.bits, 0);
+	    if ((bits + usedBits) > totalBits) {
+	      throw new Error('bits too long for span remainder ('
+	                      + (totalBits - usedBits) + ' of '
+	                      + totalBits + ' remain)');
+	    }
+
+	    /** The {@link BitStructure} instance to which this bit field
+	     * belongs. */
+	    this.container = container;
+
+	    /** The span of this value in bits. */
+	    this.bits = bits;
+
+	    /** A mask of {@link BitField#bits|bits} bits isolating value bits
+	     * that fit within the field.
+	     *
+	     * That is, it masks a value that has not yet been shifted into
+	     * position within its containing packed integer. */
+	    this.valueMask = (1 << bits) - 1;
+	    if (32 === bits) { // shifted value out of range
+	      this.valueMask = 0xFFFFFFFF;
+	    }
+
+	    /** The offset of the value within the containing packed unsigned
+	     * integer.  The least significant bit of the packed value is at
+	     * offset zero, regardless of bit ordering used. */
+	    this.start = usedBits;
+	    if (this.container.msb) {
+	      this.start = totalBits - usedBits - bits;
+	    }
+
+	    /** A mask of {@link BitField#bits|bits} isolating the field value
+	     * within the containing packed unsigned integer. */
+	    this.wordMask = fixBitwiseResult(this.valueMask << this.start);
+
+	    /** The property name used when this bitfield is represented in an
+	     * Object.
+	     *
+	     * Intended to be functionally equivalent to {@link
+	     * Layout#property}.
+	     *
+	     * If left undefined the corresponding span of bits will be
+	     * treated as padding: it will not be mutated by {@link
+	     * Layout#encode|encode} nor represented as a property in the
+	     * decoded Object. */
+	    this.property = property;
+	  }
+
+	  /** Store a value into the corresponding subsequence of the containing
+	   * bit field. */
+	  decode() {
+	    const word = this.container._packedGetValue();
+	    const wordValue = fixBitwiseResult(word & this.wordMask);
+	    const value = wordValue >>> this.start;
+	    return value;
+	  }
+
+	  /** Store a value into the corresponding subsequence of the containing
+	   * bit field.
+	   *
+	   * **NOTE** This is not a specialization of {@link
+	   * Layout#encode|Layout.encode} and there is no return value. */
+	  encode(value) {
+	    if ((!Number.isInteger(value))
+	        || (value !== fixBitwiseResult(value & this.valueMask))) {
+	      throw new TypeError(nameWithProperty('BitField.encode', this)
+	                          + ' value must be integer not exceeding ' + this.valueMask);
+	    }
+	    const word = this.container._packedGetValue();
+	    const wordValue = fixBitwiseResult(value << this.start);
+	    this.container._packedSetValue(fixBitwiseResult(word & ~this.wordMask)
+	                                   | wordValue);
+	  };
+	}
+
+	/**
+	 * Represent a single bit within a {@link BitStructure} as a
+	 * JavaScript boolean.
+	 *
+	 * **NOTE** User code should not invoke this constructor directly.
+	 * Use the container {@link BitStructure#addBoolean|addBoolean} helper
+	 * method.
+	 *
+	 * @param {BitStructure} container - initializer for {@link
+	 * BitField#container|container}.
+	 *
+	 * @param {string} [property] - initializer for {@link
+	 * Layout#property|property}.
+	 *
+	 * @augments {BitField}
+	 */
+	/* eslint-disable no-extend-native */
+	let Boolean$1 = class Boolean extends BitField {
+	  constructor(container, property) {
+	    super(container, 1, property);
+	  }
+
+	  /** Override {@link BitField#decode|decode} for {@link Boolean|Boolean}.
+	   *
+	   * @returns {boolean} */
+	  decode(b, offset) {
+	    return !!BitField.prototype.decode.call(this, b, offset);
+	  }
+
+	  /** @override */
+	  encode(value) {
+	    if ('boolean' === typeof value) {
+	      // BitField requires integer values
+	      value = +value;
+	    }
+	    return BitField.prototype.encode.call(this, value);
+	  }
+	};
+	/* eslint-enable no-extend-native */
+
+	/**
+	 * Contain a fixed-length block of arbitrary data, represented as a
+	 * Buffer.
+	 *
+	 * *Factory*: {@link module:Layout.blob|blob}
+	 *
+	 * @param {(Number|ExternalLayout)} length - initializes {@link
+	 * Blob#length|length}.
+	 *
+	 * @param {String} [property] - initializer for {@link
+	 * Layout#property|property}.
+	 *
+	 * @augments {Layout}
+	 */
+	class Blob extends Layout {
+	  constructor(length, property) {
+	    if (!(((length instanceof ExternalLayout) && length.isCount())
+	          || (Number.isInteger(length) && (0 <= length)))) {
+	      throw new TypeError('length must be positive integer '
+	                          + 'or an unsigned integer ExternalLayout');
+	    }
+
+	    let span = -1;
+	    if (!(length instanceof ExternalLayout)) {
+	      span = length;
+	    }
+	    super(span, property);
+
+	    /** The number of bytes in the blob.
+	     *
+	     * This may be a non-negative integer, or an instance of {@link
+	     * ExternalLayout} that satisfies {@link
+	     * ExternalLayout#isCount|isCount()}. */
+	    this.length = length;
+	  }
+
+	  /** @override */
+	  getSpan(b, offset) {
+	    let span = this.span;
+	    if (0 > span) {
+	      span = this.length.decode(b, offset);
+	    }
+	    return span;
+	  }
+
+	  /** @override */
+	  decode(b, offset) {
+	    if (undefined === offset) {
+	      offset = 0;
+	    }
+	    let span = this.span;
+	    if (0 > span) {
+	      span = this.length.decode(b, offset);
+	    }
+	    return b.slice(offset, offset + span);
+	  }
+
+	  /** Implement {@link Layout#encode|encode} for {@link Blob}.
+	   *
+	   * **NOTE** If {@link Layout#count|count} is an instance of {@link
+	   * ExternalLayout} then the length of `src` will be encoded as the
+	   * count after `src` is encoded. */
+	  encode(src, b, offset) {
+	    let span = this.length;
+	    if (this.length instanceof ExternalLayout) {
+	      span = src.length;
+	    }
+	    if (!(Buffer.isBuffer(src)
+	          && (span === src.length))) {
+	      throw new TypeError(nameWithProperty('Blob.encode', this)
+	                          + ' requires (length ' + span + ') Buffer as src');
+	    }
+	    if ((offset + span) > b.length) {
+	      throw new RangeError('encoding overruns Buffer');
+	    }
+	    b.write(src.toString('hex'), offset, span, 'hex');
+	    if (this.length instanceof ExternalLayout) {
+	      this.length.encode(span, b, offset);
+	    }
+	    return span;
+	  }
+	}
+
+	/**
+	 * Contain a `NUL`-terminated UTF8 string.
+	 *
+	 * *Factory*: {@link module:Layout.cstr|cstr}
+	 *
+	 * **NOTE** Any UTF8 string that incorporates a zero-valued byte will
+	 * not be correctly decoded by this layout.
+	 *
+	 * @param {String} [property] - initializer for {@link
+	 * Layout#property|property}.
+	 *
+	 * @augments {Layout}
+	 */
+	class CString extends Layout {
+	  constructor(property) {
+	    super(-1, property);
+	  }
+
+	  /** @override */
+	  getSpan(b, offset) {
+	    if (!Buffer.isBuffer(b)) {
+	      throw new TypeError('b must be a Buffer');
+	    }
+	    if (undefined === offset) {
+	      offset = 0;
+	    }
+	    let idx = offset;
+	    while ((idx < b.length) && (0 !== b[idx])) {
+	      idx += 1;
+	    }
+	    return 1 + idx - offset;
+	  }
+
+	  /** @override */
+	  decode(b, offset, dest) {
+	    if (undefined === offset) {
+	      offset = 0;
+	    }
+	    let span = this.getSpan(b, offset);
+	    return b.slice(offset, offset + span - 1).toString('utf-8');
+	  }
+
+	  /** @override */
+	  encode(src, b, offset) {
+	    if (undefined === offset) {
+	      offset = 0;
+	    }
+	    /* Must force this to a string, lest it be a number and the
+	     * "utf8-encoding" below actually allocate a buffer of length
+	     * src */
+	    if ('string' !== typeof src) {
+	      src = src.toString();
+	    }
+	    const srcb = new Buffer(src, 'utf8');
+	    const span = srcb.length;
+	    if ((offset + span) > b.length) {
+	      throw new RangeError('encoding overruns Buffer');
+	    }
+	    srcb.copy(b, offset);
+	    b[offset + span] = 0;
+	    return span + 1;
+	  }
+	}
+
+	/**
+	 * Contain a UTF8 string with implicit length.
+	 *
+	 * *Factory*: {@link module:Layout.utf8|utf8}
+	 *
+	 * **NOTE** Because the length is implicit in the size of the buffer
+	 * this layout should be used only in isolation, or in a situation
+	 * where the length can be expressed by operating on a slice of the
+	 * containing buffer.
+	 *
+	 * @param {Number} [maxSpan] - the maximum length allowed for encoded
+	 * string content.  If not provided there is no bound on the allowed
+	 * content.
+	 *
+	 * @param {String} [property] - initializer for {@link
+	 * Layout#property|property}.
+	 *
+	 * @augments {Layout}
+	 */
+	class UTF8 extends Layout {
+	  constructor(maxSpan, property) {
+	    if (('string' === typeof maxSpan)
+	        && (undefined === property)) {
+	      property = maxSpan;
+	      maxSpan = undefined;
+	    }
+	    if (undefined === maxSpan) {
+	      maxSpan = -1;
+	    } else if (!Number.isInteger(maxSpan)) {
+	      throw new TypeError('maxSpan must be an integer');
+	    }
+
+	    super(-1, property);
+
+	    /** The maximum span of the layout in bytes.
+	     *
+	     * Positive values are generally expected.  Zero is abnormal.
+	     * Attempts to encode or decode a value that exceeds this length
+	     * will throw a `RangeError`.
+	     *
+	     * A negative value indicates that there is no bound on the length
+	     * of the content. */
+	    this.maxSpan = maxSpan;
+	  }
+
+	  /** @override */
+	  getSpan(b, offset) {
+	    if (!Buffer.isBuffer(b)) {
+	      throw new TypeError('b must be a Buffer');
+	    }
+	    if (undefined === offset) {
+	      offset = 0;
+	    }
+	    return b.length - offset;
+	  }
+
+	  /** @override */
+	  decode(b, offset, dest) {
+	    if (undefined === offset) {
+	      offset = 0;
+	    }
+	    let span = this.getSpan(b, offset);
+	    if ((0 <= this.maxSpan)
+	        && (this.maxSpan < span)) {
+	      throw new RangeError('text length exceeds maxSpan');
+	    }
+	    return b.slice(offset, offset + span).toString('utf-8');
+	  }
+
+	  /** @override */
+	  encode(src, b, offset) {
+	    if (undefined === offset) {
+	      offset = 0;
+	    }
+	    /* Must force this to a string, lest it be a number and the
+	     * "utf8-encoding" below actually allocate a buffer of length
+	     * src */
+	    if ('string' !== typeof src) {
+	      src = src.toString();
+	    }
+	    const srcb = new Buffer(src, 'utf8');
+	    const span = srcb.length;
+	    if ((0 <= this.maxSpan)
+	        && (this.maxSpan < span)) {
+	      throw new RangeError('text length exceeds maxSpan');
+	    }
+	    if ((offset + span) > b.length) {
+	      throw new RangeError('encoding overruns Buffer');
+	    }
+	    srcb.copy(b, offset);
+	    return span;
+	  }
+	}
+
+	/**
+	 * Contain a constant value.
+	 *
+	 * This layout may be used in cases where a JavaScript value can be
+	 * inferred without an expression in the binary encoding.  An example
+	 * would be a {@link VariantLayout|variant layout} where the content
+	 * is implied by the union {@link Union#discriminator|discriminator}.
+	 *
+	 * @param {Object|Number|String} value - initializer for {@link
+	 * Constant#value|value}.  If the value is an object (or array) and
+	 * the application intends the object to remain unchanged regardless
+	 * of what is done to values decoded by this layout, the value should
+	 * be frozen prior passing it to this constructor.
+	 *
+	 * @param {String} [property] - initializer for {@link
+	 * Layout#property|property}.
+	 *
+	 * @augments {Layout}
+	 */
+	class Constant extends Layout {
+	  constructor(value, property) {
+	    super(0, property);
+
+	    /** The value produced by this constant when the layout is {@link
+	     * Constant#decode|decoded}.
+	     *
+	     * Any JavaScript value including `null` and `undefined` is
+	     * permitted.
+	     *
+	     * **WARNING** If `value` passed in the constructor was not
+	     * frozen, it is possible for users of decoded values to change
+	     * the content of the value. */
+	    this.value = value;
+	  }
+
+	  /** @override */
+	  decode(b, offset, dest) {
+	    return this.value;
+	  }
+
+	  /** @override */
+	  encode(src, b, offset) {
+	    /* Constants take no space */
+	    return 0;
+	  }
+	}
+
+	Layout$1.ExternalLayout = ExternalLayout;
+	Layout$1.GreedyCount = GreedyCount;
+	Layout$1.OffsetLayout = OffsetLayout;
+	Layout$1.UInt = UInt;
+	Layout$1.UIntBE = UIntBE;
+	Layout$1.Int = Int;
+	Layout$1.IntBE = IntBE;
+	Layout$1.Float = Float;
+	Layout$1.FloatBE = FloatBE;
+	Layout$1.Double = Double;
+	Layout$1.DoubleBE = DoubleBE;
+	Layout$1.Sequence = Sequence;
+	Layout$1.Structure = Structure;
+	Layout$1.UnionDiscriminator = UnionDiscriminator;
+	Layout$1.UnionLayoutDiscriminator = UnionLayoutDiscriminator;
+	Layout$1.Union = Union;
+	Layout$1.VariantLayout = VariantLayout;
+	Layout$1.BitStructure = BitStructure;
+	Layout$1.BitField = BitField;
+	Layout$1.Boolean = Boolean$1;
+	Layout$1.Blob = Blob;
+	Layout$1.CString = CString;
+	Layout$1.UTF8 = UTF8;
+	Layout$1.Constant = Constant;
+
+	/** Factory for {@link GreedyCount}. */
+	Layout$1.greedy = ((elementSpan, property) => new GreedyCount(elementSpan, property));
+
+	/** Factory for {@link OffsetLayout}. */
+	Layout$1.offset = ((layout, offset, property) => new OffsetLayout(layout, offset, property));
+
+	/** Factory for {@link UInt|unsigned int layouts} spanning one
+	 * byte. */
+	Layout$1.u8 = (property => new UInt(1, property));
+
+	/** Factory for {@link UInt|little-endian unsigned int layouts}
+	 * spanning two bytes. */
+	Layout$1.u16 = (property => new UInt(2, property));
+
+	/** Factory for {@link UInt|little-endian unsigned int layouts}
+	 * spanning three bytes. */
+	Layout$1.u24 = (property => new UInt(3, property));
+
+	/** Factory for {@link UInt|little-endian unsigned int layouts}
+	 * spanning four bytes. */
+	Layout$1.u32 = (property => new UInt(4, property));
+
+	/** Factory for {@link UInt|little-endian unsigned int layouts}
+	 * spanning five bytes. */
+	Layout$1.u40 = (property => new UInt(5, property));
+
+	/** Factory for {@link UInt|little-endian unsigned int layouts}
+	 * spanning six bytes. */
+	Layout$1.u48 = (property => new UInt(6, property));
+
+	/** Factory for {@link NearUInt64|little-endian unsigned int
+	 * layouts} interpreted as Numbers. */
+	Layout$1.nu64 = (property => new NearUInt64(property));
+
+	/** Factory for {@link UInt|big-endian unsigned int layouts}
+	 * spanning two bytes. */
+	Layout$1.u16be = (property => new UIntBE(2, property));
+
+	/** Factory for {@link UInt|big-endian unsigned int layouts}
+	 * spanning three bytes. */
+	Layout$1.u24be = (property => new UIntBE(3, property));
+
+	/** Factory for {@link UInt|big-endian unsigned int layouts}
+	 * spanning four bytes. */
+	Layout$1.u32be = (property => new UIntBE(4, property));
+
+	/** Factory for {@link UInt|big-endian unsigned int layouts}
+	 * spanning five bytes. */
+	Layout$1.u40be = (property => new UIntBE(5, property));
+
+	/** Factory for {@link UInt|big-endian unsigned int layouts}
+	 * spanning six bytes. */
+	Layout$1.u48be = (property => new UIntBE(6, property));
+
+	/** Factory for {@link NearUInt64BE|big-endian unsigned int
+	 * layouts} interpreted as Numbers. */
+	Layout$1.nu64be = (property => new NearUInt64BE(property));
+
+	/** Factory for {@link Int|signed int layouts} spanning one
+	 * byte. */
+	Layout$1.s8 = (property => new Int(1, property));
+
+	/** Factory for {@link Int|little-endian signed int layouts}
+	 * spanning two bytes. */
+	Layout$1.s16 = (property => new Int(2, property));
+
+	/** Factory for {@link Int|little-endian signed int layouts}
+	 * spanning three bytes. */
+	Layout$1.s24 = (property => new Int(3, property));
+
+	/** Factory for {@link Int|little-endian signed int layouts}
+	 * spanning four bytes. */
+	Layout$1.s32 = (property => new Int(4, property));
+
+	/** Factory for {@link Int|little-endian signed int layouts}
+	 * spanning five bytes. */
+	Layout$1.s40 = (property => new Int(5, property));
+
+	/** Factory for {@link Int|little-endian signed int layouts}
+	 * spanning six bytes. */
+	Layout$1.s48 = (property => new Int(6, property));
+
+	/** Factory for {@link NearInt64|little-endian signed int layouts}
+	 * interpreted as Numbers. */
+	Layout$1.ns64 = (property => new NearInt64(property));
+
+	/** Factory for {@link Int|big-endian signed int layouts}
+	 * spanning two bytes. */
+	Layout$1.s16be = (property => new IntBE(2, property));
+
+	/** Factory for {@link Int|big-endian signed int layouts}
+	 * spanning three bytes. */
+	Layout$1.s24be = (property => new IntBE(3, property));
+
+	/** Factory for {@link Int|big-endian signed int layouts}
+	 * spanning four bytes. */
+	Layout$1.s32be = (property => new IntBE(4, property));
+
+	/** Factory for {@link Int|big-endian signed int layouts}
+	 * spanning five bytes. */
+	Layout$1.s40be = (property => new IntBE(5, property));
+
+	/** Factory for {@link Int|big-endian signed int layouts}
+	 * spanning six bytes. */
+	Layout$1.s48be = (property => new IntBE(6, property));
+
+	/** Factory for {@link NearInt64BE|big-endian signed int layouts}
+	 * interpreted as Numbers. */
+	Layout$1.ns64be = (property => new NearInt64BE(property));
+
+	/** Factory for {@link Float|little-endian 32-bit floating point} values. */
+	Layout$1.f32 = (property => new Float(property));
+
+	/** Factory for {@link FloatBE|big-endian 32-bit floating point} values. */
+	Layout$1.f32be = (property => new FloatBE(property));
+
+	/** Factory for {@link Double|little-endian 64-bit floating point} values. */
+	Layout$1.f64 = (property => new Double(property));
+
+	/** Factory for {@link DoubleBE|big-endian 64-bit floating point} values. */
+	Layout$1.f64be = (property => new DoubleBE(property));
+
+	/** Factory for {@link Structure} values. */
+	Layout$1.struct = ((fields, property, decodePrefixes) => new Structure(fields, property, decodePrefixes));
+
+	/** Factory for {@link BitStructure} values. */
+	Layout$1.bits = ((word, msb, property) => new BitStructure(word, msb, property));
+
+	/** Factory for {@link Sequence} values. */
+	Layout$1.seq = ((elementLayout, count, property) => new Sequence(elementLayout, count, property));
+
+	/** Factory for {@link Union} values. */
+	Layout$1.union = ((discr, defaultLayout, property) => new Union(discr, defaultLayout, property));
+
+	/** Factory for {@link UnionLayoutDiscriminator} values. */
+	Layout$1.unionLayoutDiscriminator = ((layout, property) => new UnionLayoutDiscriminator(layout, property));
+
+	/** Factory for {@link Blob} values. */
+	Layout$1.blob = ((length, property) => new Blob(length, property));
+
+	/** Factory for {@link CString} values. */
+	Layout$1.cstr = (property => new CString(property));
+
+	/** Factory for {@link UTF8} values. */
+	Layout$1.utf8 = ((maxSpan, property) => new UTF8(maxSpan, property));
+
+	/** Factory for {@link Constant} values. */
+	Layout$1.const = ((value, property) => new Constant(value, property));
+
+	var require$$1 = /*@__PURE__*/getAugmentedNamespace(index_browser_esm);
+
+	(function (exports) {
+		var __importDefault = (commonjsGlobal && commonjsGlobal.__importDefault) || function (mod) {
+		    return (mod && mod.__esModule) ? mod : { "default": mod };
+		};
+		Object.defineProperty(exports, "__esModule", { value: true });
+		exports.map = exports.array = exports.rustEnum = exports.str = exports.vecU8 = exports.tagged = exports.vec = exports.bool = exports.option = exports.publicKey = exports.i256 = exports.u256 = exports.i128 = exports.u128 = exports.i64 = exports.u64 = exports.struct = exports.f64 = exports.f32 = exports.i32 = exports.u32 = exports.i16 = exports.u16 = exports.i8 = exports.u8 = void 0;
+		const buffer_layout_1 = Layout$1;
+		const web3_js_1 = require$$1;
+		const bn_js_1 = __importDefault(bnExports);
+		var buffer_layout_2 = Layout$1;
+		Object.defineProperty(exports, "u8", { enumerable: true, get: function () { return buffer_layout_2.u8; } });
+		Object.defineProperty(exports, "i8", { enumerable: true, get: function () { return buffer_layout_2.s8; } });
+		Object.defineProperty(exports, "u16", { enumerable: true, get: function () { return buffer_layout_2.u16; } });
+		Object.defineProperty(exports, "i16", { enumerable: true, get: function () { return buffer_layout_2.s16; } });
+		Object.defineProperty(exports, "u32", { enumerable: true, get: function () { return buffer_layout_2.u32; } });
+		Object.defineProperty(exports, "i32", { enumerable: true, get: function () { return buffer_layout_2.s32; } });
+		Object.defineProperty(exports, "f32", { enumerable: true, get: function () { return buffer_layout_2.f32; } });
+		Object.defineProperty(exports, "f64", { enumerable: true, get: function () { return buffer_layout_2.f64; } });
+		Object.defineProperty(exports, "struct", { enumerable: true, get: function () { return buffer_layout_2.struct; } });
+		class BNLayout extends buffer_layout_1.Layout {
+		    constructor(span, signed, property) {
+		        super(span, property);
+		        this.blob = (0, buffer_layout_1.blob)(span);
+		        this.signed = signed;
+		    }
+		    decode(b, offset = 0) {
+		        const num = new bn_js_1.default(this.blob.decode(b, offset), 10, "le");
+		        if (this.signed) {
+		            return num.fromTwos(this.span * 8).clone();
+		        }
+		        return num;
+		    }
+		    encode(src, b, offset = 0) {
+		        if (this.signed) {
+		            src = src.toTwos(this.span * 8);
+		        }
+		        return this.blob.encode(src.toArrayLike(Buffer, "le", this.span), b, offset);
+		    }
+		}
+		function u64(property) {
+		    return new BNLayout(8, false, property);
+		}
+		exports.u64 = u64;
+		function i64(property) {
+		    return new BNLayout(8, true, property);
+		}
+		exports.i64 = i64;
+		function u128(property) {
+		    return new BNLayout(16, false, property);
+		}
+		exports.u128 = u128;
+		function i128(property) {
+		    return new BNLayout(16, true, property);
+		}
+		exports.i128 = i128;
+		function u256(property) {
+		    return new BNLayout(32, false, property);
+		}
+		exports.u256 = u256;
+		function i256(property) {
+		    return new BNLayout(32, true, property);
+		}
+		exports.i256 = i256;
+		class WrappedLayout extends buffer_layout_1.Layout {
+		    constructor(layout, decoder, encoder, property) {
+		        super(layout.span, property);
+		        this.layout = layout;
+		        this.decoder = decoder;
+		        this.encoder = encoder;
+		    }
+		    decode(b, offset) {
+		        return this.decoder(this.layout.decode(b, offset));
+		    }
+		    encode(src, b, offset) {
+		        return this.layout.encode(this.encoder(src), b, offset);
+		    }
+		    getSpan(b, offset) {
+		        return this.layout.getSpan(b, offset);
+		    }
+		}
+		function publicKey(property) {
+		    return new WrappedLayout((0, buffer_layout_1.blob)(32), (b) => new web3_js_1.PublicKey(b), (key) => key.toBuffer(), property);
+		}
+		exports.publicKey = publicKey;
+		class OptionLayout extends buffer_layout_1.Layout {
+		    constructor(layout, property) {
+		        super(-1, property);
+		        this.layout = layout;
+		        this.discriminator = (0, buffer_layout_1.u8)();
+		    }
+		    encode(src, b, offset = 0) {
+		        if (src === null || src === undefined) {
+		            return this.discriminator.encode(0, b, offset);
+		        }
+		        this.discriminator.encode(1, b, offset);
+		        return this.layout.encode(src, b, offset + 1) + 1;
+		    }
+		    decode(b, offset = 0) {
+		        const discriminator = this.discriminator.decode(b, offset);
+		        if (discriminator === 0) {
+		            return null;
+		        }
+		        else if (discriminator === 1) {
+		            return this.layout.decode(b, offset + 1);
+		        }
+		        throw new Error("Invalid option " + this.property);
+		    }
+		    getSpan(b, offset = 0) {
+		        const discriminator = this.discriminator.decode(b, offset);
+		        if (discriminator === 0) {
+		            return 1;
+		        }
+		        else if (discriminator === 1) {
+		            return this.layout.getSpan(b, offset + 1) + 1;
+		        }
+		        throw new Error("Invalid option " + this.property);
+		    }
+		}
+		function option(layout, property) {
+		    return new OptionLayout(layout, property);
+		}
+		exports.option = option;
+		function bool(property) {
+		    return new WrappedLayout((0, buffer_layout_1.u8)(), decodeBool, encodeBool, property);
+		}
+		exports.bool = bool;
+		function decodeBool(value) {
+		    if (value === 0) {
+		        return false;
+		    }
+		    else if (value === 1) {
+		        return true;
+		    }
+		    throw new Error("Invalid bool: " + value);
+		}
+		function encodeBool(value) {
+		    return value ? 1 : 0;
+		}
+		function vec(elementLayout, property) {
+		    const length = (0, buffer_layout_1.u32)("length");
+		    const layout = (0, buffer_layout_1.struct)([
+		        length,
+		        (0, buffer_layout_1.seq)(elementLayout, (0, buffer_layout_1.offset)(length, -length.span), "values"),
+		    ]);
+		    return new WrappedLayout(layout, ({ values }) => values, (values) => ({ values }), property);
+		}
+		exports.vec = vec;
+		function tagged(tag, layout, property) {
+		    const wrappedLayout = (0, buffer_layout_1.struct)([
+		        u64("tag"),
+		        layout.replicate("data"),
+		    ]);
+		    function decodeTag({ tag: receivedTag, data }) {
+		        if (!receivedTag.eq(tag)) {
+		            throw new Error("Invalid tag, expected: " +
+		                tag.toString("hex") +
+		                ", got: " +
+		                receivedTag.toString("hex"));
+		        }
+		        return data;
+		    }
+		    return new WrappedLayout(wrappedLayout, decodeTag, (data) => ({ tag, data }), property);
+		}
+		exports.tagged = tagged;
+		function vecU8(property) {
+		    const length = (0, buffer_layout_1.u32)("length");
+		    const layout = (0, buffer_layout_1.struct)([
+		        length,
+		        (0, buffer_layout_1.blob)((0, buffer_layout_1.offset)(length, -length.span), "data"),
+		    ]);
+		    return new WrappedLayout(layout, ({ data }) => data, (data) => ({ data }), property);
+		}
+		exports.vecU8 = vecU8;
+		function str(property) {
+		    return new WrappedLayout(vecU8(), (data) => data.toString("utf-8"), (s) => Buffer.from(s, "utf-8"), property);
+		}
+		exports.str = str;
+		function rustEnum(variants, property, discriminant) {
+		    const unionLayout = (0, buffer_layout_1.union)(discriminant !== null && discriminant !== void 0 ? discriminant : (0, buffer_layout_1.u8)(), property);
+		    variants.forEach((variant, index) => unionLayout.addVariant(index, variant, variant.property));
+		    return unionLayout;
+		}
+		exports.rustEnum = rustEnum;
+		function array(elementLayout, length, property) {
+		    const layout = (0, buffer_layout_1.struct)([
+		        (0, buffer_layout_1.seq)(elementLayout, length, "values"),
+		    ]);
+		    return new WrappedLayout(layout, ({ values }) => values, (values) => ({ values }), property);
+		}
+		exports.array = array;
+		class MapEntryLayout extends buffer_layout_1.Layout {
+		    constructor(keyLayout, valueLayout, property) {
+		        super(keyLayout.span + valueLayout.span, property);
+		        this.keyLayout = keyLayout;
+		        this.valueLayout = valueLayout;
+		    }
+		    decode(b, offset) {
+		        offset = offset || 0;
+		        const key = this.keyLayout.decode(b, offset);
+		        const value = this.valueLayout.decode(b, offset + this.keyLayout.getSpan(b, offset));
+		        return [key, value];
+		    }
+		    encode(src, b, offset) {
+		        offset = offset || 0;
+		        const keyBytes = this.keyLayout.encode(src[0], b, offset);
+		        const valueBytes = this.valueLayout.encode(src[1], b, offset + keyBytes);
+		        return keyBytes + valueBytes;
+		    }
+		    getSpan(b, offset) {
+		        return (this.keyLayout.getSpan(b, offset) + this.valueLayout.getSpan(b, offset));
+		    }
+		}
+		function map(keyLayout, valueLayout, property) {
+		    const length = (0, buffer_layout_1.u32)("length");
+		    const layout = (0, buffer_layout_1.struct)([
+		        length,
+		        (0, buffer_layout_1.seq)(new MapEntryLayout(keyLayout, valueLayout), (0, buffer_layout_1.offset)(length, -length.span), "values"),
+		    ]);
+		    return new WrappedLayout(layout, ({ values }) => new Map(values), (values) => ({ values: Array.from(values.entries()) }), property);
+		}
+		exports.map = map;
+		
+	} (dist));
+
+	const lockup = (property) => dist.struct([dist.u64('unixTimestamp'), dist.u64('epoch'), dist.publicKey('custodian')], property);
+	const fee = (property) => dist.struct([dist.u64('denominator'), dist.u64('numerator')], property);
 	var AccountType;
 	(function (AccountType) {
 	    AccountType[AccountType["Uninitialized"] = 0] = "Uninitialized";
@@ -17931,69 +29563,71 @@ var solanaStakePool = (function (exports) {
 	    type: StakeAccountType,
 	    info: optional(StakeAccountInfo),
 	});
-	const StakePoolLayout = struct([
-	    u8('accountType'),
-	    publicKey('manager'),
-	    publicKey('staker'),
-	    publicKey('stakeDepositAuthority'),
-	    u8('stakeWithdrawBumpSeed'),
-	    publicKey('validatorList'),
-	    publicKey('reserveStake'),
-	    publicKey('poolMint'),
-	    publicKey('managerFeeAccount'),
-	    publicKey('tokenProgramId'),
-	    u64('totalLamports'),
-	    u64('poolTokenSupply'),
-	    u64('lastUpdateEpoch'),
+	const StakePoolLayout = dist.struct([
+	    dist.u8('accountType'),
+	    dist.publicKey('manager'),
+	    dist.publicKey('staker'),
+	    dist.publicKey('stakeDepositAuthority'),
+	    dist.u8('stakeWithdrawBumpSeed'),
+	    dist.publicKey('validatorList'),
+	    dist.publicKey('reserveStake'),
+	    dist.publicKey('poolMint'),
+	    dist.publicKey('managerFeeAccount'),
+	    dist.publicKey('tokenProgramId'),
+	    dist.u64('totalLamports'),
+	    dist.u64('poolTokenSupply'),
+	    dist.u64('lastUpdateEpoch'),
 	    lockup('lockup'),
 	    fee('epochFee'),
-	    option(fee('nextEpochFee')),
-	    option(publicKey('preferredDepositValidatorVoteAddress')),
-	    option(publicKey('preferredWithdrawValidatorVoteAddress')),
+	    dist.option(fee(), 'nextEpochFee'),
+	    dist.option(dist.publicKey(), 'preferredDepositValidatorVoteAddress'),
+	    dist.option(dist.publicKey(), 'preferredWithdrawValidatorVoteAddress'),
 	    fee('stakeDepositFee'),
 	    fee('stakeWithdrawalFee'),
-	    option(fee('nextStakeWithdrawalFee')),
-	    u8('stakeReferralFee'),
-	    option(publicKey('solDepositAuthority')),
+	    dist.option(fee(), 'nextStakeWithdrawalFee'),
+	    dist.u8('stakeReferralFee'),
+	    dist.option(dist.publicKey(), 'solDepositAuthority'),
 	    fee('solDepositFee'),
-	    u8('solReferralFee'),
-	    option(publicKey('solWithdrawAuthority')),
+	    dist.u8('solReferralFee'),
+	    dist.option(dist.publicKey(), 'solWithdrawAuthority'),
 	    fee('solWithdrawalFee'),
-	    option(fee('nextSolWithdrawalFee')),
-	    u64('lastEpochPoolTokenSupply'),
-	    u64('lastEpochTotalLamports'),
+	    dist.option(fee(), 'nextSolWithdrawalFee'),
+	    dist.u64('lastEpochPoolTokenSupply'),
+	    dist.u64('lastEpochTotalLamports'),
 	]);
+	StakePoolLayout.span = 501;
 	var ValidatorStakeInfoStatus;
 	(function (ValidatorStakeInfoStatus) {
 	    ValidatorStakeInfoStatus[ValidatorStakeInfoStatus["Active"] = 0] = "Active";
 	    ValidatorStakeInfoStatus[ValidatorStakeInfoStatus["DeactivatingTransient"] = 1] = "DeactivatingTransient";
 	    ValidatorStakeInfoStatus[ValidatorStakeInfoStatus["ReadyForRemoval"] = 2] = "ReadyForRemoval";
 	})(ValidatorStakeInfoStatus || (ValidatorStakeInfoStatus = {}));
-	const ValidatorStakeInfoLayout = struct([
+	const ValidatorStakeInfoLayout = dist.struct([
 	    /// Amount of active stake delegated to this validator
 	    /// Note that if `last_update_epoch` does not match the current epoch then
 	    /// this field may not be accurate
-	    u64('activeStakeLamports'),
+	    dist.u64('activeStakeLamports'),
 	    /// Amount of transient stake delegated to this validator
 	    /// Note that if `last_update_epoch` does not match the current epoch then
 	    /// this field may not be accurate
-	    u64('transientStakeLamports'),
+	    dist.u64('transientStakeLamports'),
 	    /// Last epoch the active and transient stake lamports fields were updated
-	    u64('lastUpdateEpoch'),
+	    dist.u64('lastUpdateEpoch'),
 	    /// Start of the validator transient account seed suffixes
-	    u64('transientSeedSuffixStart'),
+	    dist.u64('transientSeedSuffixStart'),
 	    /// End of the validator transient account seed suffixes
-	    u64('transientSeedSuffixEnd'),
+	    dist.u64('transientSeedSuffixEnd'),
 	    /// Status of the validator stake account
-	    u8('status'),
+	    dist.u8('status'),
 	    /// Validator vote account address
-	    publicKey('voteAccountAddress'),
+	    dist.publicKey('voteAccountAddress'),
 	]);
-	const ValidatorListLayout = struct([
-	    u8('accountType'),
-	    u32('maxValidators'),
-	    vec(ValidatorStakeInfoLayout, 'validators'),
+	const ValidatorListLayout = dist.struct([
+	    dist.u8('accountType'),
+	    dist.u32('maxValidators'),
+	    dist.vec(ValidatorStakeInfoLayout, 'validators'),
 	]);
+	ValidatorListLayout.span = 1 + 4 + 4;
 
 	async function getValidatorListAccount(connection, pubkey) {
 	    const account = await connection.getAccountInfo(pubkey);
@@ -18013,19 +29647,20 @@ var solanaStakePool = (function (exports) {
 	async function prepareWithdrawAccounts(connection, stakePool, stakePoolAddress, amount, compareFn, skipFee) {
 	    var _a, _b, _c;
 	    const validatorListAcc = await connection.getAccountInfo(stakePool.validatorList);
-	    const validatorList = ValidatorListLayout.decode(Uint8Array.from((_a = validatorListAcc === null || validatorListAcc === void 0 ? void 0 : validatorListAcc.data) !== null && _a !== void 0 ? _a : []));
+	    const validatorList = ValidatorListLayout.decode(Buffer.from((_a = validatorListAcc === null || validatorListAcc === void 0 ? void 0 : validatorListAcc.data) !== null && _a !== void 0 ? _a : []));
 	    if (!(validatorList === null || validatorList === void 0 ? void 0 : validatorList.validators) || (validatorList === null || validatorList === void 0 ? void 0 : validatorList.validators.length) === 0) {
 	        throw new Error('No accounts found');
 	    }
 	    const minBalanceForRentExemption = await connection.getMinimumBalanceForRentExemption(StakeProgram.space);
 	    const minBalance = minBalanceForRentExemption + MINIMUM_ACTIVE_STAKE;
+	    const types = ['preferred', 'active', 'transient', 'reserve'];
 	    let accounts = [];
 	    // Prepare accounts
 	    for (const validator of validatorList.validators) {
 	        if (validator.status !== ValidatorStakeInfoStatus.Active) {
 	            continue;
 	        }
-	        const stakeAccountAddress = await findStakeProgramAddress(STAKE_POOL_PROGRAM_ID, validator.voteAccountAddress, stakePoolAddress);
+	        const stakeAccountAddress = findStakeProgramAddress(STAKE_POOL_PROGRAM_ID, validator.voteAccountAddress, stakePoolAddress);
 	        if (!validator.activeStakeLamports.isZero()) {
 	            const isPreferred = (_b = stakePool === null || stakePool === void 0 ? void 0 : stakePool.preferredWithdrawValidatorVoteAddress) === null || _b === void 0 ? void 0 : _b.equals(validator.voteAccountAddress);
 	            accounts.push({
@@ -18037,7 +29672,7 @@ var solanaStakePool = (function (exports) {
 	        }
 	        const transientStakeLamports = validator.transientStakeLamports.toNumber() - minBalance;
 	        if (transientStakeLamports > 0) {
-	            const transientStakeAccountAddress = await findTransientStakeProgramAddress(STAKE_POOL_PROGRAM_ID, validator.voteAccountAddress, stakePoolAddress, validator.transientSeedSuffixStart);
+	            const transientStakeAccountAddress = findTransientStakeProgramAddress(STAKE_POOL_PROGRAM_ID, validator.voteAccountAddress, stakePoolAddress, validator.transientSeedSuffixStart);
 	            accounts.push({
 	                type: 'transient',
 	                voteAddress: validator.voteAccountAddress,
@@ -18065,7 +29700,7 @@ var solanaStakePool = (function (exports) {
 	        numerator: fee.denominator.sub(fee.numerator),
 	        denominator: fee.denominator,
 	    };
-	    for (const type of ['preferred', 'active', 'transient', 'reserve']) {
+	    for (const type of types) {
 	        const filteredAccounts = accounts.filter((a) => a.type === type);
 	        for (const { stakeAddress, voteAddress, lamports } of filteredAccounts) {
 	            if (lamports <= minBalance && type === 'transient') {
@@ -18147,10 +29782,10 @@ var solanaStakePool = (function (exports) {
 	 */
 	function encodeData(type, fields) {
 	    const allocLength = type.layout.span;
-	    const data = buffer.Buffer.alloc(allocLength);
+	    const data = buffer.Buffer.alloc(allocLength < 0 ? 1024 : allocLength);
 	    const layoutFields = Object.assign({ instruction: type.index }, fields);
-	    type.layout.encode(layoutFields, data);
-	    return data;
+	    const offset = type.layout.encode(layoutFields, data);
+	    return buffer.Buffer.from(new Uint8Array(data.buffer).slice(0, offset));
 	}
 
 	function arrayChunk(array, size) {
@@ -18161,19 +29796,29 @@ var solanaStakePool = (function (exports) {
 	    return result;
 	}
 
-	const MOVE_STAKE_LAYOUT = struct([
-	    u8('instruction'),
-	    nu64('lamports'),
-	    nu64('transientStakeSeed'),
-	]);
-	const TOKEN_METADATA_LAYOUT = struct([
-	    u8('instruction'),
-	    blob(METADATA_MAX_NAME_LENGTH, 'name'),
-	    blob(METADATA_MAX_SYMBOL_LENGTH, 'symbol'),
-	    blob(METADATA_MAX_URI_LENGTH, 'uri'),
+	const MOVE_STAKE_LAYOUT = dist.struct([dist.u8('instruction'), dist.u64('lamports'), dist.u64('transientStakeSeed')]);
+	const TOKEN_METADATA_LAYOUT = dist.struct([
+	    dist.u8('instruction'),
+	    dist.u32('nameLen'),
+	    dist.str('name'),
+	    dist.u32('symbolLen'),
+	    dist.str('symbol'),
+	    dist.u32('uriLen'),
+	    dist.str('uri'),
 	]);
 	function feeLayout(property) {
-	    return struct([nu64('denominator'), nu64('numerator')], property);
+	    return dist.struct([dist.u64('denominator'), dist.u64('numerator')], property);
+	}
+	function validateMetadata(name, symbol, uri) {
+	    if (name.length > METADATA_MAX_NAME_LENGTH) {
+	        throw new Error(`maximum token name length is ${METADATA_MAX_NAME_LENGTH} characters`);
+	    }
+	    if (symbol.length > METADATA_MAX_SYMBOL_LENGTH) {
+	        throw new Error(`maximum token symbol length is ${METADATA_MAX_SYMBOL_LENGTH} characters`);
+	    }
+	    if (uri.length > METADATA_MAX_URI_LENGTH) {
+	        throw new Error(`maximum token uri length is ${METADATA_MAX_URI_LENGTH} characters`);
+	    }
 	}
 	/**
 	 * An enumeration of valid stake InstructionType's
@@ -18183,160 +29828,216 @@ var solanaStakePool = (function (exports) {
 	    /// Initializes a new StakePool.
 	    Initialize: {
 	        index: 0,
-	        layout: struct([
-	            u8('instruction'),
+	        layout: dist.struct([
+	            dist.u8('instruction'),
 	            feeLayout('fee'),
 	            feeLayout('withdrawalFee'),
 	            feeLayout('depositFee'),
-	            u8('referralFee'),
-	            u32('maxValidators'),
+	            dist.u8('referralFee'),
+	            dist.u32('maxValidators'),
 	        ]),
 	    },
 	    /// (Staker only) Adds stake account delegated to validator to the pool's list of managed validators.
 	    AddValidatorToPool: {
 	        index: 1,
-	        layout: struct([
-	            u8('instruction'),
+	        layout: dist.struct([
+	            dist.u8('instruction'),
 	            // Optional non-zero u32 seed used for generating the validator stake address
-	            // OptionLayout.of(BufferLayout.u32('seed')),
+	            dist.u32('seed'),
 	        ]),
 	    },
-	    /// (Staker only) Removes validator from the pool, deactivating its stake
+	    /// (Staker only) Removes validator from the pool, deactivating its stake.
 	    RemoveValidatorFromPool: {
 	        index: 2,
-	        layout: struct([u8('instruction')]),
+	        layout: dist.struct([dist.u8('instruction')]),
 	    },
-	    /// (Staker only) Decrease active stake on a validator, eventually moving it to the reserve
+	    /// (Staker only) Decrease active stake on a validator, eventually moving it to the reserve.
 	    DecreaseValidatorStake: {
 	        index: 3,
 	        layout: MOVE_STAKE_LAYOUT,
 	    },
-	    /// (Staker only) Increase stake on a validator from the reserve account
+	    /// (Staker only) Increase stake on a validator from the reserve account.
 	    IncreaseValidatorStake: {
 	        index: 4,
 	        layout: MOVE_STAKE_LAYOUT,
 	    },
-	    // SetPreferredValidator: {
-	    //   index: 5,
-	    //   layout: BufferLayout.struct<any>([
-	    //     BufferLayout.u8('instruction'),
-	    //     BufferLayout.u8('validatorType'),
-	    //     BufferLayout.u64('validatorVoteAddress'), // Option<Pubkey>
-	    //   ]),
-	    // },
-	    UpdateValidatorListBalance: {
-	        index: 6,
-	        layout: struct([
-	            u8('instruction'),
-	            u32('startIndex'),
-	            u8('noMerge'),
+	    /// (Staker only) Set the preferred deposit or withdraw stake account for the stake pool.
+	    SetPreferredValidator: {
+	        index: 5,
+	        layout: dist.struct([
+	            dist.u8('instruction'),
+	            dist.u8('validatorType'),
+	            dist.option(dist.publicKey(), 'validatorVoteAddress'),
 	        ]),
 	    },
+	    /// Updates balances of validator and transient stake accounts in the pool.
+	    UpdateValidatorListBalance: {
+	        index: 6,
+	        layout: dist.struct([dist.u8('instruction'), dist.u32('startIndex'), dist.u8('noMerge')]),
+	    },
+	    /// Updates total pool balance based on balances in the reserve and validator list.
 	    UpdateStakePoolBalance: {
 	        index: 7,
-	        layout: struct([u8('instruction')]),
+	        layout: dist.struct([dist.u8('instruction')]),
 	    },
+	    /// Cleans up validator stake account entries marked as `ReadyForRemoval`.
 	    CleanupRemovedValidatorEntries: {
 	        index: 8,
-	        layout: struct([u8('instruction')]),
+	        layout: dist.struct([dist.u8('instruction')]),
 	    },
+	    /// Deposit some stake into the pool. The output is a "pool" token
+	    /// representing ownership into the pool. Inputs are converted to the
+	    /// current ratio.
 	    DepositStake: {
 	        index: 9,
-	        layout: struct([u8('instruction')]),
+	        layout: dist.struct([dist.u8('instruction')]),
 	    },
 	    /// Withdraw the token from the pool at the current ratio.
 	    WithdrawStake: {
 	        index: 10,
-	        layout: struct([
-	            u8('instruction'),
-	            nu64('poolTokens'),
+	        layout: dist.struct([dist.u8('instruction'), dist.u64('poolTokens')]),
+	    },
+	    /// (Manager only) Update manager.
+	    SetManager: {
+	        index: 11,
+	        layout: dist.struct([dist.u8('instruction')]),
+	    },
+	    /// (Manager only) Update fee.
+	    SetFee: {
+	        index: 12,
+	        layout: dist.struct([
+	            dist.u8('instruction'),
+	            // Type of fee to update and value to update it to
+	            dist.u64('fee'),
 	        ]),
 	    },
-	    // /// (Manager only) Update manager
-	    // SetManager: {
-	    //   index: 11,
-	    //   layout: BufferLayout.struct<any>([BufferLayout.u8('instruction')]),
-	    // },
-	    // /// (Manager only) Update fee
-	    // SetFee: {
-	    //   index: 12,
-	    //   layout: BufferLayout.struct<any>([
-	    //     BufferLayout.u8('instruction'),
-	    //     // Type of fee to update and value to update it to
-	    //     BufferLayout.nu64('fee'),
-	    //   ]),
-	    // },
-	    // /// (Manager or staker only) Update staker
-	    // SetStaker: {
-	    //   index: 13,
-	    //   layout: BufferLayout.struct<any>([BufferLayout.u8('instruction')]),
-	    // },
+	    /// (Manager or staker only) Update staker.
+	    SetStaker: {
+	        index: 13,
+	        layout: dist.struct([dist.u8('instruction')]),
+	    },
 	    /// Deposit SOL directly into the pool's reserve account. The output is a "pool" token
 	    /// representing ownership into the pool. Inputs are converted to the current ratio.
 	    DepositSol: {
 	        index: 14,
-	        layout: struct([
-	            u8('instruction'),
-	            nu64('lamports'),
-	        ]),
+	        layout: dist.struct([dist.u8('instruction'), dist.u64('lamports')]),
 	    },
-	    // /// (Manager only) Update SOL deposit, stake deposit, or SOL withdrawal authority.
-	    // SetFundingAuthority: {
-	    //   index: 15,
-	    // },
+	    /// (Manager only) Update SOL deposit, stake deposit, or SOL withdrawal authority.
+	    SetFundingAuthority: {
+	        index: 15,
+	        layout: dist.struct([dist.u8('instruction'), dist.u8('fundingType')]),
+	    },
 	    /// Withdraw SOL directly from the pool's reserve account. Fails if the
 	    /// reserve does not have enough SOL.
 	    WithdrawSol: {
 	        index: 16,
-	        layout: struct([
-	            u8('instruction'),
-	            nu64('poolTokens'),
-	        ]),
+	        layout: dist.struct([dist.u8('instruction'), dist.u64('poolTokens')]),
 	    },
 	    /// Create token metadata for the stake-pool token in the
-	    /// metaplex-token program
+	    /// metaplex-token program.
 	    CreateTokenMetadata: {
 	        index: 17,
 	        layout: TOKEN_METADATA_LAYOUT,
 	    },
 	    /// Update token metadata for the stake-pool token in the
-	    /// metaplex-token program
+	    /// metaplex-token program.
 	    UpdateTokenMetadata: {
 	        index: 18,
 	        layout: TOKEN_METADATA_LAYOUT,
 	    },
+	    /// (Staker only) Increase stake on a validator again in an epoch.
 	    IncreaseAdditionalValidatorStake: {
 	        index: 19,
-	        layout: struct([
-	            u8('instruction'),
-	            nu64('lamports'),
-	            nu64('transientStakeSeed'),
-	            nu64('ephemeralStakeSeed'),
+	        layout: dist.struct([
+	            dist.u8('instruction'),
+	            dist.u64('lamports'),
+	            dist.u64('transientStakeSeed'),
+	            dist.u64('ephemeralStakeSeed'),
 	        ]),
 	    },
+	    /// (Staker only) Decrease active stake again from a validator, eventually
+	    /// moving it to the reserve.
 	    DecreaseAdditionalValidatorStake: {
 	        index: 20,
-	        layout: struct([
-	            u8('instruction'),
-	            nu64('lamports'),
-	            nu64('transientStakeSeed'),
-	            nu64('ephemeralStakeSeed'),
+	        layout: dist.struct([
+	            dist.u8('instruction'),
+	            dist.u64('lamports'),
+	            dist.u64('transientStakeSeed'),
+	            dist.u64('ephemeralStakeSeed'),
 	        ]),
 	    },
-	    Redelegate: {
+	    /// (Staker only) Decrease active stake on a validator, eventually moving it
+	    /// to the reserve.
+	    DecreaseValidatorStakeWithReserve: {
 	        index: 21,
-	        layout: struct([
-	            u8('instruction'),
+	        layout: MOVE_STAKE_LAYOUT,
+	    },
+	    /// (Staker only) Redelegate active stake on a validator, eventually moving
+	    /// it to another.
+	    Redelegate: {
+	        index: 22,
+	        layout: dist.struct([
+	            dist.u8('instruction'),
 	            /// Amount of lamports to redelegate
-	            nu64('lamports'),
+	            dist.u64('lamports'),
 	            /// Seed used to create source transient stake account
-	            nu64('sourceTransientStakeSeed'),
+	            dist.u64('sourceTransientStakeSeed'),
 	            /// Seed used to create destination ephemeral account.
-	            nu64('ephemeralStakeSeed'),
+	            dist.u64('ephemeralStakeSeed'),
 	            /// Seed used to create destination transient stake account. If there is
 	            /// already transient stake, this must match the current seed, otherwise
 	            /// it can be anything
-	            nu64('destinationTransientStakeSeed'),
+	            dist.u64('destinationTransientStakeSeed'),
+	        ]),
+	    },
+	    /// Deposit some stake into the pool, with a specified slippage
+	    /// constraint. The output is a "pool" token representing ownership
+	    /// into the pool. Inputs are converted at the current ratio.
+	    DepositStakeWithSlippage: {
+	        index: 23,
+	        layout: dist.struct([
+	            dist.u8('instruction'),
+	            /// Minimum amount of pool tokens that must be received
+	            dist.u64('minimumPoolTokensOut'),
+	        ]),
+	    },
+	    /// Withdraw the token from the pool at the current ratio, specifying a
+	    /// minimum expected output lamport amount.
+	    WithdrawStakeWithSlippage: {
+	        index: 24,
+	        layout: dist.struct([
+	            dist.u8('instruction'),
+	            /// Pool tokens to burn in exchange for lamports
+	            dist.u64('poolTokensIn'),
+	            /// Minimum amount of lamports that must be received
+	            dist.u64('minimumLamportsOut'),
+	        ]),
+	    },
+	    /// Deposit SOL directly into the pool's reserve account, with a
+	    /// specified slippage constraint. The output is a "pool" token
+	    /// representing ownership into the pool. Inputs are converted at the
+	    /// current ratio.
+	    DepositSolWithSlippage: {
+	        index: 25,
+	        layout: dist.struct([
+	            dist.u8('instruction'),
+	            /// Amount of lamports to deposit into the reserve
+	            dist.u64('lamportsIn'),
+	            /// Minimum amount of pool tokens that must be received
+	            dist.u64('minimumPoolTokensOut'),
+	        ]),
+	    },
+	    /// Withdraw SOL directly from the pool's reserve account. Fails if the
+	    /// reserve does not have enough SOL or if the slippage constraint is not
+	    /// met.
+	    WithdrawSolWithSlippage: {
+	        index: 26,
+	        layout: dist.struct([
+	            dist.u8('instruction'),
+	            /// Pool tokens to burn in exchange for lamports
+	            dist.u64('poolTokensIn'),
+	            /// Minimum amount of lamports that must be received
+	            dist.u64('minimumLamportsOut'),
 	        ]),
 	    },
 	});
@@ -18348,8 +30049,7 @@ var solanaStakePool = (function (exports) {
 	     * Creates an 'initialize' instruction.
 	     */
 	    static initialize(params) {
-	        const type = STAKE_POOL_INSTRUCTION_LAYOUTS.Initialize;
-	        const data = encodeData(type, {
+	        const data = encodeData(STAKE_POOL_INSTRUCTION_LAYOUTS.Initialize, {
 	            fee: params.fee,
 	            withdrawalFee: params.withdrawalFee,
 	            depositFee: params.depositFee,
@@ -18380,13 +30080,13 @@ var solanaStakePool = (function (exports) {
 	     * Creates instruction to add a validator to the pool.
 	     */
 	    static addValidatorToPool(params) {
-	        const type = STAKE_POOL_INSTRUCTION_LAYOUTS.AddValidatorToPool;
-	        const data = encodeData(type, { seed: params.seed });
+	        const data = encodeData(STAKE_POOL_INSTRUCTION_LAYOUTS.AddValidatorToPool, {
+	            seed: params.seed,
+	        });
 	        const keys = [
 	            { pubkey: params.stakePool, isSigner: false, isWritable: true },
 	            { pubkey: params.staker, isSigner: true, isWritable: false },
-	            { pubkey: params.funder, isSigner: true, isWritable: true },
-	            // { pubkey: params.reserveStake, isSigner: false, isWritable: true },
+	            { pubkey: params.reserveStake, isSigner: false, isWritable: true },
 	            { pubkey: params.withdrawAuthority, isSigner: false, isWritable: false },
 	            { pubkey: params.validatorList, isSigner: false, isWritable: true },
 	            { pubkey: params.validatorStake, isSigner: false, isWritable: true },
@@ -18408,8 +30108,7 @@ var solanaStakePool = (function (exports) {
 	     * Creates instruction to remove a validator from the pool.
 	     */
 	    static removeValidatorFromPool(params) {
-	        const type = STAKE_POOL_INSTRUCTION_LAYOUTS.RemoveValidatorFromPool;
-	        const data = encodeData(type);
+	        const data = encodeData(STAKE_POOL_INSTRUCTION_LAYOUTS.RemoveValidatorFromPool);
 	        const keys = [
 	            { pubkey: params.stakePool, isSigner: false, isWritable: true },
 	            { pubkey: params.staker, isSigner: true, isWritable: false },
@@ -18433,8 +30132,10 @@ var solanaStakePool = (function (exports) {
 	     */
 	    static updateValidatorListBalance(params) {
 	        const { stakePool, withdrawAuthority, validatorList, reserveStake, startIndex, noMerge, validatorAndTransientStakePairs, } = params;
-	        const type = STAKE_POOL_INSTRUCTION_LAYOUTS.UpdateValidatorListBalance;
-	        const data = encodeData(type, { startIndex, noMerge: noMerge ? 1 : 0 });
+	        const data = encodeData(STAKE_POOL_INSTRUCTION_LAYOUTS.UpdateValidatorListBalance, {
+	            startIndex,
+	            noMerge: noMerge ? 1 : 0,
+	        });
 	        const keys = [
 	            { pubkey: stakePool, isSigner: false, isWritable: false },
 	            { pubkey: withdrawAuthority, isSigner: false, isWritable: false },
@@ -18460,8 +30161,7 @@ var solanaStakePool = (function (exports) {
 	     */
 	    static updateStakePoolBalance(params) {
 	        const { stakePool, withdrawAuthority, validatorList, reserveStake, managerFeeAccount, poolMint, } = params;
-	        const type = STAKE_POOL_INSTRUCTION_LAYOUTS.UpdateStakePoolBalance;
-	        const data = encodeData(type);
+	        const data = encodeData(STAKE_POOL_INSTRUCTION_LAYOUTS.UpdateStakePoolBalance);
 	        const keys = [
 	            { pubkey: stakePool, isSigner: false, isWritable: true },
 	            { pubkey: withdrawAuthority, isSigner: false, isWritable: false },
@@ -18482,8 +30182,7 @@ var solanaStakePool = (function (exports) {
 	     */
 	    static cleanupRemovedValidatorEntries(params) {
 	        const { stakePool, validatorList } = params;
-	        const type = STAKE_POOL_INSTRUCTION_LAYOUTS.CleanupRemovedValidatorEntries;
-	        const data = encodeData(type);
+	        const data = encodeData(STAKE_POOL_INSTRUCTION_LAYOUTS.CleanupRemovedValidatorEntries);
 	        const keys = [
 	            { pubkey: stakePool, isSigner: false, isWritable: false },
 	            { pubkey: validatorList, isSigner: false, isWritable: true },
@@ -18500,8 +30199,10 @@ var solanaStakePool = (function (exports) {
 	     */
 	    static increaseValidatorStake(params) {
 	        const { stakePool, staker, withdrawAuthority, validatorList, reserveStake, transientStake, validatorStake, validatorVote, lamports, transientStakeSeed, } = params;
-	        const type = STAKE_POOL_INSTRUCTION_LAYOUTS.IncreaseValidatorStake;
-	        const data = encodeData(type, { lamports, transientStakeSeed });
+	        const data = encodeData(STAKE_POOL_INSTRUCTION_LAYOUTS.IncreaseValidatorStake, {
+	            lamports: new BN(lamports),
+	            transientStakeSeed: new BN(transientStakeSeed),
+	        });
 	        const keys = [
 	            { pubkey: stakePool, isSigner: false, isWritable: false },
 	            { pubkey: staker, isSigner: true, isWritable: false },
@@ -18509,8 +30210,7 @@ var solanaStakePool = (function (exports) {
 	            { pubkey: validatorList, isSigner: false, isWritable: true },
 	            { pubkey: reserveStake, isSigner: false, isWritable: true },
 	            { pubkey: transientStake, isSigner: false, isWritable: true },
-	            // TODO: will be available in the new stake pool
-	            // { pubkey: validatorStake, isSigner: false, isWritable: false },
+	            { pubkey: validatorStake, isSigner: false, isWritable: false },
 	            { pubkey: validatorVote, isSigner: false, isWritable: false },
 	            { pubkey: SYSVAR_CLOCK_PUBKEY, isSigner: false, isWritable: false },
 	            { pubkey: SYSVAR_RENT_PUBKEY, isSigner: false, isWritable: false },
@@ -18531,8 +30231,11 @@ var solanaStakePool = (function (exports) {
 	     */
 	    static increaseAdditionalValidatorStake(params) {
 	        const { stakePool, staker, withdrawAuthority, validatorList, reserveStake, transientStake, validatorStake, validatorVote, lamports, transientStakeSeed, ephemeralStake, ephemeralStakeSeed, } = params;
-	        const type = STAKE_POOL_INSTRUCTION_LAYOUTS.IncreaseAdditionalValidatorStake;
-	        const data = encodeData(type, { lamports, transientStakeSeed, ephemeralStakeSeed });
+	        const data = encodeData(STAKE_POOL_INSTRUCTION_LAYOUTS.IncreaseAdditionalValidatorStake, {
+	            lamports: new BN(lamports),
+	            transientStakeSeed: new BN(transientStakeSeed),
+	            ephemeralStakeSeed: new BN(ephemeralStakeSeed),
+	        });
 	        const keys = [
 	            { pubkey: stakePool, isSigner: false, isWritable: false },
 	            { pubkey: staker, isSigner: true, isWritable: false },
@@ -18561,8 +30264,10 @@ var solanaStakePool = (function (exports) {
 	     */
 	    static decreaseValidatorStake(params) {
 	        const { stakePool, staker, withdrawAuthority, validatorList, validatorStake, transientStake, lamports, transientStakeSeed, } = params;
-	        const type = STAKE_POOL_INSTRUCTION_LAYOUTS.DecreaseValidatorStake;
-	        const data = encodeData(type, { lamports, transientStakeSeed });
+	        const data = encodeData(STAKE_POOL_INSTRUCTION_LAYOUTS.DecreaseValidatorStake, {
+	            lamports: new BN(lamports),
+	            transientStakeSeed: new BN(transientStakeSeed),
+	        });
 	        const keys = [
 	            { pubkey: stakePool, isSigner: false, isWritable: false },
 	            { pubkey: staker, isSigner: true, isWritable: false },
@@ -18582,13 +30287,45 @@ var solanaStakePool = (function (exports) {
 	        });
 	    }
 	    /**
+	     * Creates `DecreaseValidatorStakeWithReserve` instruction (rebalance from
+	     * validator account to transient account)
+	     */
+	    static decreaseValidatorStakeWithReserve(params) {
+	        const { stakePool, staker, withdrawAuthority, validatorList, reserveStake, validatorStake, transientStake, lamports, transientStakeSeed, } = params;
+	        const data = encodeData(STAKE_POOL_INSTRUCTION_LAYOUTS.DecreaseValidatorStakeWithReserve, {
+	            lamports: new BN(lamports),
+	            transientStakeSeed: new BN(transientStakeSeed),
+	        });
+	        const keys = [
+	            { pubkey: stakePool, isSigner: false, isWritable: false },
+	            { pubkey: staker, isSigner: true, isWritable: false },
+	            { pubkey: withdrawAuthority, isSigner: false, isWritable: false },
+	            { pubkey: validatorList, isSigner: false, isWritable: true },
+	            { pubkey: reserveStake, isSigner: false, isWritable: true },
+	            { pubkey: validatorStake, isSigner: false, isWritable: true },
+	            { pubkey: transientStake, isSigner: false, isWritable: true },
+	            { pubkey: SYSVAR_CLOCK_PUBKEY, isSigner: false, isWritable: false },
+	            { pubkey: SYSVAR_STAKE_HISTORY_PUBKEY, isSigner: false, isWritable: false },
+	            { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+	            { pubkey: StakeProgram.programId, isSigner: false, isWritable: false },
+	        ];
+	        return new TransactionInstruction({
+	            programId: STAKE_POOL_PROGRAM_ID,
+	            keys,
+	            data,
+	        });
+	    }
+	    /**
 	     * Creates `DecreaseAdditionalValidatorStake` instruction (rebalance from
 	     * validator account to transient account)
 	     */
 	    static decreaseAdditionalValidatorStake(params) {
 	        const { stakePool, staker, withdrawAuthority, validatorList, validatorStake, transientStake, lamports, transientStakeSeed, ephemeralStakeSeed, ephemeralStake, } = params;
-	        const type = STAKE_POOL_INSTRUCTION_LAYOUTS.DecreaseAdditionalValidatorStake;
-	        const data = encodeData(type, { lamports, transientStakeSeed, ephemeralStakeSeed });
+	        const data = encodeData(STAKE_POOL_INSTRUCTION_LAYOUTS.DecreaseAdditionalValidatorStake, {
+	            lamports: new BN(lamports),
+	            transientStakeSeed: new BN(transientStakeSeed),
+	            ephemeralStakeSeed: new BN(ephemeralStakeSeed),
+	        });
 	        const keys = [
 	            { pubkey: stakePool, isSigner: false, isWritable: false },
 	            { pubkey: staker, isSigner: true, isWritable: false },
@@ -18613,8 +30350,7 @@ var solanaStakePool = (function (exports) {
 	     */
 	    static depositStake(params) {
 	        const { stakePool, validatorList, depositAuthority, withdrawAuthority, depositStake, validatorStake, reserveStake, destinationPoolAccount, managerFeeAccount, referralPoolAccount, poolMint, } = params;
-	        const type = STAKE_POOL_INSTRUCTION_LAYOUTS.DepositStake;
-	        const data = encodeData(type);
+	        const data = encodeData(STAKE_POOL_INSTRUCTION_LAYOUTS.DepositStake);
 	        const keys = [
 	            { pubkey: stakePool, isSigner: false, isWritable: true },
 	            { pubkey: validatorList, isSigner: false, isWritable: true },
@@ -18643,8 +30379,9 @@ var solanaStakePool = (function (exports) {
 	     */
 	    static depositSol(params) {
 	        const { stakePool, withdrawAuthority, depositAuthority, reserveStake, fundingAccount, destinationPoolAccount, managerFeeAccount, referralPoolAccount, poolMint, lamports, } = params;
-	        const type = STAKE_POOL_INSTRUCTION_LAYOUTS.DepositSol;
-	        const data = encodeData(type, { lamports });
+	        const data = encodeData(STAKE_POOL_INSTRUCTION_LAYOUTS.DepositSol, {
+	            lamports: new BN(lamports),
+	        });
 	        const keys = [
 	            { pubkey: stakePool, isSigner: false, isWritable: true },
 	            { pubkey: withdrawAuthority, isSigner: false, isWritable: false },
@@ -18675,8 +30412,9 @@ var solanaStakePool = (function (exports) {
 	     */
 	    static withdrawStake(params) {
 	        const { stakePool, validatorList, withdrawAuthority, validatorStake, destinationStake, destinationStakeAuthority, sourceTransferAuthority, sourcePoolAccount, managerFeeAccount, poolMint, poolTokens, } = params;
-	        const type = STAKE_POOL_INSTRUCTION_LAYOUTS.WithdrawStake;
-	        const data = encodeData(type, { poolTokens });
+	        const data = encodeData(STAKE_POOL_INSTRUCTION_LAYOUTS.WithdrawStake, {
+	            poolTokens: new BN(poolTokens),
+	        });
 	        const keys = [
 	            { pubkey: stakePool, isSigner: false, isWritable: true },
 	            { pubkey: validatorList, isSigner: false, isWritable: true },
@@ -18703,8 +30441,9 @@ var solanaStakePool = (function (exports) {
 	     */
 	    static withdrawSol(params) {
 	        const { stakePool, withdrawAuthority, sourceTransferAuthority, sourcePoolAccount, reserveStake, destinationSystemAccount, managerFeeAccount, solWithdrawAuthority, poolMint, poolTokens, } = params;
-	        const type = STAKE_POOL_INSTRUCTION_LAYOUTS.WithdrawSol;
-	        const data = encodeData(type, { poolTokens });
+	        const data = encodeData(STAKE_POOL_INSTRUCTION_LAYOUTS.WithdrawSol, {
+	            poolTokens: new BN(poolTokens),
+	        });
 	        const keys = [
 	            { pubkey: stakePool, isSigner: false, isWritable: true },
 	            { pubkey: withdrawAuthority, isSigner: false, isWritable: false },
@@ -18749,10 +30488,14 @@ var solanaStakePool = (function (exports) {
 	            { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
 	            { pubkey: SYSVAR_RENT_PUBKEY, isSigner: false, isWritable: false },
 	        ];
+	        validateMetadata(name, symbol, uri);
 	        const data = encodeData(STAKE_POOL_INSTRUCTION_LAYOUTS.CreateTokenMetadata, {
-	            name: new TextEncoder().encode(name.padEnd(METADATA_MAX_NAME_LENGTH, '\0')),
-	            symbol: new TextEncoder().encode(symbol.padEnd(METADATA_MAX_SYMBOL_LENGTH, '\0')),
-	            uri: new TextEncoder().encode(uri.padEnd(METADATA_MAX_URI_LENGTH, '\0')),
+	            nameLen: name.length,
+	            name: Buffer.from(name.padEnd(METADATA_MAX_NAME_LENGTH, '\0')),
+	            symbolLen: symbol.length,
+	            symbol: Buffer.from(symbol.padEnd(METADATA_MAX_SYMBOL_LENGTH, '\0')),
+	            uriLen: uri.length,
+	            uri: Buffer.from(uri.padEnd(METADATA_MAX_URI_LENGTH, '\0')),
 	        });
 	        return new TransactionInstruction({
 	            programId: STAKE_POOL_PROGRAM_ID,
@@ -18773,10 +30516,14 @@ var solanaStakePool = (function (exports) {
 	            { pubkey: tokenMetadata, isSigner: false, isWritable: true },
 	            { pubkey: METADATA_PROGRAM_ID, isSigner: false, isWritable: false },
 	        ];
+	        validateMetadata(name, symbol, uri);
 	        const data = encodeData(STAKE_POOL_INSTRUCTION_LAYOUTS.UpdateTokenMetadata, {
-	            name: new TextEncoder().encode(name.padEnd(METADATA_MAX_NAME_LENGTH, '\0')),
-	            symbol: new TextEncoder().encode(symbol.padEnd(METADATA_MAX_SYMBOL_LENGTH, '\0')),
-	            uri: new TextEncoder().encode(uri.padEnd(METADATA_MAX_URI_LENGTH, '\0')),
+	            nameLen: name.length,
+	            name: Buffer.from(name.padEnd(METADATA_MAX_NAME_LENGTH, '\0')),
+	            symbolLen: symbol.length,
+	            symbol: Buffer.from(symbol.padEnd(METADATA_MAX_SYMBOL_LENGTH, '\0')),
+	            uriLen: uri.length,
+	            uri: Buffer.from(uri.padEnd(METADATA_MAX_URI_LENGTH, '\0')),
 	        });
 	        return new TransactionInstruction({
 	            programId: STAKE_POOL_PROGRAM_ID,
@@ -18789,12 +30536,13 @@ var solanaStakePool = (function (exports) {
 	     * @param params
 	     */
 	    static redelegate(params) {
-	        const { stakePool, staker, stakePoolWithdrawAuthority, validatorList, sourceValidatorStake, sourceTransientStake, ephemeralStake, destinationTransientStake, destinationValidatorStake, validator, lamports, sourceTransientStakeSeed, ephemeralStakeSeed, destinationTransientStakeSeed, } = params;
+	        const { stakePool, staker, stakePoolWithdrawAuthority, validatorList, reserveStake, sourceValidatorStake, sourceTransientStake, ephemeralStake, destinationTransientStake, destinationValidatorStake, validator, lamports, sourceTransientStakeSeed, ephemeralStakeSeed, destinationTransientStakeSeed, } = params;
 	        const keys = [
 	            { pubkey: stakePool, isSigner: false, isWritable: false },
 	            { pubkey: staker, isSigner: true, isWritable: false },
 	            { pubkey: stakePoolWithdrawAuthority, isSigner: false, isWritable: false },
 	            { pubkey: validatorList, isSigner: false, isWritable: true },
+	            { pubkey: reserveStake, isSigner: false, isWritable: true },
 	            { pubkey: sourceValidatorStake, isSigner: false, isWritable: true },
 	            { pubkey: sourceTransientStake, isSigner: false, isWritable: true },
 	            { pubkey: ephemeralStake, isSigner: false, isWritable: true },
@@ -18808,10 +30556,10 @@ var solanaStakePool = (function (exports) {
 	            { pubkey: StakeProgram.programId, isSigner: false, isWritable: false },
 	        ];
 	        const data = encodeData(STAKE_POOL_INSTRUCTION_LAYOUTS.Redelegate, {
-	            lamports,
-	            sourceTransientStakeSeed,
-	            ephemeralStakeSeed,
-	            destinationTransientStakeSeed,
+	            lamports: new BN(lamports),
+	            sourceTransientStakeSeed: new BN(sourceTransientStakeSeed),
+	            ephemeralStakeSeed: new BN(ephemeralStakeSeed),
+	            destinationTransientStakeSeed: new BN(destinationTransientStakeSeed),
 	        });
 	        return new TransactionInstruction({
 	            programId: STAKE_POOL_PROGRAM_ID,
@@ -18823,8 +30571,8 @@ var solanaStakePool = (function (exports) {
 
 	/**
 	 * Retrieves and deserializes a StakePool account using a web3js connection and the stake pool address.
-	 * @param connection: An active web3js connection.
-	 * @param stakePoolAddress: The public key (address) of the stake pool account.
+	 * @param connection An active web3js connection.
+	 * @param stakePoolAddress The public key (address) of the stake pool account.
 	 */
 	async function getStakePoolAccount(connection, stakePoolAddress) {
 	    const account = await connection.getAccountInfo(stakePoolAddress);
@@ -18843,8 +30591,8 @@ var solanaStakePool = (function (exports) {
 	}
 	/**
 	 * Retrieves and deserializes a Stake account using a web3js connection and the stake address.
-	 * @param connection: An active web3js connection.
-	 * @param stakeAccount: The public key (address) of the stake account.
+	 * @param connection An active web3js connection.
+	 * @param stakeAccount The public key (address) of the stake account.
 	 */
 	async function getStakeAccount(connection, stakeAccount) {
 	    const result = (await connection.getParsedAccountInfo(stakeAccount)).value;
@@ -18859,12 +30607,12 @@ var solanaStakePool = (function (exports) {
 	}
 	/**
 	 * Retrieves all StakePool and ValidatorList accounts that are running a particular StakePool program.
-	 * @param connection: An active web3js connection.
-	 * @param stakePoolProgramAddress: The public key (address) of the StakePool program.
+	 * @param connection An active web3js connection.
+	 * @param stakePoolProgramAddress The public key (address) of the StakePool program.
 	 */
 	async function getStakePoolAccounts(connection, stakePoolProgramAddress) {
 	    const response = await connection.getProgramAccounts(stakePoolProgramAddress);
-	    return response.value.map((a) => {
+	    return response.map((a) => {
 	        let decodedData;
 	        if (a.account.data.readUInt8() === 1) {
 	            try {
@@ -19025,7 +30773,7 @@ var solanaStakePool = (function (exports) {
 	            throw new Error(`Invalid stake receiver ${stakeReceiver} delegation`);
 	        }
 	        const validatorListAccount = await connection.getAccountInfo(stakePool.account.data.validatorList);
-	        const validatorList = ValidatorListLayout.decode(Uint8Array.from((_e = validatorListAccount === null || validatorListAccount === void 0 ? void 0 : validatorListAccount.data) !== null && _e !== void 0 ? _e : []));
+	        const validatorList = ValidatorListLayout.decode(Buffer.from((_e = validatorListAccount === null || validatorListAccount === void 0 ? void 0 : validatorListAccount.data) !== null && _e !== void 0 ? _e : []));
 	        const isValidVoter = validatorList.validators.find((val) => val.voteAccountAddress.equals(voteAccount));
 	        if (voteAccountAddress && voteAccountAddress !== voteAccount) {
 	            throw new Error(`Provided withdrawal vote account ${voteAccountAddress} does not match delegation on stake receiver account ${voteAccount},
@@ -19341,7 +31089,7 @@ var solanaStakePool = (function (exports) {
 	    const epochInfo = await connection.getEpochInfo();
 	    const reserveStake = await connection.getAccountInfo(reserveAccountStakeAddress);
 	    const withdrawAuthority = findWithdrawAuthorityProgramAddress(STAKE_POOL_PROGRAM_ID, stakePoolAddress);
-	    const minimumReserveStakeBalance = (await connection.getMinimumBalanceForRentExemption(StakeProgram.space)) + 1;
+	    const minimumReserveStakeBalance = await connection.getMinimumBalanceForRentExemption(StakeProgram.space);
 	    const stakeAccounts = await Promise.all(validatorList.account.data.validators.map(async (validator) => {
 	        const stakeAccountAddress = findStakeProgramAddress(STAKE_POOL_PROGRAM_ID, validator.voteAccountAddress, stakePoolAddress);
 	        const transientStakeAccountAddress = findTransientStakeProgramAddress(STAKE_POOL_PROGRAM_ID, validator.voteAccountAddress, stakePoolAddress, validator.transientSeedSuffixStart);
@@ -19379,7 +31127,7 @@ var solanaStakePool = (function (exports) {
 	                status: validator.status.toString(),
 	                voteAccountAddress: validator.voteAccountAddress.toString(),
 	            };
-	        }),
+	        }), // CliStakePoolValidator
 	        validatorListStorageAccount: stakePool.account.data.validatorList.toBase58(),
 	        reserveStake: stakePool.account.data.reserveStake.toBase58(),
 	        poolMint: stakePool.account.data.poolMint.toBase58(),
@@ -19388,7 +31136,7 @@ var solanaStakePool = (function (exports) {
 	        totalLamports: stakePool.account.data.totalLamports.toString(),
 	        poolTokenSupply: stakePool.account.data.poolTokenSupply.toString(),
 	        lastUpdateEpoch: stakePool.account.data.lastUpdateEpoch.toString(),
-	        lockup: stakePool.account.data.lockup,
+	        lockup: stakePool.account.data.lockup, // pub lockup: CliStakePoolLockup
 	        epochFee: stakePool.account.data.epochFee,
 	        nextEpochFee: stakePool.account.data.nextEpochFee,
 	        preferredDepositValidatorVoteAddress: stakePool.account.data.preferredDepositValidatorVoteAddress,
@@ -19436,6 +31184,7 @@ var solanaStakePool = (function (exports) {
 	        stakePool: stakePool.pubkey,
 	        staker: stakePool.account.data.staker,
 	        validatorList: stakePool.account.data.validatorList,
+	        reserveStake: stakePool.account.data.reserveStake,
 	        stakePoolWithdrawAuthority,
 	        ephemeralStake,
 	        ephemeralStakeSeed,
@@ -19457,7 +31206,7 @@ var solanaStakePool = (function (exports) {
 	 */
 	async function initialize(props) {
 	    var _c, _d, _e;
-	    const { connection, poolMint, reserveStake, manager, managerPoolAccount, fee, referralFee } = props;
+	    const { connection, poolMint, reserveStake, manager, managerPoolAccount, fee, depositFee, withdrawalFee, referralFee, } = props;
 	    const poolBalance = await connection.getMinimumBalanceForRentExemption(StakePoolLayout.span);
 	    const stakePool = (_c = props.stakePool) !== null && _c !== void 0 ? _c : Keypair.generate();
 	    const validatorList = (_d = props.validatorList) !== null && _d !== void 0 ? _d : Keypair.generate();
@@ -19470,11 +31219,8 @@ var solanaStakePool = (function (exports) {
 	        space: StakePoolLayout.span,
 	        programId: STAKE_POOL_PROGRAM_ID,
 	    }));
-	    // current supported max by the program, go big!
-	    const maxValidators = (_e = props.maxValidators) !== null && _e !== void 0 ? _e : 2950;
-	    // TODO: ValidatorListLayout.span returns -1
-	    // const validatorListSpace = ValidatorListLayout.span + ValidatorStakeInfoLayout.span * maxValidators;
-	    const validatorListSpace = 1 + 4 + 4 + ValidatorStakeInfoLayout.span * maxValidators;
+	    const maxValidators = (_e = props.maxValidators) !== null && _e !== void 0 ? _e : DEFAULT_MAX_VALIDATORS;
+	    const validatorListSpace = ValidatorListLayout.span + ValidatorStakeInfoLayout.span * maxValidators;
 	    const validatorListBalance = await connection.getMinimumBalanceForRentExemption(validatorListSpace);
 	    instructions.push(SystemProgram.createAccount({
 	        fromPubkey: manager.publicKey,
@@ -19493,10 +31239,10 @@ var solanaStakePool = (function (exports) {
 	        poolMint,
 	        managerPoolAccount,
 	        reserveStake,
-	        fee,
-	        withdrawalFee: fee,
-	        depositFee: fee,
-	        referralFee,
+	        fee: fee !== null && fee !== void 0 ? fee : { denominator: new BN(0), numerator: new BN(0) },
+	        withdrawalFee: withdrawalFee !== null && withdrawalFee !== void 0 ? withdrawalFee : { denominator: new BN(0), numerator: new BN(0) },
+	        depositFee: depositFee !== null && depositFee !== void 0 ? depositFee : { denominator: new BN(0), numerator: new BN(0) },
+	        referralFee: referralFee !== null && referralFee !== void 0 ? referralFee : 0,
 	        maxValidators,
 	    }));
 	    return {
@@ -19513,7 +31259,7 @@ var solanaStakePool = (function (exports) {
 	    const stakePool = props.stakePool instanceof PublicKey
 	        ? await getStakePoolAccount(connection, props.stakePool)
 	        : props.stakePool;
-	    const tokenMetadata = (_c = props.tokenMetadata) !== null && _c !== void 0 ? _c : findTokenMetadataAddress(stakePool.account.data.poolMint);
+	    const tokenMetadata = (_c = props.tokenMetadata) !== null && _c !== void 0 ? _c : findMetadataAddress(stakePool.account.data.poolMint);
 	    const withdrawAuthority = findWithdrawAuthorityProgramAddress(STAKE_POOL_PROGRAM_ID, stakePool.pubkey);
 	    const manager = stakePool.account.data.manager;
 	    const instructions = [];
@@ -19541,7 +31287,7 @@ var solanaStakePool = (function (exports) {
 	    const stakePool = props.stakePool instanceof PublicKey
 	        ? await getStakePoolAccount(connection, props.stakePool)
 	        : props.stakePool;
-	    const tokenMetadata = (_c = props.tokenMetadata) !== null && _c !== void 0 ? _c : findTokenMetadataAddress(stakePool.account.data.poolMint);
+	    const tokenMetadata = (_c = props.tokenMetadata) !== null && _c !== void 0 ? _c : findMetadataAddress(stakePool.account.data.poolMint);
 	    const withdrawAuthority = findWithdrawAuthorityProgramAddress(STAKE_POOL_PROGRAM_ID, stakePool.pubkey);
 	    const instructions = [];
 	    instructions.push(StakePoolInstruction.updateTokenMetadata({
@@ -19560,7 +31306,7 @@ var solanaStakePool = (function (exports) {
 	/**
 	 * Creates instructions required to add a validator to the pool.
 	 */
-	async function addValidatorToPool(connection, stakePoolAddress, validatorVote, funder) {
+	async function addValidatorToPool(connection, stakePoolAddress, validatorVote, seed) {
 	    const stakePool = await getStakePoolAccount(connection, stakePoolAddress);
 	    const validatorList = await getValidatorListAccount(connection, stakePool.account.data.validatorList);
 	    const validatorInfo = validatorList.account.data.validators.find((v) => v.voteAccountAddress.toBase58() === validatorVote.toBase58());
@@ -19573,13 +31319,12 @@ var solanaStakePool = (function (exports) {
 	    instructions.push(StakePoolInstruction.addValidatorToPool({
 	        stakePool: stakePoolAddress,
 	        staker: stakePool.account.data.staker,
-	        funder,
-	        // reserveStake: stakePool.account.data.reserveStake,
+	        reserveStake: stakePool.account.data.reserveStake,
 	        validatorList: stakePool.account.data.validatorList,
 	        validatorStake,
 	        withdrawAuthority,
 	        validatorVote,
-	        seed: undefined,
+	        seed,
 	    }));
 	    return {
 	        instructions,
@@ -19644,8 +31389,6 @@ var solanaStakePool = (function (exports) {
 	exports.updateStakePool = updateStakePool;
 	exports.withdrawSol = withdrawSol;
 	exports.withdrawStake = withdrawStake;
-
-	Object.defineProperty(exports, '__esModule', { value: true });
 
 	return exports;
 
