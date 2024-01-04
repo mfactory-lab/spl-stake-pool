@@ -15,8 +15,7 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noFallthroughCasesInSwitch": true,
-    "noImplicitReturns": true,
-    "skipLibCheck": true // needed to avoid re-export errors from borsh
+    "noImplicitReturns": true
   },
   "include": ["src/**/*.ts"]
 }
