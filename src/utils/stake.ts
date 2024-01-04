@@ -1,9 +1,8 @@
 import type { Connection, PublicKey, TransactionInstruction } from '@solana/web3.js';
 import { Keypair, StakeProgram, SystemProgram } from '@solana/web3.js';
 import BN from 'bn.js';
-
-import type { Fee, WithdrawAccount } from '../index';
-import type { StakePool, ValidatorList } from '../layouts';
+import type { WithdrawAccount } from '../index';
+import type { Fee, StakePool, ValidatorList } from '../layouts';
 import { ValidatorListLayout, ValidatorStakeInfoStatus } from '../layouts';
 import { MINIMUM_ACTIVE_STAKE, STAKE_POOL_PROGRAM_ID } from '../constants';
 import { lamportsToSol } from './math';
@@ -42,7 +41,7 @@ export async function prepareWithdrawAccounts(
 ): Promise<WithdrawAccount[]> {
   const validatorListAcc = await connection.getAccountInfo(stakePool.validatorList);
   const validatorList = ValidatorListLayout.decode(
-    Uint8Array.from(validatorListAcc?.data ?? []),
+    Buffer.from(validatorListAcc?.data ?? []),
   ) as ValidatorList;
 
   if (!validatorList?.validators || validatorList?.validators.length === 0) {
@@ -54,8 +53,10 @@ export async function prepareWithdrawAccounts(
   );
   const minBalance = minBalanceForRentExemption + MINIMUM_ACTIVE_STAKE;
 
+  const types = ['preferred', 'active', 'transient', 'reserve'] as const;
+
   let accounts = [] as Array<{
-    type: 'preferred' | 'active' | 'transient' | 'reserve';
+    type: (typeof types)[number];
     voteAddress?: PublicKey | undefined;
     stakeAddress: PublicKey;
     lamports: number;
@@ -67,7 +68,7 @@ export async function prepareWithdrawAccounts(
       continue;
     }
 
-    const stakeAccountAddress = await findStakeProgramAddress(
+    const stakeAccountAddress = findStakeProgramAddress(
       STAKE_POOL_PROGRAM_ID,
       validator.voteAccountAddress,
       stakePoolAddress,
@@ -87,7 +88,7 @@ export async function prepareWithdrawAccounts(
 
     const transientStakeLamports = validator.transientStakeLamports.toNumber() - minBalance;
     if (transientStakeLamports > 0) {
-      const transientStakeAccountAddress = await findTransientStakeProgramAddress(
+      const transientStakeAccountAddress = findTransientStakeProgramAddress(
         STAKE_POOL_PROGRAM_ID,
         validator.voteAccountAddress,
         stakePoolAddress,
@@ -125,7 +126,7 @@ export async function prepareWithdrawAccounts(
     denominator: fee.denominator,
   };
 
-  for (const type of ['preferred', 'active', 'transient', 'reserve']) {
+  for (const type of types) {
     const filteredAccounts = accounts.filter((a) => a.type === type);
 
     for (const { stakeAddress, voteAddress, lamports } of filteredAccounts) {

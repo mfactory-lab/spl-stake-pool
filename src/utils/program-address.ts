@@ -75,7 +75,7 @@ export function findEphemeralStakeProgramAddress(
 /**
  * Generates the token metadata address by {@link mint}
  */
-export function findTokenMetadataAddress(mint: PublicKey): PublicKey {
+export function findMetadataAddress(mint: PublicKey): PublicKey {
   const [publicKey] = PublicKey.findProgramAddressSync(
     [Buffer.from('metadata'), METADATA_PROGRAM_ID.toBuffer(), mint.toBuffer()],
     METADATA_PROGRAM_ID,

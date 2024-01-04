@@ -1,10 +1,13 @@
-import { struct, u32, u8 } from '@solana/buffer-layout';
+import { publicKey, struct, u32, u64, u8, option, vec } from '@coral-xyz/borsh';
 import { PublicKey } from '@solana/web3.js';
 import BN from 'bn.js';
 import type { Infer } from 'superstruct';
 import { coerce, enums, instance, nullable, number, optional, string, type } from 'superstruct';
-import { option, publicKey, u64, vec } from './utils';
-import type { Fee } from './index';
+
+export interface Fee {
+  denominator: BN;
+  numerator: BN;
+}
 
 export interface Lockup {
   unixTimestamp: BN;
@@ -33,10 +36,10 @@ export const PublicKeyFromString = coerce(
   (value) => new PublicKey(value),
 );
 
-export const StakeAccountType = enums(['uninitialized', 'initialized', 'delegated', 'rewardsPool']);
-// eslint-disable-next-line @typescript-eslint/no-redeclare
 export type StakeAccountType = Infer<typeof StakeAccountType>;
+export const StakeAccountType = enums(['uninitialized', 'initialized', 'delegated', 'rewardsPool']);
 
+export type StakeMeta = Infer<typeof StakeMeta>;
 export const StakeMeta = type({
   rentExemptReserve: BigNumFromString,
   authorized: type({
@@ -49,9 +52,8 @@ export const StakeMeta = type({
     custodian: PublicKeyFromString,
   }),
 });
-// eslint-disable-next-line @typescript-eslint/no-redeclare
-export type StakeMeta = Infer<typeof StakeMeta>;
 
+export type StakeAccountInfo = Infer<typeof StakeAccountInfo>;
 export const StakeAccountInfo = type({
   meta: StakeMeta,
   stake: nullable(
@@ -67,15 +69,12 @@ export const StakeAccountInfo = type({
     }),
   ),
 });
-// eslint-disable-next-line @typescript-eslint/no-redeclare
-export type StakeAccountInfo = Infer<typeof StakeAccountInfo>;
 
+export type StakeAccount = Infer<typeof StakeAccount>;
 export const StakeAccount = type({
   type: StakeAccountType,
   info: optional(StakeAccountInfo),
 });
-// eslint-disable-next-line @typescript-eslint/no-redeclare
-export type StakeAccount = Infer<typeof StakeAccount>;
 
 export interface StakePool {
   accountType: AccountType;
@@ -126,22 +125,24 @@ export const StakePoolLayout = struct<StakePool>([
   u64('lastUpdateEpoch'),
   lockup('lockup'),
   fee('epochFee'),
-  option(fee('nextEpochFee')),
-  option(publicKey('preferredDepositValidatorVoteAddress')),
-  option(publicKey('preferredWithdrawValidatorVoteAddress')),
+  option(fee(), 'nextEpochFee'),
+  option(publicKey(), 'preferredDepositValidatorVoteAddress'),
+  option(publicKey(), 'preferredWithdrawValidatorVoteAddress'),
   fee('stakeDepositFee'),
   fee('stakeWithdrawalFee'),
-  option(fee('nextStakeWithdrawalFee')),
+  option(fee(), 'nextStakeWithdrawalFee'),
   u8('stakeReferralFee'),
-  option(publicKey('solDepositAuthority')),
+  option(publicKey(), 'solDepositAuthority'),
   fee('solDepositFee'),
   u8('solReferralFee'),
-  option(publicKey('solWithdrawAuthority')),
+  option(publicKey(), 'solWithdrawAuthority'),
   fee('solWithdrawalFee'),
-  option(fee('nextSolWithdrawalFee')),
+  option(fee(), 'nextSolWithdrawalFee'),
   u64('lastEpochPoolTokenSupply'),
   u64('lastEpochTotalLamports'),
 ]);
+
+StakePoolLayout.span = 501;
 
 export enum ValidatorStakeInfoStatus {
   Active,
@@ -194,3 +195,5 @@ export const ValidatorListLayout = struct<ValidatorList>([
   u32('maxValidators'),
   vec(ValidatorStakeInfoLayout, 'validators'),
 ]);
+
+ValidatorListLayout.span = 1 + 4 + 4;

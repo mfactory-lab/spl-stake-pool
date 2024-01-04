@@ -20,7 +20,7 @@ import {
   calcLamportsWithdrawAmount,
   findEphemeralStakeProgramAddress,
   findStakeProgramAddress,
-  findTokenMetadataAddress,
+  findMetadataAddress,
   findTransientStakeProgramAddress,
   findWithdrawAuthorityProgramAddress,
   getValidatorListAccount,
@@ -30,14 +30,19 @@ import {
   solToLamports,
 } from './utils';
 import { StakePoolInstruction } from './instructions';
-import type { StakePool, ValidatorList } from './layouts';
+import type { Fee, StakePool, ValidatorList } from './layouts';
 import {
   StakeAccount,
   StakePoolLayout,
   ValidatorListLayout,
   ValidatorStakeInfoLayout,
 } from './layouts';
-import { MAX_VALIDATORS_TO_UPDATE, MINIMUM_ACTIVE_STAKE, STAKE_POOL_PROGRAM_ID } from './constants';
+import {
+  DEFAULT_MAX_VALIDATORS,
+  MAX_VALIDATORS_TO_UPDATE,
+  MINIMUM_ACTIVE_STAKE,
+  STAKE_POOL_PROGRAM_ID,
+} from './constants';
 
 export type { StakePool, AccountType, ValidatorList, ValidatorStakeInfo } from './layouts';
 export { STAKE_POOL_PROGRAM_ID } from './constants';
@@ -59,11 +64,6 @@ export interface WithdrawAccount {
   poolAmount: number;
 }
 
-export interface Fee {
-  denominator: BN;
-  numerator: BN;
-}
-
 /**
  * Wrapper class for a stake pool.
  * Each stake pool has a stake pool account and a validator list account.
@@ -73,50 +73,10 @@ export interface StakePoolAccounts {
   validatorList: ValidatorListAccount | undefined;
 }
 
-interface InitializeProps {
-  connection: Connection;
-  manager: Keypair;
-  // Default: Keypair.generate
-  stakePool?: Keypair;
-  // Default: Keypair.generate
-  validatorList?: Keypair;
-  poolMint: PublicKey;
-  reserveStake: PublicKey;
-  managerPoolAccount: PublicKey;
-  fee: Fee;
-  referralFee: number;
-  // Default: 2950
-  maxValidators?: number;
-}
-
-interface UpdateStakePoolTokenMetadataProps {
-  connection: Connection;
-  stakePool: StakePoolAccount | PublicKey;
-  tokenMetadata?: PublicKey;
-  name: string;
-  symbol: string;
-  uri: string;
-}
-
-interface CreateStakePoolTokenMetadataProps extends UpdateStakePoolTokenMetadataProps {
-  payer: PublicKey;
-}
-
-interface RedelegateProps {
-  connection: Connection;
-  stakePoolAddress: PublicKey;
-  sourceVoteAccount: PublicKey;
-  destinationVoteAccount: PublicKey;
-  sourceTransientStakeSeed: number | BN;
-  destinationTransientStakeSeed: number | BN;
-  ephemeralStakeSeed: number | BN;
-  lamports: number | BN;
-}
-
 /**
  * Retrieves and deserializes a StakePool account using a web3js connection and the stake pool address.
- * @param connection: An active web3js connection.
- * @param stakePoolAddress: The public key (address) of the stake pool account.
+ * @param connection An active web3js connection.
+ * @param stakePoolAddress The public key (address) of the stake pool account.
  */
 export async function getStakePoolAccount(
   connection: Connection,
@@ -141,8 +101,8 @@ export async function getStakePoolAccount(
 
 /**
  * Retrieves and deserializes a Stake account using a web3js connection and the stake address.
- * @param connection: An active web3js connection.
- * @param stakeAccount: The public key (address) of the stake account.
+ * @param connection An active web3js connection.
+ * @param stakeAccount The public key (address) of the stake account.
  */
 export async function getStakeAccount(
   connection: Connection,
@@ -161,17 +121,17 @@ export async function getStakeAccount(
 
 /**
  * Retrieves all StakePool and ValidatorList accounts that are running a particular StakePool program.
- * @param connection: An active web3js connection.
- * @param stakePoolProgramAddress: The public key (address) of the StakePool program.
+ * @param connection An active web3js connection.
+ * @param stakePoolProgramAddress The public key (address) of the StakePool program.
  */
 export async function getStakePoolAccounts(
   connection: Connection,
   stakePoolProgramAddress: PublicKey,
-) {
+): Promise<(StakePoolAccount | ValidatorListAccount)[] | undefined> {
   const response = await connection.getProgramAccounts(stakePoolProgramAddress);
 
-  return response.value.map((a) => {
-    let decodedData;
+  return response.map((a) => {
+    let decodedData: any;
 
     if (a.account.data.readUInt8() === 1) {
       try {
@@ -429,7 +389,7 @@ export async function withdrawStake(
       stakePool.account.data.validatorList,
     );
     const validatorList = ValidatorListLayout.decode(
-      Uint8Array.from(validatorListAccount?.data ?? []),
+      Buffer.from(validatorListAccount?.data ?? []),
     ) as ValidatorList;
     const isValidVoter = validatorList.validators.find((val) =>
       val.voteAccountAddress.equals(voteAccount),
@@ -967,8 +927,9 @@ export async function stakePoolInfo(connection: Connection, stakePoolAddress: Pu
     stakePoolAddress,
   );
 
-  const minimumReserveStakeBalance =
-    (await connection.getMinimumBalanceForRentExemption(StakeProgram.space)) + 1;
+  const minimumReserveStakeBalance = await connection.getMinimumBalanceForRentExemption(
+    StakeProgram.space,
+  );
 
   const stakeAccounts = await Promise.all(
     validatorList.account.data.validators.map(async (validator) => {
@@ -1063,6 +1024,17 @@ export async function stakePoolInfo(connection: Connection, stakePoolAddress: Pu
   };
 }
 
+interface RedelegateProps {
+  connection: Connection;
+  stakePoolAddress: PublicKey;
+  sourceVoteAccount: PublicKey;
+  destinationVoteAccount: PublicKey;
+  sourceTransientStakeSeed: number | BN;
+  destinationTransientStakeSeed: number | BN;
+  ephemeralStakeSeed: number | BN;
+  lamports: number | BN;
+}
+
 /**
  * Creates instructions required to redelegate stake.
  */
@@ -1077,6 +1049,7 @@ export async function redelegate(props: RedelegateProps) {
     ephemeralStakeSeed,
     lamports,
   } = props;
+
   const stakePool = await getStakePoolAccount(connection, stakePoolAddress);
 
   const stakePoolWithdrawAuthority = findWithdrawAuthorityProgramAddress(
@@ -1123,6 +1096,7 @@ export async function redelegate(props: RedelegateProps) {
       stakePool: stakePool.pubkey,
       staker: stakePool.account.data.staker,
       validatorList: stakePool.account.data.validatorList,
+      reserveStake: stakePool.account.data.reserveStake,
       stakePoolWithdrawAuthority,
       ephemeralStake,
       ephemeralStakeSeed,
@@ -1142,12 +1116,39 @@ export async function redelegate(props: RedelegateProps) {
   };
 }
 
+interface InitializeProps {
+  connection: Connection;
+  manager: Keypair;
+  // Default: Keypair.generate
+  stakePool?: Keypair;
+  // Default: Keypair.generate
+  validatorList?: Keypair;
+  poolMint: PublicKey;
+  reserveStake: PublicKey;
+  managerPoolAccount: PublicKey;
+  fee?: Fee;
+  depositFee?: Fee;
+  withdrawalFee?: Fee;
+  referralFee?: number;
+  // Default: 2949
+  maxValidators?: number;
+}
+
 /**
  * Initializes a new StakePool.
  */
 export async function initialize(props: InitializeProps) {
-  const { connection, poolMint, reserveStake, manager, managerPoolAccount, fee, referralFee } =
-    props;
+  const {
+    connection,
+    poolMint,
+    reserveStake,
+    manager,
+    managerPoolAccount,
+    fee,
+    depositFee,
+    withdrawalFee,
+    referralFee,
+  } = props;
 
   const poolBalance = await connection.getMinimumBalanceForRentExemption(StakePoolLayout.span);
 
@@ -1167,13 +1168,9 @@ export async function initialize(props: InitializeProps) {
     }),
   );
 
-  // current supported max by the program, go big!
-  const maxValidators = props.maxValidators ?? 2950;
-
-  // TODO: ValidatorListLayout.span returns -1
-  // const validatorListSpace = ValidatorListLayout.span + ValidatorStakeInfoLayout.span * maxValidators;
-  const validatorListSpace = 1 + 4 + 4 + ValidatorStakeInfoLayout.span * maxValidators;
-
+  const maxValidators = props.maxValidators ?? DEFAULT_MAX_VALIDATORS;
+  const validatorListSpace =
+    ValidatorListLayout.span + ValidatorStakeInfoLayout.span * maxValidators;
   const validatorListBalance = await connection.getMinimumBalanceForRentExemption(
     validatorListSpace,
   );
@@ -1203,10 +1200,10 @@ export async function initialize(props: InitializeProps) {
       poolMint,
       managerPoolAccount,
       reserveStake,
-      fee,
-      withdrawalFee: fee,
-      depositFee: fee,
-      referralFee,
+      fee: fee ?? { denominator: new BN(0), numerator: new BN(0) },
+      withdrawalFee: withdrawalFee ?? { denominator: new BN(0), numerator: new BN(0) },
+      depositFee: depositFee ?? { denominator: new BN(0), numerator: new BN(0) },
+      referralFee: referralFee ?? 0,
       maxValidators,
     }),
   );
@@ -1215,6 +1212,10 @@ export async function initialize(props: InitializeProps) {
     instructions,
     signers,
   };
+}
+
+interface CreateStakePoolTokenMetadataProps extends UpdateStakePoolTokenMetadataProps {
+  payer: PublicKey;
 }
 
 /**
@@ -1228,8 +1229,7 @@ export async function createPoolTokenMetadata(props: CreateStakePoolTokenMetadat
       ? await getStakePoolAccount(connection, props.stakePool)
       : props.stakePool;
 
-  const tokenMetadata =
-    props.tokenMetadata ?? findTokenMetadataAddress(stakePool.account.data.poolMint);
+  const tokenMetadata = props.tokenMetadata ?? findMetadataAddress(stakePool.account.data.poolMint);
 
   const withdrawAuthority = findWithdrawAuthorityProgramAddress(
     STAKE_POOL_PROGRAM_ID,
@@ -1258,6 +1258,15 @@ export async function createPoolTokenMetadata(props: CreateStakePoolTokenMetadat
   };
 }
 
+interface UpdateStakePoolTokenMetadataProps {
+  connection: Connection;
+  stakePool: StakePoolAccount | PublicKey;
+  tokenMetadata?: PublicKey;
+  name: string;
+  symbol: string;
+  uri: string;
+}
+
 /**
  * Creates instructions required to update pool token metadata.
  */
@@ -1269,8 +1278,7 @@ export async function updatePoolTokenMetadata(props: UpdateStakePoolTokenMetadat
       ? await getStakePoolAccount(connection, props.stakePool)
       : props.stakePool;
 
-  const tokenMetadata =
-    props.tokenMetadata ?? findTokenMetadataAddress(stakePool.account.data.poolMint);
+  const tokenMetadata = props.tokenMetadata ?? findMetadataAddress(stakePool.account.data.poolMint);
 
   const withdrawAuthority = findWithdrawAuthorityProgramAddress(
     STAKE_POOL_PROGRAM_ID,
@@ -1302,8 +1310,7 @@ export async function addValidatorToPool(
   connection: Connection,
   stakePoolAddress: PublicKey,
   validatorVote: PublicKey,
-  funder: PublicKey,
-  // seed?: number,
+  seed?: number,
 ) {
   const stakePool = await getStakePoolAccount(connection, stakePoolAddress);
 
@@ -1339,13 +1346,12 @@ export async function addValidatorToPool(
     StakePoolInstruction.addValidatorToPool({
       stakePool: stakePoolAddress,
       staker: stakePool.account.data.staker,
-      funder,
-      // reserveStake: stakePool.account.data.reserveStake,
+      reserveStake: stakePool.account.data.reserveStake,
       validatorList: stakePool.account.data.validatorList,
       validatorStake,
       withdrawAuthority,
       validatorVote,
-      seed: undefined,
+      seed,
     }),
   );
 
