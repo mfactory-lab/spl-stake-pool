@@ -92,7 +92,7 @@ describe('StakePoolProgram', () => {
     const decodedData = decodeData(STAKE_POOL_INSTRUCTION_LAYOUTS.DepositSol, instruction.data);
 
     expect(decodedData.instruction).toEqual(STAKE_POOL_INSTRUCTION_LAYOUTS.DepositSol.index);
-    expect(decodedData.lamports).toEqual(payload.lamports);
+    expect(Number(decodedData.lamports)).toEqual(payload.lamports);
 
     payload.depositAuthority = Keypair.generate().publicKey;
 
@@ -411,24 +411,24 @@ describe('StakePoolProgram', () => {
         res.instructions[0].data,
       );
 
-      expect(decodedData.instruction).toBe(21);
-      expect(decodedData.lamports).toBe(data.lamports);
-      expect(decodedData.sourceTransientStakeSeed).toBe(data.sourceTransientStakeSeed);
-      expect(decodedData.destinationTransientStakeSeed).toBe(data.destinationTransientStakeSeed);
-      expect(decodedData.ephemeralStakeSeed).toBe(data.ephemeralStakeSeed);
+      expect(decodedData.instruction).toBe(22);
+      expect(Number(decodedData.lamports)).toBe(data.lamports);
+      expect(Number(decodedData.sourceTransientStakeSeed)).toBe(data.sourceTransientStakeSeed);
+      expect(Number(decodedData.destinationTransientStakeSeed)).toBe(
+        data.destinationTransientStakeSeed,
+      );
+      expect(Number(decodedData.ephemeralStakeSeed)).toBe(data.ephemeralStakeSeed);
     });
   });
 
   describe('add validator', () => {
     it('should call successfully', async () => {
       mockStakePoolAccounts();
-      const funder = PublicKey.default;
       const validatorVote = PublicKey.default;
       const { instructions } = await addValidatorToPool(
         connection,
         stakePoolAddress,
         validatorVote,
-        funder,
       );
       const decodedData = STAKE_POOL_INSTRUCTION_LAYOUTS.AddValidatorToPool.layout.decode(
         instructions[0].data,
