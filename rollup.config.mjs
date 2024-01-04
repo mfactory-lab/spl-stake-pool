@@ -2,7 +2,7 @@ import typescript from '@rollup/plugin-typescript';
 import commonjs from '@rollup/plugin-commonjs';
 import json from '@rollup/plugin-json';
 import nodeResolve from '@rollup/plugin-node-resolve';
-import { terser } from 'rollup-plugin-terser';
+import terser from '@rollup/plugin-terser';
 
 const extensions = ['.js', '.ts'];
 
@@ -66,6 +66,7 @@ function generateConfig(configType, format) {
 
       // Prevent dependencies from being bundled
       config.external = [
+        '@coral-xyz/borsh',
         '@solana/buffer-layout',
         '@solana/spl-token',
         '@solana/web3.js',
@@ -93,6 +94,7 @@ function generateConfig(configType, format) {
 
     // Prevent dependencies from being bundled
     config.external = [
+      '@coral-xyz/borsh',
       '@solana/buffer-layout',
       '@solana/spl-token',
       '@solana/web3.js',
