@@ -1171,9 +1171,8 @@ export async function initialize(props: InitializeProps) {
   const maxValidators = props.maxValidators ?? DEFAULT_MAX_VALIDATORS;
   const validatorListSpace =
     ValidatorListLayout.span + ValidatorStakeInfoLayout.span * maxValidators;
-  const validatorListBalance = await connection.getMinimumBalanceForRentExemption(
-    validatorListSpace,
-  );
+  const validatorListBalance =
+    await connection.getMinimumBalanceForRentExemption(validatorListSpace);
 
   instructions.push(
     SystemProgram.createAccount({
@@ -1421,12 +1420,10 @@ export async function removeValidatorFromPool(
     StakePoolInstruction.removeValidatorFromPool({
       stakePool: stakePoolAddress,
       staker: stakePool.account.data.staker,
-      newStakeAuthority: staker,
       withdrawAuthority,
       validatorList: stakePool.account.data.validatorList,
       validatorStake,
       transientStake,
-      destinationStake: destinationStake.publicKey,
     }),
   );
 
