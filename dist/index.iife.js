@@ -30113,11 +30113,9 @@ var solanaStakePool = (function (exports) {
 	            { pubkey: params.stakePool, isSigner: false, isWritable: true },
 	            { pubkey: params.staker, isSigner: true, isWritable: false },
 	            { pubkey: params.withdrawAuthority, isSigner: false, isWritable: false },
-	            { pubkey: params.newStakeAuthority, isSigner: false, isWritable: true },
 	            { pubkey: params.validatorList, isSigner: false, isWritable: true },
 	            { pubkey: params.validatorStake, isSigner: false, isWritable: true },
-	            { pubkey: params.transientStake, isSigner: false, isWritable: false },
-	            { pubkey: params.destinationStake, isSigner: false, isWritable: true },
+	            { pubkey: params.transientStake, isSigner: false, isWritable: true },
 	            { pubkey: SYSVAR_CLOCK_PUBKEY, isSigner: false, isWritable: false },
 	            { pubkey: StakeProgram.programId, isSigner: false, isWritable: false },
 	        ];
@@ -30147,7 +30145,8 @@ var solanaStakePool = (function (exports) {
 	            ...validatorAndTransientStakePairs.map((pubkey) => ({
 	                pubkey,
 	                isSigner: false,
-	                isWritable: true,
+	                // https://github.com/solana-labs/solana-program-library/blob/f36c2fb5a24bd87e04c60a509aec94304798c1a3/stake-pool/program/src/instruction.rs#L238C22-L238C22
+	                isWritable: true, // TODO: false ?
 	            })),
 	        ];
 	        return new TransactionInstruction({
@@ -30378,10 +30377,15 @@ var solanaStakePool = (function (exports) {
 	     * Creates a transaction instruction to deposit SOL into a stake pool.
 	     */
 	    static depositSol(params) {
-	        const { stakePool, withdrawAuthority, depositAuthority, reserveStake, fundingAccount, destinationPoolAccount, managerFeeAccount, referralPoolAccount, poolMint, lamports, } = params;
-	        const data = encodeData(STAKE_POOL_INSTRUCTION_LAYOUTS.DepositSol, {
-	            lamports: new BN(lamports),
-	        });
+	        const { stakePool, withdrawAuthority, depositAuthority, reserveStake, fundingAccount, destinationPoolAccount, managerFeeAccount, referralPoolAccount, poolMint, lamports, minimumPoolTokensOut, } = params;
+	        const data = minimumPoolTokensOut !== undefined
+	            ? encodeData(STAKE_POOL_INSTRUCTION_LAYOUTS.DepositSolWithSlippage, {
+	                lamports: new BN(lamports),
+	                minimumPoolTokensOut: new BN(minimumPoolTokensOut),
+	            })
+	            : encodeData(STAKE_POOL_INSTRUCTION_LAYOUTS.DepositSol, {
+	                lamports: new BN(lamports),
+	            });
 	        const keys = [
 	            { pubkey: stakePool, isSigner: false, isWritable: true },
 	            { pubkey: withdrawAuthority, isSigner: false, isWritable: false },
@@ -30411,10 +30415,15 @@ var solanaStakePool = (function (exports) {
 	     * Creates a transaction instruction to withdraw active stake from a stake pool.
 	     */
 	    static withdrawStake(params) {
-	        const { stakePool, validatorList, withdrawAuthority, validatorStake, destinationStake, destinationStakeAuthority, sourceTransferAuthority, sourcePoolAccount, managerFeeAccount, poolMint, poolTokens, } = params;
-	        const data = encodeData(STAKE_POOL_INSTRUCTION_LAYOUTS.WithdrawStake, {
-	            poolTokens: new BN(poolTokens),
-	        });
+	        const { stakePool, validatorList, withdrawAuthority, validatorStake, destinationStake, destinationStakeAuthority, sourceTransferAuthority, sourcePoolAccount, managerFeeAccount, poolMint, poolTokens, minimumLamportsOut, } = params;
+	        const data = minimumLamportsOut !== undefined
+	            ? encodeData(STAKE_POOL_INSTRUCTION_LAYOUTS.WithdrawStakeWithSlippage, {
+	                poolTokens: new BN(poolTokens),
+	                minimumLamportsOut: new BN(minimumLamportsOut),
+	            })
+	            : encodeData(STAKE_POOL_INSTRUCTION_LAYOUTS.WithdrawStake, {
+	                poolTokens: new BN(poolTokens),
+	            });
 	        const keys = [
 	            { pubkey: stakePool, isSigner: false, isWritable: true },
 	            { pubkey: validatorList, isSigner: false, isWritable: true },
@@ -30440,10 +30449,15 @@ var solanaStakePool = (function (exports) {
 	     * Creates a transaction instruction to withdraw SOL from a stake pool.
 	     */
 	    static withdrawSol(params) {
-	        const { stakePool, withdrawAuthority, sourceTransferAuthority, sourcePoolAccount, reserveStake, destinationSystemAccount, managerFeeAccount, solWithdrawAuthority, poolMint, poolTokens, } = params;
-	        const data = encodeData(STAKE_POOL_INSTRUCTION_LAYOUTS.WithdrawSol, {
-	            poolTokens: new BN(poolTokens),
-	        });
+	        const { stakePool, withdrawAuthority, sourceTransferAuthority, sourcePoolAccount, reserveStake, destinationSystemAccount, managerFeeAccount, solWithdrawAuthority, poolMint, poolTokens, minimumLamportsOut, } = params;
+	        const data = minimumLamportsOut !== undefined
+	            ? encodeData(STAKE_POOL_INSTRUCTION_LAYOUTS.WithdrawSolWithSlippage, {
+	                poolTokens: new BN(poolTokens),
+	                minimumPoolTokensOut: new BN(minimumLamportsOut),
+	            })
+	            : encodeData(STAKE_POOL_INSTRUCTION_LAYOUTS.WithdrawSol, {
+	                poolTokens: new BN(poolTokens),
+	            });
 	        const keys = [
 	            { pubkey: stakePool, isSigner: false, isWritable: true },
 	            { pubkey: withdrawAuthority, isSigner: false, isWritable: false },
@@ -30491,11 +30505,11 @@ var solanaStakePool = (function (exports) {
 	        validateMetadata(name, symbol, uri);
 	        const data = encodeData(STAKE_POOL_INSTRUCTION_LAYOUTS.CreateTokenMetadata, {
 	            nameLen: name.length,
-	            name: Buffer.from(name.padEnd(METADATA_MAX_NAME_LENGTH, '\0')),
+	            name: buffer.Buffer.from(name.padEnd(METADATA_MAX_NAME_LENGTH, '\0')),
 	            symbolLen: symbol.length,
-	            symbol: Buffer.from(symbol.padEnd(METADATA_MAX_SYMBOL_LENGTH, '\0')),
+	            symbol: buffer.Buffer.from(symbol.padEnd(METADATA_MAX_SYMBOL_LENGTH, '\0')),
 	            uriLen: uri.length,
-	            uri: Buffer.from(uri.padEnd(METADATA_MAX_URI_LENGTH, '\0')),
+	            uri: buffer.Buffer.from(uri.padEnd(METADATA_MAX_URI_LENGTH, '\0')),
 	        });
 	        return new TransactionInstruction({
 	            programId: STAKE_POOL_PROGRAM_ID,
@@ -30519,11 +30533,11 @@ var solanaStakePool = (function (exports) {
 	        validateMetadata(name, symbol, uri);
 	        const data = encodeData(STAKE_POOL_INSTRUCTION_LAYOUTS.UpdateTokenMetadata, {
 	            nameLen: name.length,
-	            name: Buffer.from(name.padEnd(METADATA_MAX_NAME_LENGTH, '\0')),
+	            name: buffer.Buffer.from(name.padEnd(METADATA_MAX_NAME_LENGTH, '\0')),
 	            symbolLen: symbol.length,
-	            symbol: Buffer.from(symbol.padEnd(METADATA_MAX_SYMBOL_LENGTH, '\0')),
+	            symbol: buffer.Buffer.from(symbol.padEnd(METADATA_MAX_SYMBOL_LENGTH, '\0')),
 	            uriLen: uri.length,
-	            uri: Buffer.from(uri.padEnd(METADATA_MAX_URI_LENGTH, '\0')),
+	            uri: buffer.Buffer.from(uri.padEnd(METADATA_MAX_URI_LENGTH, '\0')),
 	        });
 	        return new TransactionInstruction({
 	            programId: STAKE_POOL_PROGRAM_ID,
@@ -30560,6 +30574,105 @@ var solanaStakePool = (function (exports) {
 	            sourceTransientStakeSeed: new BN(sourceTransientStakeSeed),
 	            ephemeralStakeSeed: new BN(ephemeralStakeSeed),
 	            destinationTransientStakeSeed: new BN(destinationTransientStakeSeed),
+	        });
+	        return new TransactionInstruction({
+	            programId: STAKE_POOL_PROGRAM_ID,
+	            keys,
+	            data,
+	        });
+	    }
+	    /**
+	     * Creates a 'SetManager' instruction.
+	     * @param params
+	     */
+	    static setManager(params) {
+	        const { stakePool, manager, newManager, newFeeReceiver } = params;
+	        const keys = [
+	            { pubkey: stakePool, isSigner: false, isWritable: true },
+	            { pubkey: manager, isSigner: true, isWritable: false },
+	            { pubkey: newManager, isSigner: true, isWritable: false },
+	            { pubkey: newFeeReceiver, isSigner: false, isWritable: false },
+	        ];
+	        const data = encodeData(STAKE_POOL_INSTRUCTION_LAYOUTS.SetManager);
+	        return new TransactionInstruction({
+	            programId: STAKE_POOL_PROGRAM_ID,
+	            keys,
+	            data,
+	        });
+	    }
+	    /**
+	     * Creates a 'SetFee' instruction.
+	     * @param params
+	     */
+	    static setFee(params) {
+	        const { stakePool, manager, fee } = params;
+	        const keys = [
+	            { pubkey: stakePool, isSigner: false, isWritable: true },
+	            { pubkey: manager, isSigner: true, isWritable: false },
+	        ];
+	        const data = encodeData(STAKE_POOL_INSTRUCTION_LAYOUTS.SetFee, {
+	            fee: new BN(fee),
+	        });
+	        return new TransactionInstruction({
+	            programId: STAKE_POOL_PROGRAM_ID,
+	            keys,
+	            data,
+	        });
+	    }
+	    /**
+	     * Creates a 'SetStaker' instruction.
+	     * @param params
+	     */
+	    static setStaker(params) {
+	        const { stakePool, setStakerAuthority, newStaker } = params;
+	        const keys = [
+	            { pubkey: stakePool, isSigner: false, isWritable: true },
+	            { pubkey: setStakerAuthority, isSigner: true, isWritable: false },
+	            { pubkey: newStaker, isSigner: false, isWritable: false },
+	        ];
+	        const data = encodeData(STAKE_POOL_INSTRUCTION_LAYOUTS.SetStaker);
+	        return new TransactionInstruction({
+	            programId: STAKE_POOL_PROGRAM_ID,
+	            keys,
+	            data,
+	        });
+	    }
+	    /**
+	     * Creates a 'SetFundingAuthority' instruction.
+	     * @param params
+	     */
+	    static setFundingAuthority(params) {
+	        const { stakePool, manager, newSolDepositAuthority, fundingType } = params;
+	        const keys = [
+	            { pubkey: stakePool, isSigner: false, isWritable: true },
+	            { pubkey: manager, isSigner: true, isWritable: false },
+	        ];
+	        if (newSolDepositAuthority) {
+	            keys.push({ pubkey: newSolDepositAuthority, isSigner: false, isWritable: false });
+	        }
+	        const data = encodeData(STAKE_POOL_INSTRUCTION_LAYOUTS.SetFundingAuthority, {
+	            fundingType,
+	        });
+	        return new TransactionInstruction({
+	            programId: STAKE_POOL_PROGRAM_ID,
+	            keys,
+	            data,
+	        });
+	    }
+	    /**
+	     * Creates a 'SetPreferredValidator' instruction.
+	     * @param params
+	     */
+	    static setPreferredValidator(params) {
+	        const { stakePool, staker, validatorList, validatorVote, validatorType } = params;
+	        const keys = [
+	            { pubkey: stakePool, isSigner: false, isWritable: true },
+	            { pubkey: staker, isSigner: true, isWritable: false },
+	            { pubkey: validatorList, isSigner: false, isWritable: false },
+	        ];
+	        const data = encodeData(STAKE_POOL_INSTRUCTION_LAYOUTS.SetPreferredValidator, {
+	            validatorVoteAddress: validatorVote,
+	            validatorType,
 	        });
 	        return new TransactionInstruction({
 	            programId: STAKE_POOL_PROGRAM_ID,
@@ -31356,12 +31469,10 @@ var solanaStakePool = (function (exports) {
 	    instructions.push(StakePoolInstruction.removeValidatorFromPool({
 	        stakePool: stakePoolAddress,
 	        staker: stakePool.account.data.staker,
-	        newStakeAuthority: staker,
 	        withdrawAuthority,
 	        validatorList: stakePool.account.data.validatorList,
 	        validatorStake,
 	        transientStake,
-	        destinationStake: destinationStake.publicKey,
 	    }));
 	    return {
 	        instructions,

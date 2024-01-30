@@ -44,11 +44,9 @@ export interface RemoveValidatorFromPoolParams {
     stakePool: PublicKey;
     staker: PublicKey;
     withdrawAuthority: PublicKey;
-    newStakeAuthority: PublicKey;
     validatorList: PublicKey;
     validatorStake: PublicKey;
     transientStake: PublicKey;
-    destinationStake: PublicKey;
 }
 /**
  * Cleans up validator stake account entries marked as `ReadyForRemoval`
@@ -150,6 +148,7 @@ export interface WithdrawStakeParams {
     managerFeeAccount: PublicKey;
     poolMint: PublicKey;
     poolTokens: number | BN;
+    minimumLamportsOut?: number | BN | undefined;
 }
 /**
  * Withdraw sol instruction params
@@ -165,6 +164,7 @@ export interface WithdrawSolParams {
     managerFeeAccount: PublicKey;
     poolMint: PublicKey;
     poolTokens: number | BN;
+    minimumLamportsOut?: number | BN | undefined;
 }
 /**
  * Deposit SOL directly into the pool's reserve account. The output is a "pool" token
@@ -181,6 +181,7 @@ export interface DepositSolParams {
     referralPoolAccount: PublicKey;
     poolMint: PublicKey;
     lamports: number | BN;
+    minimumPoolTokensOut?: number | BN | undefined;
 }
 export interface UpdateTokenMetadataParams {
     stakePool: PublicKey;
@@ -211,6 +212,35 @@ export interface RedelegateParams {
     sourceTransientStakeSeed: number | BN;
     ephemeralStakeSeed: number | BN;
     destinationTransientStakeSeed: number | BN;
+}
+export interface SetManagerParams {
+    stakePool: PublicKey;
+    manager: PublicKey;
+    newManager: PublicKey;
+    newFeeReceiver: PublicKey;
+}
+export interface SetFeeParams {
+    stakePool: PublicKey;
+    manager: PublicKey;
+    fee: number | BN;
+}
+export interface SetStakerParams {
+    stakePool: PublicKey;
+    setStakerAuthority: PublicKey;
+    newStaker: PublicKey;
+}
+export interface SetFundingAuthorityParams {
+    stakePool: PublicKey;
+    manager: PublicKey;
+    newSolDepositAuthority?: PublicKey | undefined;
+    fundingType: number;
+}
+export interface SetPreferredValidatorParams {
+    stakePool: PublicKey;
+    staker: PublicKey;
+    validatorList: PublicKey;
+    validatorVote?: PublicKey | undefined;
+    validatorType: number;
 }
 /**
  * Stake Pool Instruction class
@@ -296,4 +326,29 @@ export declare class StakePoolInstruction {
      * @param params
      */
     static redelegate(params: RedelegateParams): TransactionInstruction;
+    /**
+     * Creates a 'SetManager' instruction.
+     * @param params
+     */
+    static setManager(params: SetManagerParams): TransactionInstruction;
+    /**
+     * Creates a 'SetFee' instruction.
+     * @param params
+     */
+    static setFee(params: SetFeeParams): TransactionInstruction;
+    /**
+     * Creates a 'SetStaker' instruction.
+     * @param params
+     */
+    static setStaker(params: SetStakerParams): TransactionInstruction;
+    /**
+     * Creates a 'SetFundingAuthority' instruction.
+     * @param params
+     */
+    static setFundingAuthority(params: SetFundingAuthorityParams): TransactionInstruction;
+    /**
+     * Creates a 'SetPreferredValidator' instruction.
+     * @param params
+     */
+    static setPreferredValidator(params: SetPreferredValidatorParams): TransactionInstruction;
 }
