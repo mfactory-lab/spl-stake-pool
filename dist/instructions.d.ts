@@ -1,3 +1,4 @@
+/// <reference types="types/buffer-layout" />
 import type { PublicKey } from '@solana/web3.js';
 import { TransactionInstruction } from '@solana/web3.js';
 import BN from 'bn.js';
@@ -6,7 +7,11 @@ import { Fee } from './layouts';
 /**
  * An enumeration of valid StakePoolInstructionType's
  */
-export type StakePoolInstructionType = 'Initialize' | 'AddValidatorToPool' | 'RemoveValidatorFromPool' | 'DecreaseValidatorStake' | 'IncreaseValidatorStake' | 'SetPreferredValidator' | 'UpdateValidatorListBalance' | 'UpdateStakePoolBalance' | 'CleanupRemovedValidatorEntries' | 'DepositStake' | 'WithdrawStake' | 'SetManager' | 'SetFee' | 'SetStaker' | 'DepositSol' | 'SetFundingAuthority' | 'WithdrawSol' | 'CreateTokenMetadata' | 'UpdateTokenMetadata' | 'IncreaseAdditionalValidatorStake' | 'DecreaseAdditionalValidatorStake' | 'DecreaseValidatorStakeWithReserve' | 'Redelegate' | 'DepositStakeWithSlippage' | 'WithdrawStakeWithSlippage' | 'DepositSolWithSlippage' | 'WithdrawSolWithSlippage';
+export type StakePoolInstructionType = 'Initialize' | 'AddValidatorToPool' | 'RemoveValidatorFromPool' | 'DecreaseValidatorStake' | 'IncreaseValidatorStake' | 'SetPreferredValidator' | 'UpdateValidatorListBalance' | 'UpdateStakePoolBalance' | 'CleanupRemovedValidatorEntries' | 'DepositStake' | 'WithdrawStake' | 'SetManager' | 'SetFee' | 'SetStaker' | 'DepositSol' | 'SetFundingAuthority' | 'WithdrawSol' | 'IncreaseAdditionalValidatorStake' | 'DecreaseAdditionalValidatorStake' | 'DecreaseValidatorStakeWithReserve' | 'Redelegate' | 'DepositStakeWithSlippage' | 'WithdrawStakeWithSlippage' | 'DepositSolWithSlippage' | 'WithdrawSolWithSlippage';
+export declare function tokenMetadataLayout(instruction: number, nameLength: number, symbolLength: number, uriLength: number): {
+    index: number;
+    layout: import("buffer-layout").Layout<unknown>;
+};
 /**
  * An enumeration of valid stake InstructionType's
  * @internal
@@ -312,15 +317,15 @@ export declare class StakePoolInstruction {
      */
     static withdrawSol(params: WithdrawSolParams): TransactionInstruction;
     /**
-     * Creates an instruction to create metadata
-     * using the mpl token metadata program for the pool token
-     */
-    static createTokenMetadata(params: CreateTokenMetadataParams): TransactionInstruction;
-    /**
      * Creates an instruction to update metadata
      * in the mpl token metadata program account for the pool token
      */
     static updateTokenMetadata(params: UpdateTokenMetadataParams): TransactionInstruction;
+    /**
+     * Creates an instruction to create metadata
+     * using the mpl token metadata program for the pool token
+     */
+    static createTokenMetadata(params: CreateTokenMetadataParams): TransactionInstruction;
     /**
      * Creates `Redelegate` instruction (rebalance from one validator account to another)
      * @param params

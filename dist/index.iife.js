@@ -1,4 +1,4 @@
-var solanaStakePool = (function (exports) {
+var solanaStakePool = (function (exports, bufferLayout) {
 	'use strict';
 
 	var commonjsGlobal = typeof globalThis !== 'undefined' ? globalThis : typeof window !== 'undefined' ? window : typeof global !== 'undefined' ? global : typeof self !== 'undefined' ? self : {};
@@ -29796,29 +29796,33 @@ var solanaStakePool = (function (exports) {
 	    return result;
 	}
 
+	// 'UpdateTokenMetadata' and 'CreateTokenMetadata' have dynamic layouts
 	const MOVE_STAKE_LAYOUT = dist.struct([dist.u8('instruction'), dist.u64('lamports'), dist.u64('transientStakeSeed')]);
-	const TOKEN_METADATA_LAYOUT = dist.struct([
-	    dist.u8('instruction'),
-	    dist.u32('nameLen'),
-	    dist.str('name'),
-	    dist.u32('symbolLen'),
-	    dist.str('symbol'),
-	    dist.u32('uriLen'),
-	    dist.str('uri'),
-	]);
 	function feeLayout(property) {
 	    return dist.struct([dist.u64('denominator'), dist.u64('numerator')], property);
 	}
-	function validateMetadata(name, symbol, uri) {
-	    if (name.length > METADATA_MAX_NAME_LENGTH) {
+	function tokenMetadataLayout(instruction, nameLength, symbolLength, uriLength) {
+	    if (nameLength > METADATA_MAX_NAME_LENGTH) {
 	        throw new Error(`maximum token name length is ${METADATA_MAX_NAME_LENGTH} characters`);
 	    }
-	    if (symbol.length > METADATA_MAX_SYMBOL_LENGTH) {
+	    if (symbolLength > METADATA_MAX_SYMBOL_LENGTH) {
 	        throw new Error(`maximum token symbol length is ${METADATA_MAX_SYMBOL_LENGTH} characters`);
 	    }
-	    if (uri.length > METADATA_MAX_URI_LENGTH) {
+	    if (uriLength > METADATA_MAX_URI_LENGTH) {
 	        throw new Error(`maximum token uri length is ${METADATA_MAX_URI_LENGTH} characters`);
 	    }
+	    return {
+	        index: instruction,
+	        layout: dist.struct([
+	            dist.u8('instruction'),
+	            dist.u32('nameLen'),
+	            bufferLayout.blob(nameLength, 'name'),
+	            dist.u32('symbolLen'),
+	            bufferLayout.blob(symbolLength, 'symbol'),
+	            dist.u32('uriLen'),
+	            bufferLayout.blob(uriLength, 'uri'),
+	        ]),
+	    };
 	}
 	/**
 	 * An enumeration of valid stake InstructionType's
@@ -29932,18 +29936,6 @@ var solanaStakePool = (function (exports) {
 	    WithdrawSol: {
 	        index: 16,
 	        layout: dist.struct([dist.u8('instruction'), dist.u64('poolTokens')]),
-	    },
-	    /// Create token metadata for the stake-pool token in the
-	    /// metaplex-token program.
-	    CreateTokenMetadata: {
-	        index: 17,
-	        layout: TOKEN_METADATA_LAYOUT,
-	    },
-	    /// Update token metadata for the stake-pool token in the
-	    /// metaplex-token program.
-	    UpdateTokenMetadata: {
-	        index: 18,
-	        layout: TOKEN_METADATA_LAYOUT,
 	    },
 	    /// (Staker only) Increase stake on a validator again in an epoch.
 	    IncreaseAdditionalValidatorStake: {
@@ -30486,6 +30478,34 @@ var solanaStakePool = (function (exports) {
 	        });
 	    }
 	    /**
+	     * Creates an instruction to update metadata
+	     * in the mpl token metadata program account for the pool token
+	     */
+	    static updateTokenMetadata(params) {
+	        const { stakePool, withdrawAuthority, tokenMetadata, manager, name, symbol, uri } = params;
+	        const keys = [
+	            { pubkey: stakePool, isSigner: false, isWritable: false },
+	            { pubkey: manager, isSigner: true, isWritable: false },
+	            { pubkey: withdrawAuthority, isSigner: false, isWritable: false },
+	            { pubkey: tokenMetadata, isSigner: false, isWritable: true },
+	            { pubkey: METADATA_PROGRAM_ID, isSigner: false, isWritable: false },
+	        ];
+	        const type = tokenMetadataLayout(17, name.length, symbol.length, uri.length);
+	        const data = encodeData(type, {
+	            nameLen: name.length,
+	            name: buffer.Buffer.from(name),
+	            symbolLen: symbol.length,
+	            symbol: buffer.Buffer.from(symbol),
+	            uriLen: uri.length,
+	            uri: buffer.Buffer.from(uri),
+	        });
+	        return new TransactionInstruction({
+	            programId: STAKE_POOL_PROGRAM_ID,
+	            keys,
+	            data,
+	        });
+	    }
+	    /**
 	     * Creates an instruction to create metadata
 	     * using the mpl token metadata program for the pool token
 	     */
@@ -30502,42 +30522,14 @@ var solanaStakePool = (function (exports) {
 	            { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
 	            { pubkey: SYSVAR_RENT_PUBKEY, isSigner: false, isWritable: false },
 	        ];
-	        validateMetadata(name, symbol, uri);
-	        const data = encodeData(STAKE_POOL_INSTRUCTION_LAYOUTS.CreateTokenMetadata, {
+	        const type = tokenMetadataLayout(18, name.length, symbol.length, uri.length);
+	        const data = encodeData(type, {
 	            nameLen: name.length,
-	            name: buffer.Buffer.from(name.padEnd(METADATA_MAX_NAME_LENGTH, '\0')),
+	            name: buffer.Buffer.from(name),
 	            symbolLen: symbol.length,
-	            symbol: buffer.Buffer.from(symbol.padEnd(METADATA_MAX_SYMBOL_LENGTH, '\0')),
+	            symbol: buffer.Buffer.from(symbol),
 	            uriLen: uri.length,
-	            uri: buffer.Buffer.from(uri.padEnd(METADATA_MAX_URI_LENGTH, '\0')),
-	        });
-	        return new TransactionInstruction({
-	            programId: STAKE_POOL_PROGRAM_ID,
-	            keys,
-	            data,
-	        });
-	    }
-	    /**
-	     * Creates an instruction to update metadata
-	     * in the mpl token metadata program account for the pool token
-	     */
-	    static updateTokenMetadata(params) {
-	        const { stakePool, withdrawAuthority, tokenMetadata, manager, name, symbol, uri } = params;
-	        const keys = [
-	            { pubkey: stakePool, isSigner: false, isWritable: false },
-	            { pubkey: manager, isSigner: true, isWritable: false },
-	            { pubkey: withdrawAuthority, isSigner: false, isWritable: false },
-	            { pubkey: tokenMetadata, isSigner: false, isWritable: true },
-	            { pubkey: METADATA_PROGRAM_ID, isSigner: false, isWritable: false },
-	        ];
-	        validateMetadata(name, symbol, uri);
-	        const data = encodeData(STAKE_POOL_INSTRUCTION_LAYOUTS.UpdateTokenMetadata, {
-	            nameLen: name.length,
-	            name: buffer.Buffer.from(name.padEnd(METADATA_MAX_NAME_LENGTH, '\0')),
-	            symbolLen: symbol.length,
-	            symbol: buffer.Buffer.from(symbol.padEnd(METADATA_MAX_SYMBOL_LENGTH, '\0')),
-	            uriLen: uri.length,
-	            uri: buffer.Buffer.from(uri.padEnd(METADATA_MAX_URI_LENGTH, '\0')),
+	            uri: buffer.Buffer.from(uri),
 	        });
 	        return new TransactionInstruction({
 	            programId: STAKE_POOL_PROGRAM_ID,
@@ -31496,6 +31488,7 @@ var solanaStakePool = (function (exports) {
 	exports.redelegate = redelegate;
 	exports.removeValidatorFromPool = removeValidatorFromPool;
 	exports.stakePoolInfo = stakePoolInfo;
+	exports.tokenMetadataLayout = tokenMetadataLayout;
 	exports.updatePoolTokenMetadata = updatePoolTokenMetadata;
 	exports.updateStakePool = updateStakePool;
 	exports.withdrawSol = withdrawSol;
@@ -31503,5 +31496,5 @@ var solanaStakePool = (function (exports) {
 
 	return exports;
 
-})({});
+})({}, bufferLayout);
 //# sourceMappingURL=index.iife.js.map
