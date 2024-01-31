@@ -8,7 +8,7 @@ import {
   SystemProgram,
   TransactionInstruction,
 } from '@solana/web3.js';
-import { option, publicKey, str, struct, u32, u64, u8 } from '@coral-xyz/borsh';
+import { option, publicKey, struct, u32, u64, u8 } from '@coral-xyz/borsh';
 import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import BN from 'bn.js';
 import {
@@ -22,6 +22,7 @@ import type { InstructionType } from './utils';
 import { encodeData } from './utils';
 import { Fee } from './layouts';
 import { Buffer } from 'buffer';
+import { blob } from 'buffer-layout';
 
 /**
  * An enumeration of valid StakePoolInstructionType's
@@ -60,11 +61,11 @@ const MOVE_STAKE_LAYOUT = struct([u8('instruction'), u64('lamports'), u64('trans
 const TOKEN_METADATA_LAYOUT = struct([
   u8('instruction'),
   u32('nameLen'),
-  str('name'),
+  blob(METADATA_MAX_NAME_LENGTH, 'name'),
   u32('symbolLen'),
-  str('symbol'),
+  blob(METADATA_MAX_SYMBOL_LENGTH, 'symbol'),
   u32('uriLen'),
-  str('uri'),
+  blob(METADATA_MAX_URI_LENGTH, 'uri'),
 ]);
 
 function feeLayout(property?: string) {
