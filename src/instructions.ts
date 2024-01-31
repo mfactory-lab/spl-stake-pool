@@ -45,8 +45,6 @@ export type StakePoolInstructionType =
   | 'DepositSol'
   | 'SetFundingAuthority'
   | 'WithdrawSol'
-  | 'CreateTokenMetadata'
-  | 'UpdateTokenMetadata'
   | 'IncreaseAdditionalValidatorStake'
   | 'DecreaseAdditionalValidatorStake'
   | 'DecreaseValidatorStakeWithReserve'
@@ -56,34 +54,44 @@ export type StakePoolInstructionType =
   | 'DepositSolWithSlippage'
   | 'WithdrawSolWithSlippage';
 
-const MOVE_STAKE_LAYOUT = struct([u8('instruction'), u64('lamports'), u64('transientStakeSeed')]);
+// 'UpdateTokenMetadata' and 'CreateTokenMetadata' have dynamic layouts
 
-const TOKEN_METADATA_LAYOUT = struct([
-  u8('instruction'),
-  u32('nameLen'),
-  blob(METADATA_MAX_NAME_LENGTH, 'name'),
-  u32('symbolLen'),
-  blob(METADATA_MAX_SYMBOL_LENGTH, 'symbol'),
-  u32('uriLen'),
-  blob(METADATA_MAX_URI_LENGTH, 'uri'),
-]);
+const MOVE_STAKE_LAYOUT = struct([u8('instruction'), u64('lamports'), u64('transientStakeSeed')]);
 
 function feeLayout(property?: string) {
   return struct([u64('denominator'), u64('numerator')], property);
 }
 
-function validateMetadata(name: string, symbol: string, uri: string) {
-  if (name.length > METADATA_MAX_NAME_LENGTH) {
+export function tokenMetadataLayout(
+  instruction: number,
+  nameLength: number,
+  symbolLength: number,
+  uriLength: number,
+) {
+  if (nameLength > METADATA_MAX_NAME_LENGTH) {
     throw new Error(`maximum token name length is ${METADATA_MAX_NAME_LENGTH} characters`);
   }
 
-  if (symbol.length > METADATA_MAX_SYMBOL_LENGTH) {
+  if (symbolLength > METADATA_MAX_SYMBOL_LENGTH) {
     throw new Error(`maximum token symbol length is ${METADATA_MAX_SYMBOL_LENGTH} characters`);
   }
 
-  if (uri.length > METADATA_MAX_URI_LENGTH) {
+  if (uriLength > METADATA_MAX_URI_LENGTH) {
     throw new Error(`maximum token uri length is ${METADATA_MAX_URI_LENGTH} characters`);
   }
+
+  return {
+    index: instruction,
+    layout: struct([
+      u8('instruction'),
+      u32('nameLen'),
+      blob(nameLength, 'name'),
+      u32('symbolLen'),
+      blob(symbolLength, 'symbol'),
+      u32('uriLen'),
+      blob(uriLength, 'uri'),
+    ]),
+  };
 }
 
 /**
@@ -200,18 +208,6 @@ export const STAKE_POOL_INSTRUCTION_LAYOUTS: {
   WithdrawSol: {
     index: 16,
     layout: struct([u8('instruction'), u64('poolTokens')]),
-  },
-  /// Create token metadata for the stake-pool token in the
-  /// metaplex-token program.
-  CreateTokenMetadata: {
-    index: 17,
-    layout: TOKEN_METADATA_LAYOUT,
-  },
-  /// Update token metadata for the stake-pool token in the
-  /// metaplex-token program.
-  UpdateTokenMetadata: {
-    index: 18,
-    layout: TOKEN_METADATA_LAYOUT,
   },
   /// (Staker only) Increase stake on a validator again in an epoch.
   IncreaseAdditionalValidatorStake: {
@@ -1208,6 +1204,38 @@ export class StakePoolInstruction {
   }
 
   /**
+   * Creates an instruction to update metadata
+   * in the mpl token metadata program account for the pool token
+   */
+  static updateTokenMetadata(params: UpdateTokenMetadataParams): TransactionInstruction {
+    const { stakePool, withdrawAuthority, tokenMetadata, manager, name, symbol, uri } = params;
+
+    const keys = [
+      { pubkey: stakePool, isSigner: false, isWritable: false },
+      { pubkey: manager, isSigner: true, isWritable: false },
+      { pubkey: withdrawAuthority, isSigner: false, isWritable: false },
+      { pubkey: tokenMetadata, isSigner: false, isWritable: true },
+      { pubkey: METADATA_PROGRAM_ID, isSigner: false, isWritable: false },
+    ];
+
+    const type = tokenMetadataLayout(17, name.length, symbol.length, uri.length);
+    const data = encodeData(type, {
+      nameLen: name.length,
+      name: Buffer.from(name),
+      symbolLen: symbol.length,
+      symbol: Buffer.from(symbol),
+      uriLen: uri.length,
+      uri: Buffer.from(uri),
+    });
+
+    return new TransactionInstruction({
+      programId: STAKE_POOL_PROGRAM_ID,
+      keys,
+      data,
+    });
+  }
+
+  /**
    * Creates an instruction to create metadata
    * using the mpl token metadata program for the pool token
    */
@@ -1236,48 +1264,14 @@ export class StakePoolInstruction {
       { pubkey: SYSVAR_RENT_PUBKEY, isSigner: false, isWritable: false },
     ];
 
-    validateMetadata(name, symbol, uri);
-
-    const data = encodeData(STAKE_POOL_INSTRUCTION_LAYOUTS.CreateTokenMetadata, {
+    const type = tokenMetadataLayout(18, name.length, symbol.length, uri.length);
+    const data = encodeData(type, {
       nameLen: name.length,
-      name: Buffer.from(name.padEnd(METADATA_MAX_NAME_LENGTH, '\0')),
+      name: Buffer.from(name),
       symbolLen: symbol.length,
-      symbol: Buffer.from(symbol.padEnd(METADATA_MAX_SYMBOL_LENGTH, '\0')),
+      symbol: Buffer.from(symbol),
       uriLen: uri.length,
-      uri: Buffer.from(uri.padEnd(METADATA_MAX_URI_LENGTH, '\0')),
-    });
-
-    return new TransactionInstruction({
-      programId: STAKE_POOL_PROGRAM_ID,
-      keys,
-      data,
-    });
-  }
-
-  /**
-   * Creates an instruction to update metadata
-   * in the mpl token metadata program account for the pool token
-   */
-  static updateTokenMetadata(params: UpdateTokenMetadataParams): TransactionInstruction {
-    const { stakePool, withdrawAuthority, tokenMetadata, manager, name, symbol, uri } = params;
-
-    const keys = [
-      { pubkey: stakePool, isSigner: false, isWritable: false },
-      { pubkey: manager, isSigner: true, isWritable: false },
-      { pubkey: withdrawAuthority, isSigner: false, isWritable: false },
-      { pubkey: tokenMetadata, isSigner: false, isWritable: true },
-      { pubkey: METADATA_PROGRAM_ID, isSigner: false, isWritable: false },
-    ];
-
-    validateMetadata(name, symbol, uri);
-
-    const data = encodeData(STAKE_POOL_INSTRUCTION_LAYOUTS.UpdateTokenMetadata, {
-      nameLen: name.length,
-      name: Buffer.from(name.padEnd(METADATA_MAX_NAME_LENGTH, '\0')),
-      symbolLen: symbol.length,
-      symbol: Buffer.from(symbol.padEnd(METADATA_MAX_SYMBOL_LENGTH, '\0')),
-      uriLen: uri.length,
-      uri: Buffer.from(uri.padEnd(METADATA_MAX_URI_LENGTH, '\0')),
+      uri: Buffer.from(uri),
     });
 
     return new TransactionInstruction({
