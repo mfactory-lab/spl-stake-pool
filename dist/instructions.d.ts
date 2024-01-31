@@ -317,15 +317,15 @@ export declare class StakePoolInstruction {
      */
     static withdrawSol(params: WithdrawSolParams): TransactionInstruction;
     /**
-     * Creates an instruction to update metadata
-     * in the mpl token metadata program account for the pool token
-     */
-    static updateTokenMetadata(params: UpdateTokenMetadataParams): TransactionInstruction;
-    /**
      * Creates an instruction to create metadata
      * using the mpl token metadata program for the pool token
      */
     static createTokenMetadata(params: CreateTokenMetadataParams): TransactionInstruction;
+    /**
+     * Creates an instruction to update metadata
+     * in the mpl token metadata program account for the pool token
+     */
+    static updateTokenMetadata(params: UpdateTokenMetadataParams): TransactionInstruction;
     /**
      * Creates `Redelegate` instruction (rebalance from one validator account to another)
      * @param params

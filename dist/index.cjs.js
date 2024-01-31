@@ -1461,17 +1461,21 @@ class StakePoolInstruction {
         });
     }
     /**
-     * Creates an instruction to update metadata
-     * in the mpl token metadata program account for the pool token
+     * Creates an instruction to create metadata
+     * using the mpl token metadata program for the pool token
      */
-    static updateTokenMetadata(params) {
-        const { stakePool, withdrawAuthority, tokenMetadata, manager, name, symbol, uri } = params;
+    static createTokenMetadata(params) {
+        const { stakePool, withdrawAuthority, tokenMetadata, manager, payer, poolMint, name, symbol, uri, } = params;
         const keys = [
             { pubkey: stakePool, isSigner: false, isWritable: false },
             { pubkey: manager, isSigner: true, isWritable: false },
             { pubkey: withdrawAuthority, isSigner: false, isWritable: false },
+            { pubkey: poolMint, isSigner: false, isWritable: false },
+            { pubkey: payer, isSigner: true, isWritable: true },
             { pubkey: tokenMetadata, isSigner: false, isWritable: true },
             { pubkey: METADATA_PROGRAM_ID, isSigner: false, isWritable: false },
+            { pubkey: web3_js.SystemProgram.programId, isSigner: false, isWritable: false },
+            { pubkey: web3_js.SYSVAR_RENT_PUBKEY, isSigner: false, isWritable: false },
         ];
         const type = tokenMetadataLayout(17, name.length, symbol.length, uri.length);
         const data = encodeData(type, {
@@ -1489,21 +1493,17 @@ class StakePoolInstruction {
         });
     }
     /**
-     * Creates an instruction to create metadata
-     * using the mpl token metadata program for the pool token
+     * Creates an instruction to update metadata
+     * in the mpl token metadata program account for the pool token
      */
-    static createTokenMetadata(params) {
-        const { stakePool, withdrawAuthority, tokenMetadata, manager, payer, poolMint, name, symbol, uri, } = params;
+    static updateTokenMetadata(params) {
+        const { stakePool, withdrawAuthority, tokenMetadata, manager, name, symbol, uri } = params;
         const keys = [
             { pubkey: stakePool, isSigner: false, isWritable: false },
             { pubkey: manager, isSigner: true, isWritable: false },
             { pubkey: withdrawAuthority, isSigner: false, isWritable: false },
-            { pubkey: poolMint, isSigner: false, isWritable: false },
-            { pubkey: payer, isSigner: true, isWritable: true },
             { pubkey: tokenMetadata, isSigner: false, isWritable: true },
             { pubkey: METADATA_PROGRAM_ID, isSigner: false, isWritable: false },
-            { pubkey: web3_js.SystemProgram.programId, isSigner: false, isWritable: false },
-            { pubkey: web3_js.SYSVAR_RENT_PUBKEY, isSigner: false, isWritable: false },
         ];
         const type = tokenMetadataLayout(18, name.length, symbol.length, uri.length);
         const data = encodeData(type, {
