@@ -31,6 +31,7 @@ import {
   updatePoolTokenMetadata,
   removeValidatorFromPool,
   addValidatorToPool,
+  tokenMetadataLayout,
 } from '../src';
 
 import { decodeData } from '../src/utils';
@@ -46,6 +47,7 @@ import {
   uninitializedStakeAccount,
   validatorListMock,
 } from './mocks';
+import BN from 'bn.js';
 
 describe('StakePoolProgram', () => {
   const connection = new Connection('http://127.0.0.1:8899');
@@ -346,50 +348,49 @@ describe('StakePoolProgram', () => {
 
   describe('createPoolTokenMetadata', () => {
     it('should create pool token metadata', async () => {
-      mockStakePoolAccounts();
+      connection.getAccountInfo = jest.fn(async (pubKey: PublicKey) => {
+        if (pubKey == stakePoolAddress) {
+          return stakePoolAccount;
+        }
+        return null;
+      });
+      const name = 'test';
+      const symbol = 'TEST';
+      const uri = 'https://example.com';
 
       const payer = new PublicKey(0);
-
-      const data = {
-        name: 'test',
-        symbol: 'TEST',
-        uri: 'https://example.com',
-      };
-
       const res = await createPoolTokenMetadata({
         connection,
         stakePool: stakePoolAddress,
         payer,
-        ...data,
+        name,
+        symbol,
+        uri,
       });
 
-      const decodedData = STAKE_POOL_INSTRUCTION_LAYOUTS.CreateTokenMetadata.layout.decode(
-        res.instructions[0].data,
-      );
-      expect(Buffer.from(decodedData.name).toString().replace(/\0/g, '')).toBe(data.name);
-      expect(Buffer.from(decodedData.symbol).toString().replace(/\0/g, '')).toBe(data.symbol);
-      expect(Buffer.from(decodedData.uri).toString().replace(/\0/g, '')).toBe(data.uri);
+      const type = tokenMetadataLayout(17, name.length, symbol.length, uri.length);
+      const data = decodeData(type, res.instructions[0].data);
+      expect(Buffer.from(data.name).toString()).toBe(name);
+      expect(Buffer.from(data.symbol).toString()).toBe(symbol);
+      expect(Buffer.from(data.uri).toString()).toBe(uri);
     });
 
     it('should update pool token metadata', async () => {
-      const data = {
-        name: 'test',
-        symbol: 'TEST',
-        uri: 'https://example.com',
-      };
-
+      const name = 'test';
+      const symbol = 'TEST';
+      const uri = 'https://example.com';
       const res = await updatePoolTokenMetadata({
         connection,
         stakePool: stakePoolAddress,
-        ...data,
+        name,
+        symbol,
+        uri,
       });
-
-      const decodedData = STAKE_POOL_INSTRUCTION_LAYOUTS.UpdateTokenMetadata.layout.decode(
-        res.instructions[0].data,
-      );
-      expect(Buffer.from(decodedData.name).toString().replace(/\0/g, '')).toBe(data.name);
-      expect(Buffer.from(decodedData.symbol).toString().replace(/\0/g, '')).toBe(data.symbol);
-      expect(Buffer.from(decodedData.uri).toString().replace(/\0/g, '')).toBe(data.uri);
+      const type = tokenMetadataLayout(18, name.length, symbol.length, uri.length);
+      const data = decodeData(type, res.instructions[0].data);
+      expect(Buffer.from(data.name).toString()).toBe(name);
+      expect(Buffer.from(data.symbol).toString()).toBe(symbol);
+      expect(Buffer.from(data.uri).toString()).toBe(uri);
     });
   });
 
@@ -455,5 +456,46 @@ describe('StakePoolProgram', () => {
         STAKE_POOL_INSTRUCTION_LAYOUTS.RemoveValidatorFromPool.index,
       );
     });
+  });
+});
+
+describe('StakePoolLayout', () => {
+  function divideBnToNumber(numerator: BN, denominator: BN): number {
+    if (denominator.isZero()) {
+      return 0;
+    }
+    const quotient = numerator.div(denominator).toNumber();
+    const rem = numerator.umod(denominator);
+    const gcd = rem.gcd(denominator);
+    return quotient + rem.div(gcd).toNumber() / denominator.div(gcd).toNumber();
+  }
+
+  it('should deserialize', async () => {
+    const data =
+      'AWq1iyr99ATwNekhxZcljopQjeBixmWt+p/5CTXBmRbd3Noj1MlCDU6CVh08awajdvCUB/G3tPyo/emrHFdD8Wfh4Pippvxf8kLk81F78B7Wst0ZUaC6ttlDVyWShgT3cP/LqkIDCUdVLBkThURwDuYX1RR+JyWBHNvgnIkDCm914o2jckW1NrCzDbv9Jn/RWcT0cAMYKm8U4SfG/F878wV0XwxEYxirEMlfQJSVhXDNBXRlpU2rFNnd40gahv7V/Mvj/aPav/vdTOwRdFALTRZQlijB9G5myz+0QWe7U7EGIQbd9uHXZaGT2cvhRs7reawctIXtX1s3kTqM9YV+/wCpvg5b6DCoAQANR0RDLW0BAEECAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAZAAAAAAAAAAFAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAnAAAAAAAAC0AAAAAAAAAAoA4AQAAAAAAhwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAANAHAAAAAAAAAwAAAAAAAAACoA8AAAAAAAAJAAAAAAAAAKryysAqbQEA9duCPAOoAQAAicd7jscBANVMdCNW7gEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
+    const buffer = Buffer.alloc(StakePoolLayout.span, data, 'base64');
+
+    const stakePool = StakePoolLayout.decode(buffer);
+
+    expect(
+      divideBnToNumber(
+        stakePool.nextSolWithdrawalFee!.numerator,
+        stakePool.nextSolWithdrawalFee!.denominator,
+      ),
+    ).toEqual(0.00225);
+
+    expect(
+      divideBnToNumber(
+        stakePool.stakeWithdrawalFee.numerator,
+        stakePool.stakeWithdrawalFee.denominator,
+      ),
+    ).toEqual(0.001125);
+
+    expect(
+      divideBnToNumber(
+        stakePool.solWithdrawalFee.numerator,
+        stakePool.solWithdrawalFee.denominator,
+      ),
+    ).toEqual(0.0015);
   });
 });

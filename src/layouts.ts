@@ -3,6 +3,7 @@ import { PublicKey } from '@solana/web3.js';
 import BN from 'bn.js';
 import type { Infer } from 'superstruct';
 import { coerce, enums, instance, nullable, number, optional, string, type } from 'superstruct';
+import { futureEpoch } from './utils';
 
 export interface Fee {
   denominator: BN;
@@ -125,24 +126,26 @@ export const StakePoolLayout = struct<StakePool>([
   u64('lastUpdateEpoch'),
   lockup('lockup'),
   fee('epochFee'),
-  option(fee(), 'nextEpochFee'),
+  futureEpoch(fee(), 'nextEpochFee'),
   option(publicKey(), 'preferredDepositValidatorVoteAddress'),
   option(publicKey(), 'preferredWithdrawValidatorVoteAddress'),
   fee('stakeDepositFee'),
   fee('stakeWithdrawalFee'),
-  option(fee(), 'nextStakeWithdrawalFee'),
+  fee('nextStakeWithdrawalFee'),
+  futureEpoch(fee(), 'nextStakeWithdrawalFee'),
   u8('stakeReferralFee'),
   option(publicKey(), 'solDepositAuthority'),
   fee('solDepositFee'),
   u8('solReferralFee'),
   option(publicKey(), 'solWithdrawAuthority'),
   fee('solWithdrawalFee'),
-  option(fee(), 'nextSolWithdrawalFee'),
+  futureEpoch(fee(), 'nextSolWithdrawalFee'),
   u64('lastEpochPoolTokenSupply'),
   u64('lastEpochTotalLamports'),
 ]);
 
-StakePoolLayout.span = 501;
+// 1 + 32*3 + 1 + 32*5 + 8*3 + (8+8+32) + 16 + 17  + 33*2 + 16*3 + 17 + 1 + 33 + 16 + 1 + 33 + 16 + 17 + 8 + 8
+StakePoolLayout.span = 627;
 
 export enum ValidatorStakeInfoStatus {
   Active,
@@ -196,4 +199,5 @@ export const ValidatorListLayout = struct<ValidatorList>([
   vec(ValidatorStakeInfoLayout, 'validators'),
 ]);
 
-ValidatorListLayout.span = 1 + 4 + 4;
+// 1 + 4 + 4
+ValidatorListLayout.span = 9;
