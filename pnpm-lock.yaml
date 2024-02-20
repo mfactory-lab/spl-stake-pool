@@ -20,6 +20,9 @@ dependencies:
   buffer:
     specifier: ^6.0.3
     version: 6.0.3
+  buffer-layout:
+    specifier: ^1.2.2
+    version: 1.2.2
   superstruct:
     specifier: ^1.0.3
     version: 1.0.3
