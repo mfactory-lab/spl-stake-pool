@@ -1,9 +1,8 @@
 import { LAMPORTS_PER_SOL, PublicKey, StakeProgram, Keypair, SystemProgram, TransactionInstruction, SYSVAR_RENT_PUBKEY, SYSVAR_CLOCK_PUBKEY, SYSVAR_STAKE_HISTORY_PUBKEY, STAKE_CONFIG_ID, StakeAuthorizationLayout } from '@solana/web3.js';
 import { TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync, createAssociatedTokenAccountIdempotentInstruction, getAccount, createApproveInstruction } from '@solana/spl-token';
 import BN from 'bn.js';
-import { struct, u8, publicKey, u64, option, u32, vec } from '@coral-xyz/borsh';
+import { struct, u8 as u8$1, publicKey, u64, option, u32, vec } from '@coral-xyz/borsh';
 import { Buffer as Buffer$1 } from 'buffer';
-import { Layout, u8 as u8$1, blob } from 'buffer-layout';
 
 /**
  * A `StructFailure` represents a single specific failure in validation.
@@ -545,11 +544,11 @@ const StakeAccount = type({
     info: optional(StakeAccountInfo),
 });
 const StakePoolLayout = struct([
-    u8('accountType'),
+    u8$1('accountType'),
     publicKey('manager'),
     publicKey('staker'),
     publicKey('stakeDepositAuthority'),
-    u8('stakeWithdrawBumpSeed'),
+    u8$1('stakeWithdrawBumpSeed'),
     publicKey('validatorList'),
     publicKey('reserveStake'),
     publicKey('poolMint'),
@@ -567,10 +566,10 @@ const StakePoolLayout = struct([
     fee('stakeWithdrawalFee'),
     fee('nextStakeWithdrawalFee'),
     futureEpoch(fee(), 'nextStakeWithdrawalFee'),
-    u8('stakeReferralFee'),
+    u8$1('stakeReferralFee'),
     option(publicKey(), 'solDepositAuthority'),
     fee('solDepositFee'),
-    u8('solReferralFee'),
+    u8$1('solReferralFee'),
     option(publicKey(), 'solWithdrawAuthority'),
     fee('solWithdrawalFee'),
     futureEpoch(fee(), 'nextSolWithdrawalFee'),
@@ -601,12 +600,12 @@ const ValidatorStakeInfoLayout = struct([
     /// End of the validator transient account seed suffixes
     u64('transientSeedSuffixEnd'),
     /// Status of the validator stake account
-    u8('status'),
+    u8$1('status'),
     /// Validator vote account address
     publicKey('voteAccountAddress'),
 ]);
 const ValidatorListLayout = struct([
-    u8('accountType'),
+    u8$1('accountType'),
     u32('maxValidators'),
     vec(ValidatorStakeInfoLayout, 'validators'),
 ]);
@@ -772,11 +771,394 @@ function encodeData(type, fields) {
     return Buffer$1.from(new Uint8Array(data.buffer).slice(0, offset));
 }
 
-class FutureEpochLayout extends Layout {
+/* The MIT License (MIT)
+ *
+ * Copyright 2015-2018 Peter A. Bigot
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
+
+/**
+ * Base class for layout objects.
+ *
+ * **NOTE** This is an abstract base class; you can create instances
+ * if it amuses you, but they won't support the {@link
+ * Layout#encode|encode} or {@link Layout#decode|decode} functions.
+ *
+ * @param {Number} span - Initializer for {@link Layout#span|span}.  The
+ * parameter must be an integer; a negative value signifies that the
+ * span is {@link Layout#getSpan|value-specific}.
+ *
+ * @param {string} [property] - Initializer for {@link
+ * Layout#property|property}.
+ *
+ * @abstract
+ */
+class Layout {
+  constructor(span, property) {
+    if (!Number.isInteger(span)) {
+      throw new TypeError('span must be an integer');
+    }
+
+    /** The span of the layout in bytes.
+     *
+     * Positive values are generally expected.
+     *
+     * Zero will only appear in {@link Constant}s and in {@link
+     * Sequence}s where the {@link Sequence#count|count} is zero.
+     *
+     * A negative value indicates that the span is value-specific, and
+     * must be obtained using {@link Layout#getSpan|getSpan}. */
+    this.span = span;
+
+    /** The property name used when this layout is represented in an
+     * Object.
+     *
+     * Used only for layouts that {@link Layout#decode|decode} to Object
+     * instances.  If left undefined the span of the unnamed layout will
+     * be treated as padding: it will not be mutated by {@link
+     * Layout#encode|encode} nor represented as a property in the
+     * decoded Object. */
+    this.property = property;
+  }
+
+  /** Function to create an Object into which decoded properties will
+   * be written.
+   *
+   * Used only for layouts that {@link Layout#decode|decode} to Object
+   * instances, which means:
+   * * {@link Structure}
+   * * {@link Union}
+   * * {@link VariantLayout}
+   * * {@link BitStructure}
+   *
+   * If left undefined the JavaScript representation of these layouts
+   * will be Object instances.
+   *
+   * See {@link bindConstructorLayout}.
+   */
+  makeDestinationObject() {
+    return {};
+  }
+
+  /**
+   * Decode from a Buffer into an JavaScript value.
+   *
+   * @param {Buffer} b - the buffer from which encoded data is read.
+   *
+   * @param {Number} [offset] - the offset at which the encoded data
+   * starts.  If absent a zero offset is inferred.
+   *
+   * @returns {(Number|Array|Object)} - the value of the decoded data.
+   *
+   * @abstract
+   */
+  decode(b, offset) {
+    throw new Error('Layout is abstract');
+  }
+
+  /**
+   * Encode a JavaScript value into a Buffer.
+   *
+   * @param {(Number|Array|Object)} src - the value to be encoded into
+   * the buffer.  The type accepted depends on the (sub-)type of {@link
+   * Layout}.
+   *
+   * @param {Buffer} b - the buffer into which encoded data will be
+   * written.
+   *
+   * @param {Number} [offset] - the offset at which the encoded data
+   * starts.  If absent a zero offset is inferred.
+   *
+   * @returns {Number} - the number of bytes encoded, including the
+   * space skipped for internal padding, but excluding data such as
+   * {@link Sequence#count|lengths} when stored {@link
+   * ExternalLayout|externally}.  This is the adjustment to `offset`
+   * producing the offset where data for the next layout would be
+   * written.
+   *
+   * @abstract
+   */
+  encode(src, b, offset) {
+    throw new Error('Layout is abstract');
+  }
+
+  /**
+   * Calculate the span of a specific instance of a layout.
+   *
+   * @param {Buffer} b - the buffer that contains an encoded instance.
+   *
+   * @param {Number} [offset] - the offset at which the encoded instance
+   * starts.  If absent a zero offset is inferred.
+   *
+   * @return {Number} - the number of bytes covered by the layout
+   * instance.  If this method is not overridden in a subclass the
+   * definition-time constant {@link Layout#span|span} will be
+   * returned.
+   *
+   * @throws {RangeError} - if the length of the value cannot be
+   * determined.
+   */
+  getSpan(b, offset) {
+    if (0 > this.span) {
+      throw new RangeError('indeterminate span');
+    }
+    return this.span;
+  }
+
+  /**
+   * Replicate the layout using a new property.
+   *
+   * This function must be used to get a structurally-equivalent layout
+   * with a different name since all {@link Layout} instances are
+   * immutable.
+   *
+   * **NOTE** This is a shallow copy.  All fields except {@link
+   * Layout#property|property} are strictly equal to the origin layout.
+   *
+   * @param {String} property - the value for {@link
+   * Layout#property|property} in the replica.
+   *
+   * @returns {Layout} - the copy with {@link Layout#property|property}
+   * set to `property`.
+   */
+  replicate(property) {
+    const rv = Object.create(this.constructor.prototype);
+    Object.assign(rv, this);
+    rv.property = property;
+    return rv;
+  }
+
+  /**
+   * Create an object from layout properties and an array of values.
+   *
+   * **NOTE** This function returns `undefined` if invoked on a layout
+   * that does not return its value as an Object.  Objects are
+   * returned for things that are a {@link Structure}, which includes
+   * {@link VariantLayout|variant layouts} if they are structures, and
+   * excludes {@link Union}s.  If you want this feature for a union
+   * you must use {@link Union.getVariant|getVariant} to select the
+   * desired layout.
+   *
+   * @param {Array} values - an array of values that correspond to the
+   * default order for properties.  As with {@link Layout#decode|decode}
+   * layout elements that have no property name are skipped when
+   * iterating over the array values.  Only the top-level properties are
+   * assigned; arguments are not assigned to properties of contained
+   * layouts.  Any unused values are ignored.
+   *
+   * @return {(Object|undefined)}
+   */
+  fromArray(values) {
+    return undefined;
+  }
+}
+var Layout_2 = Layout;
+
+/* Provide text that carries a name (such as for a function that will
+ * be throwing an error) annotated with the property of a given layout
+ * (such as one for which the value was unacceptable).
+ *
+ * @ignore */
+function nameWithProperty(name, lo) {
+  if (lo.property) {
+    return name + '[' + lo.property + ']';
+  }
+  return name;
+}
+
+/**
+ * An object that behaves like a layout but does not consume space
+ * within its containing layout.
+ *
+ * This is primarily used to obtain metadata about a member, such as a
+ * {@link OffsetLayout} that can provide data about a {@link
+ * Layout#getSpan|value-specific span}.
+ *
+ * **NOTE** This is an abstract base class; you can create instances
+ * if it amuses you, but they won't support {@link
+ * ExternalLayout#isCount|isCount} or other {@link Layout} functions.
+ *
+ * @param {Number} span - initializer for {@link Layout#span|span}.
+ * The parameter can range from 1 through 6.
+ *
+ * @param {string} [property] - initializer for {@link
+ * Layout#property|property}.
+ *
+ * @abstract
+ * @augments {Layout}
+ */
+class ExternalLayout extends Layout {
+  /**
+   * Return `true` iff the external layout decodes to an unsigned
+   * integer layout.
+   *
+   * In that case it can be used as the source of {@link
+   * Sequence#count|Sequence counts}, {@link Blob#length|Blob lengths},
+   * or as {@link UnionLayoutDiscriminator#layout|external union
+   * discriminators}.
+   *
+   * @abstract
+   */
+  isCount() {
+    throw new Error('ExternalLayout is abstract');
+  }
+}
+
+/**
+ * Represent an unsigned integer in little-endian format.
+ *
+ * *Factory*: {@link module:Layout.u8|u8}, {@link
+ *  module:Layout.u16|u16}, {@link module:Layout.u24|u24}, {@link
+ *  module:Layout.u32|u32}, {@link module:Layout.u40|u40}, {@link
+ *  module:Layout.u48|u48}
+ *
+ * @param {Number} span - initializer for {@link Layout#span|span}.
+ * The parameter can range from 1 through 6.
+ *
+ * @param {string} [property] - initializer for {@link
+ * Layout#property|property}.
+ *
+ * @augments {Layout}
+ */
+class UInt extends Layout {
+  constructor(span, property) {
+    super(span, property);
+    if (6 < this.span) {
+      throw new RangeError('span must not exceed 6 bytes');
+    }
+  }
+
+  /** @override */
+  decode(b, offset) {
+    if (undefined === offset) {
+      offset = 0;
+    }
+    return b.readUIntLE(offset, this.span);
+  }
+
+  /** @override */
+  encode(src, b, offset) {
+    if (undefined === offset) {
+      offset = 0;
+    }
+    b.writeUIntLE(src, offset, this.span);
+    return this.span;
+  }
+}
+/* eslint-enable no-extend-native */
+
+/**
+ * Contain a fixed-length block of arbitrary data, represented as a
+ * Buffer.
+ *
+ * *Factory*: {@link module:Layout.blob|blob}
+ *
+ * @param {(Number|ExternalLayout)} length - initializes {@link
+ * Blob#length|length}.
+ *
+ * @param {String} [property] - initializer for {@link
+ * Layout#property|property}.
+ *
+ * @augments {Layout}
+ */
+class Blob extends Layout {
+  constructor(length, property) {
+    if (!(((length instanceof ExternalLayout) && length.isCount())
+          || (Number.isInteger(length) && (0 <= length)))) {
+      throw new TypeError('length must be positive integer '
+                          + 'or an unsigned integer ExternalLayout');
+    }
+
+    let span = -1;
+    if (!(length instanceof ExternalLayout)) {
+      span = length;
+    }
+    super(span, property);
+
+    /** The number of bytes in the blob.
+     *
+     * This may be a non-negative integer, or an instance of {@link
+     * ExternalLayout} that satisfies {@link
+     * ExternalLayout#isCount|isCount()}. */
+    this.length = length;
+  }
+
+  /** @override */
+  getSpan(b, offset) {
+    let span = this.span;
+    if (0 > span) {
+      span = this.length.decode(b, offset);
+    }
+    return span;
+  }
+
+  /** @override */
+  decode(b, offset) {
+    if (undefined === offset) {
+      offset = 0;
+    }
+    let span = this.span;
+    if (0 > span) {
+      span = this.length.decode(b, offset);
+    }
+    return b.slice(offset, offset + span);
+  }
+
+  /** Implement {@link Layout#encode|encode} for {@link Blob}.
+   *
+   * **NOTE** If {@link Layout#count|count} is an instance of {@link
+   * ExternalLayout} then the length of `src` will be encoded as the
+   * count after `src` is encoded. */
+  encode(src, b, offset) {
+    let span = this.length;
+    if (this.length instanceof ExternalLayout) {
+      span = src.length;
+    }
+    if (!(Buffer.isBuffer(src)
+          && (span === src.length))) {
+      throw new TypeError(nameWithProperty('Blob.encode', this)
+                          + ' requires (length ' + span + ') Buffer as src');
+    }
+    if ((offset + span) > b.length) {
+      throw new RangeError('encoding overruns Buffer');
+    }
+    b.write(src.toString('hex'), offset, span, 'hex');
+    if (this.length instanceof ExternalLayout) {
+      this.length.encode(span, b, offset);
+    }
+    return span;
+  }
+}
+
+/** Factory for {@link UInt|unsigned int layouts} spanning one
+ * byte. */
+var u8 = (property => new UInt(1, property));
+
+/** Factory for {@link Blob} values. */
+var blob = ((length, property) => new Blob(length, property));
+
+class FutureEpochLayout extends Layout_2 {
     constructor(layout, property) {
         super(-1, property);
         this.layout = layout;
-        this.discriminator = u8$1();
+        this.discriminator = u8();
     }
     encode(src, b, offset = 0) {
         if (src === null || src === undefined) {
@@ -813,7 +1195,7 @@ function arrayChunk(array, size) {
 }
 
 // 'UpdateTokenMetadata' and 'CreateTokenMetadata' have dynamic layouts
-const MOVE_STAKE_LAYOUT = struct([u8('instruction'), u64('lamports'), u64('transientStakeSeed')]);
+const MOVE_STAKE_LAYOUT = struct([u8$1('instruction'), u64('lamports'), u64('transientStakeSeed')]);
 function feeLayout(property) {
     return struct([u64('denominator'), u64('numerator')], property);
 }
@@ -830,7 +1212,7 @@ function tokenMetadataLayout(instruction, nameLength, symbolLength, uriLength) {
     return {
         index: instruction,
         layout: struct([
-            u8('instruction'),
+            u8$1('instruction'),
             u32('nameLen'),
             blob(nameLength, 'name'),
             u32('symbolLen'),
@@ -849,11 +1231,11 @@ const STAKE_POOL_INSTRUCTION_LAYOUTS = Object.freeze({
     Initialize: {
         index: 0,
         layout: struct([
-            u8('instruction'),
+            u8$1('instruction'),
             feeLayout('fee'),
             feeLayout('withdrawalFee'),
             feeLayout('depositFee'),
-            u8('referralFee'),
+            u8$1('referralFee'),
             u32('maxValidators'),
         ]),
     },
@@ -861,7 +1243,7 @@ const STAKE_POOL_INSTRUCTION_LAYOUTS = Object.freeze({
     AddValidatorToPool: {
         index: 1,
         layout: struct([
-            u8('instruction'),
+            u8$1('instruction'),
             // Optional non-zero u32 seed used for generating the validator stake address
             u32('seed'),
         ]),
@@ -869,7 +1251,7 @@ const STAKE_POOL_INSTRUCTION_LAYOUTS = Object.freeze({
     /// (Staker only) Removes validator from the pool, deactivating its stake.
     RemoveValidatorFromPool: {
         index: 2,
-        layout: struct([u8('instruction')]),
+        layout: struct([u8$1('instruction')]),
     },
     /// (Staker only) Decrease active stake on a validator, eventually moving it to the reserve.
     DecreaseValidatorStake: {
@@ -885,48 +1267,48 @@ const STAKE_POOL_INSTRUCTION_LAYOUTS = Object.freeze({
     SetPreferredValidator: {
         index: 5,
         layout: struct([
-            u8('instruction'),
-            u8('validatorType'),
+            u8$1('instruction'),
+            u8$1('validatorType'),
             option(publicKey(), 'validatorVoteAddress'),
         ]),
     },
     /// Updates balances of validator and transient stake accounts in the pool.
     UpdateValidatorListBalance: {
         index: 6,
-        layout: struct([u8('instruction'), u32('startIndex'), u8('noMerge')]),
+        layout: struct([u8$1('instruction'), u32('startIndex'), u8$1('noMerge')]),
     },
     /// Updates total pool balance based on balances in the reserve and validator list.
     UpdateStakePoolBalance: {
         index: 7,
-        layout: struct([u8('instruction')]),
+        layout: struct([u8$1('instruction')]),
     },
     /// Cleans up validator stake account entries marked as `ReadyForRemoval`.
     CleanupRemovedValidatorEntries: {
         index: 8,
-        layout: struct([u8('instruction')]),
+        layout: struct([u8$1('instruction')]),
     },
     /// Deposit some stake into the pool. The output is a "pool" token
     /// representing ownership into the pool. Inputs are converted to the
     /// current ratio.
     DepositStake: {
         index: 9,
-        layout: struct([u8('instruction')]),
+        layout: struct([u8$1('instruction')]),
     },
     /// Withdraw the token from the pool at the current ratio.
     WithdrawStake: {
         index: 10,
-        layout: struct([u8('instruction'), u64('poolTokens')]),
+        layout: struct([u8$1('instruction'), u64('poolTokens')]),
     },
     /// (Manager only) Update manager.
     SetManager: {
         index: 11,
-        layout: struct([u8('instruction')]),
+        layout: struct([u8$1('instruction')]),
     },
     /// (Manager only) Update fee.
     SetFee: {
         index: 12,
         layout: struct([
-            u8('instruction'),
+            u8$1('instruction'),
             // Type of fee to update and value to update it to
             u64('fee'),
         ]),
@@ -934,30 +1316,30 @@ const STAKE_POOL_INSTRUCTION_LAYOUTS = Object.freeze({
     /// (Manager or staker only) Update staker.
     SetStaker: {
         index: 13,
-        layout: struct([u8('instruction')]),
+        layout: struct([u8$1('instruction')]),
     },
     /// Deposit SOL directly into the pool's reserve account. The output is a "pool" token
     /// representing ownership into the pool. Inputs are converted to the current ratio.
     DepositSol: {
         index: 14,
-        layout: struct([u8('instruction'), u64('lamports')]),
+        layout: struct([u8$1('instruction'), u64('lamports')]),
     },
     /// (Manager only) Update SOL deposit, stake deposit, or SOL withdrawal authority.
     SetFundingAuthority: {
         index: 15,
-        layout: struct([u8('instruction'), u8('fundingType')]),
+        layout: struct([u8$1('instruction'), u8$1('fundingType')]),
     },
     /// Withdraw SOL directly from the pool's reserve account. Fails if the
     /// reserve does not have enough SOL.
     WithdrawSol: {
         index: 16,
-        layout: struct([u8('instruction'), u64('poolTokens')]),
+        layout: struct([u8$1('instruction'), u64('poolTokens')]),
     },
     /// (Staker only) Increase stake on a validator again in an epoch.
     IncreaseAdditionalValidatorStake: {
         index: 19,
         layout: struct([
-            u8('instruction'),
+            u8$1('instruction'),
             u64('lamports'),
             u64('transientStakeSeed'),
             u64('ephemeralStakeSeed'),
@@ -968,7 +1350,7 @@ const STAKE_POOL_INSTRUCTION_LAYOUTS = Object.freeze({
     DecreaseAdditionalValidatorStake: {
         index: 20,
         layout: struct([
-            u8('instruction'),
+            u8$1('instruction'),
             u64('lamports'),
             u64('transientStakeSeed'),
             u64('ephemeralStakeSeed'),
@@ -985,7 +1367,7 @@ const STAKE_POOL_INSTRUCTION_LAYOUTS = Object.freeze({
     Redelegate: {
         index: 22,
         layout: struct([
-            u8('instruction'),
+            u8$1('instruction'),
             /// Amount of lamports to redelegate
             u64('lamports'),
             /// Seed used to create source transient stake account
@@ -1004,7 +1386,7 @@ const STAKE_POOL_INSTRUCTION_LAYOUTS = Object.freeze({
     DepositStakeWithSlippage: {
         index: 23,
         layout: struct([
-            u8('instruction'),
+            u8$1('instruction'),
             /// Minimum amount of pool tokens that must be received
             u64('minimumPoolTokensOut'),
         ]),
@@ -1014,7 +1396,7 @@ const STAKE_POOL_INSTRUCTION_LAYOUTS = Object.freeze({
     WithdrawStakeWithSlippage: {
         index: 24,
         layout: struct([
-            u8('instruction'),
+            u8$1('instruction'),
             /// Pool tokens to burn in exchange for lamports
             u64('poolTokensIn'),
             /// Minimum amount of lamports that must be received
@@ -1028,7 +1410,7 @@ const STAKE_POOL_INSTRUCTION_LAYOUTS = Object.freeze({
     DepositSolWithSlippage: {
         index: 25,
         layout: struct([
-            u8('instruction'),
+            u8$1('instruction'),
             /// Amount of lamports to deposit into the reserve
             u64('lamportsIn'),
             /// Minimum amount of pool tokens that must be received
@@ -1041,7 +1423,7 @@ const STAKE_POOL_INSTRUCTION_LAYOUTS = Object.freeze({
     WithdrawSolWithSlippage: {
         index: 26,
         layout: struct([
-            u8('instruction'),
+            u8$1('instruction'),
             /// Pool tokens to burn in exchange for lamports
             u64('poolTokensIn'),
             /// Minimum amount of lamports that must be received

@@ -1,4 +1,4 @@
-var solanaStakePool = (function (exports, bufferLayout) {
+var solanaStakePool = (function (exports) {
 	'use strict';
 
 	var commonjsGlobal = typeof globalThis !== 'undefined' ? globalThis : typeof window !== 'undefined' ? window : typeof global !== 'undefined' ? global : typeof self !== 'undefined' ? self : {};
@@ -8984,8 +8984,8 @@ var solanaStakePool = (function (exports, bufferLayout) {
 	 * THE SOFTWARE.
 	 */
 	Object.defineProperty(Layout$3, "__esModule", { value: true });
-	Layout$3.s16 = Layout$3.s8 = Layout$3.nu64be = Layout$3.u48be = Layout$3.u40be = Layout$3.u32be = Layout$3.u24be = Layout$3.u16be = nu64 = Layout$3.nu64 = Layout$3.u48 = Layout$3.u40 = u32 = Layout$3.u32 = Layout$3.u24 = u16 = Layout$3.u16 = u8 = Layout$3.u8 = offset = Layout$3.offset = Layout$3.greedy = Layout$3.Constant = Layout$3.UTF8 = Layout$3.CString = Layout$3.Blob = Layout$3.Boolean = Layout$3.BitField = Layout$3.BitStructure = Layout$3.VariantLayout = Layout$3.Union = Layout$3.UnionLayoutDiscriminator = Layout$3.UnionDiscriminator = Layout$3.Structure = Layout$3.Sequence = Layout$3.DoubleBE = Layout$3.Double = Layout$3.FloatBE = Layout$3.Float = Layout$3.NearInt64BE = Layout$3.NearInt64 = Layout$3.NearUInt64BE = Layout$3.NearUInt64 = Layout$3.IntBE = Layout$3.Int = Layout$3.UIntBE = Layout$3.UInt = Layout$3.OffsetLayout = Layout$3.GreedyCount = Layout$3.ExternalLayout = Layout$3.bindConstructorLayout = Layout$3.nameWithProperty = Layout$3.Layout = Layout$3.uint8ArrayToBuffer = Layout$3.checkUint8Array = void 0;
-	Layout$3.constant = Layout$3.utf8 = Layout$3.cstr = blob = Layout$3.blob = Layout$3.unionLayoutDiscriminator = Layout$3.union = seq = Layout$3.seq = Layout$3.bits = struct = Layout$3.struct = Layout$3.f64be = Layout$3.f64 = Layout$3.f32be = Layout$3.f32 = Layout$3.ns64be = Layout$3.s48be = Layout$3.s40be = Layout$3.s32be = Layout$3.s24be = Layout$3.s16be = ns64 = Layout$3.ns64 = Layout$3.s48 = Layout$3.s40 = Layout$3.s32 = Layout$3.s24 = void 0;
+	Layout$3.s16 = Layout$3.s8 = Layout$3.nu64be = Layout$3.u48be = Layout$3.u40be = Layout$3.u32be = Layout$3.u24be = Layout$3.u16be = nu64 = Layout$3.nu64 = Layout$3.u48 = Layout$3.u40 = u32 = Layout$3.u32 = Layout$3.u24 = u16 = Layout$3.u16 = u8$1 = Layout$3.u8 = offset = Layout$3.offset = Layout$3.greedy = Layout$3.Constant = Layout$3.UTF8 = Layout$3.CString = Layout$3.Blob = Layout$3.Boolean = Layout$3.BitField = Layout$3.BitStructure = Layout$3.VariantLayout = Layout$3.Union = Layout$3.UnionLayoutDiscriminator = Layout$3.UnionDiscriminator = Layout$3.Structure = Layout$3.Sequence = Layout$3.DoubleBE = Layout$3.Double = Layout$3.FloatBE = Layout$3.Float = Layout$3.NearInt64BE = Layout$3.NearInt64 = Layout$3.NearUInt64BE = Layout$3.NearUInt64 = Layout$3.IntBE = Layout$3.Int = Layout$3.UIntBE = Layout$3.UInt = Layout$3.OffsetLayout = Layout$3.GreedyCount = Layout$3.ExternalLayout = Layout$3.bindConstructorLayout = Layout$3.nameWithProperty = Layout$3.Layout = Layout$3.uint8ArrayToBuffer = Layout$3.checkUint8Array = void 0;
+	Layout$3.constant = Layout$3.utf8 = Layout$3.cstr = blob$1 = Layout$3.blob = Layout$3.unionLayoutDiscriminator = Layout$3.union = seq = Layout$3.seq = Layout$3.bits = struct = Layout$3.struct = Layout$3.f64be = Layout$3.f64 = Layout$3.f32be = Layout$3.f32 = Layout$3.ns64be = Layout$3.s48be = Layout$3.s40be = Layout$3.s32be = Layout$3.s24be = Layout$3.s16be = ns64 = Layout$3.ns64 = Layout$3.s48 = Layout$3.s40 = Layout$3.s32 = Layout$3.s24 = void 0;
 	const buffer_1 = buffer;
 	/* Check if a value is a Uint8Array.
 	 *
@@ -11139,7 +11139,7 @@ var solanaStakePool = (function (exports, bufferLayout) {
 	var offset = Layout$3.offset = ((layout, offset, property) => new OffsetLayout$1(layout, offset, property));
 	/** Factory for {@link UInt|unsigned int layouts} spanning one
 	 * byte. */
-	var u8 = Layout$3.u8 = ((property) => new UInt$1(1, property));
+	var u8$1 = Layout$3.u8 = ((property) => new UInt$1(1, property));
 	/** Factory for {@link UInt|little-endian unsigned int layouts}
 	 * spanning two bytes. */
 	var u16 = Layout$3.u16 = ((property) => new UInt$1(2, property));
@@ -11234,7 +11234,7 @@ var solanaStakePool = (function (exports, bufferLayout) {
 	/** Factory for {@link UnionLayoutDiscriminator} values. */
 	Layout$3.unionLayoutDiscriminator = ((layout, property) => new UnionLayoutDiscriminator$1(layout, property));
 	/** Factory for {@link Blob} values. */
-	var blob = Layout$3.blob = ((length, property) => new Blob$1(length, property));
+	var blob$1 = Layout$3.blob = ((length, property) => new Blob$1(length, property));
 	/** Factory for {@link CString} values. */
 	Layout$3.cstr = ((property) => new CString$1(property));
 	/** Factory for {@link UTF8} values. */
@@ -16017,20 +16017,20 @@ var solanaStakePool = (function (exports, bufferLayout) {
 	 * Layout for a public key
 	 */
 	const publicKey$1 = (property = 'publicKey') => {
-	  return blob(32, property);
+	  return blob$1(32, property);
 	};
 
 	/**
 	 * Layout for a signature
 	 */
 	const signature = (property = 'signature') => {
-	  return blob(64, property);
+	  return blob$1(64, property);
 	};
 	/**
 	 * Layout for a Rust String type
 	 */
 	const rustString = (property = 'string') => {
-	  const rsl = struct([u32('length'), u32('lengthPadding'), blob(offset(u32(), -8), 'chars')], property);
+	  const rsl = struct([u32('length'), u32('lengthPadding'), blob$1(offset(u32(), -8), 'chars')], property);
 	  const _decode = rsl.decode.bind(rsl);
 	  const _encode = rsl.encode.bind(rsl);
 	  const rslShim = rsl;
@@ -16068,7 +16068,7 @@ var solanaStakePool = (function (exports, bufferLayout) {
 	 *  Layout for a VoteInit object
 	 */
 	const voteInit = (property = 'voteInit') => {
-	  return struct([publicKey$1('nodePubkey'), publicKey$1('authorizedVoter'), publicKey$1('authorizedWithdrawer'), u8('commission')], property);
+	  return struct([publicKey$1('nodePubkey'), publicKey$1('authorizedVoter'), publicKey$1('authorizedWithdrawer'), u8$1('commission')], property);
 	};
 
 	/**
@@ -16348,12 +16348,12 @@ var solanaStakePool = (function (exports, bufferLayout) {
 	    buffer.Buffer.from(instructionCount).copy(instructionBuffer);
 	    let instructionBufferLength = instructionCount.length;
 	    instructions.forEach(instruction => {
-	      const instructionLayout = struct([u8('programIdIndex'), blob(instruction.keyIndicesCount.length, 'keyIndicesCount'), seq(u8('keyIndex'), instruction.keyIndices.length, 'keyIndices'), blob(instruction.dataLength.length, 'dataLength'), seq(u8('userdatum'), instruction.data.length, 'data')]);
+	      const instructionLayout = struct([u8$1('programIdIndex'), blob$1(instruction.keyIndicesCount.length, 'keyIndicesCount'), seq(u8$1('keyIndex'), instruction.keyIndices.length, 'keyIndices'), blob$1(instruction.dataLength.length, 'dataLength'), seq(u8$1('userdatum'), instruction.data.length, 'data')]);
 	      const length = instructionLayout.encode(instruction, instructionBuffer, instructionBufferLength);
 	      instructionBufferLength += length;
 	    });
 	    instructionBuffer = instructionBuffer.slice(0, instructionBufferLength);
-	    const signDataLayout = struct([blob(1, 'numRequiredSignatures'), blob(1, 'numReadonlySignedAccounts'), blob(1, 'numReadonlyUnsignedAccounts'), blob(keyCount.length, 'keyCount'), seq(publicKey$1('key'), numKeys, 'keys'), publicKey$1('recentBlockhash')]);
+	    const signDataLayout = struct([blob$1(1, 'numRequiredSignatures'), blob$1(1, 'numReadonlySignedAccounts'), blob$1(1, 'numReadonlyUnsignedAccounts'), blob$1(keyCount.length, 'keyCount'), seq(publicKey$1('key'), numKeys, 'keys'), publicKey$1('recentBlockhash')]);
 	    const transaction = {
 	      numRequiredSignatures: buffer.Buffer.from([this.header.numRequiredSignatures]),
 	      numReadonlySignedAccounts: buffer.Buffer.from([this.header.numReadonlySignedAccounts]),
@@ -16548,7 +16548,7 @@ var solanaStakePool = (function (exports, bufferLayout) {
 	    const serializedAddressTableLookups = this.serializeAddressTableLookups();
 	    const encodedAddressTableLookupsLength = Array();
 	    encodeLength(encodedAddressTableLookupsLength, this.addressTableLookups.length);
-	    const messageLayout = struct([u8('prefix'), struct([u8('numRequiredSignatures'), u8('numReadonlySignedAccounts'), u8('numReadonlyUnsignedAccounts')], 'header'), blob(encodedStaticAccountKeysLength.length, 'staticAccountKeysLength'), seq(publicKey$1(), this.staticAccountKeys.length, 'staticAccountKeys'), publicKey$1('recentBlockhash'), blob(encodedInstructionsLength.length, 'instructionsLength'), blob(serializedInstructions.length, 'serializedInstructions'), blob(encodedAddressTableLookupsLength.length, 'addressTableLookupsLength'), blob(serializedAddressTableLookups.length, 'serializedAddressTableLookups')]);
+	    const messageLayout = struct([u8$1('prefix'), struct([u8$1('numRequiredSignatures'), u8$1('numReadonlySignedAccounts'), u8$1('numReadonlyUnsignedAccounts')], 'header'), blob$1(encodedStaticAccountKeysLength.length, 'staticAccountKeysLength'), seq(publicKey$1(), this.staticAccountKeys.length, 'staticAccountKeys'), publicKey$1('recentBlockhash'), blob$1(encodedInstructionsLength.length, 'instructionsLength'), blob$1(serializedInstructions.length, 'serializedInstructions'), blob$1(encodedAddressTableLookupsLength.length, 'addressTableLookupsLength'), blob$1(serializedAddressTableLookups.length, 'serializedAddressTableLookups')]);
 	    const serializedMessage = new Uint8Array(PACKET_DATA_SIZE);
 	    const MESSAGE_VERSION_0_PREFIX = 1 << 7;
 	    const serializedMessageLength = messageLayout.encode({
@@ -16572,7 +16572,7 @@ var solanaStakePool = (function (exports, bufferLayout) {
 	      encodeLength(encodedAccountKeyIndexesLength, instruction.accountKeyIndexes.length);
 	      const encodedDataLength = Array();
 	      encodeLength(encodedDataLength, instruction.data.length);
-	      const instructionLayout = struct([u8('programIdIndex'), blob(encodedAccountKeyIndexesLength.length, 'encodedAccountKeyIndexesLength'), seq(u8(), instruction.accountKeyIndexes.length, 'accountKeyIndexes'), blob(encodedDataLength.length, 'encodedDataLength'), blob(instruction.data.length, 'data')]);
+	      const instructionLayout = struct([u8$1('programIdIndex'), blob$1(encodedAccountKeyIndexesLength.length, 'encodedAccountKeyIndexesLength'), seq(u8$1(), instruction.accountKeyIndexes.length, 'accountKeyIndexes'), blob$1(encodedDataLength.length, 'encodedDataLength'), blob$1(instruction.data.length, 'data')]);
 	      serializedLength += instructionLayout.encode({
 	        programIdIndex: instruction.programIdIndex,
 	        encodedAccountKeyIndexesLength: new Uint8Array(encodedAccountKeyIndexesLength),
@@ -16591,7 +16591,7 @@ var solanaStakePool = (function (exports, bufferLayout) {
 	      encodeLength(encodedWritableIndexesLength, lookup.writableIndexes.length);
 	      const encodedReadonlyIndexesLength = Array();
 	      encodeLength(encodedReadonlyIndexesLength, lookup.readonlyIndexes.length);
-	      const addressTableLookupLayout = struct([publicKey$1('accountKey'), blob(encodedWritableIndexesLength.length, 'encodedWritableIndexesLength'), seq(u8(), lookup.writableIndexes.length, 'writableIndexes'), blob(encodedReadonlyIndexesLength.length, 'encodedReadonlyIndexesLength'), seq(u8(), lookup.readonlyIndexes.length, 'readonlyIndexes')]);
+	      const addressTableLookupLayout = struct([publicKey$1('accountKey'), blob$1(encodedWritableIndexesLength.length, 'encodedWritableIndexesLength'), seq(u8$1(), lookup.writableIndexes.length, 'writableIndexes'), blob$1(encodedReadonlyIndexesLength.length, 'encodedReadonlyIndexesLength'), seq(u8$1(), lookup.readonlyIndexes.length, 'readonlyIndexes')]);
 	      serializedLength += addressTableLookupLayout.encode({
 	        accountKey: lookup.accountKey.toBytes(),
 	        encodedWritableIndexesLength: new Uint8Array(encodedWritableIndexesLength),
@@ -17575,7 +17575,7 @@ var solanaStakePool = (function (exports, bufferLayout) {
 	    const serializedMessage = this.message.serialize();
 	    const encodedSignaturesLength = Array();
 	    encodeLength(encodedSignaturesLength, this.signatures.length);
-	    const transactionLayout = struct([blob(encodedSignaturesLength.length, 'encodedSignaturesLength'), seq(signature(), this.signatures.length, 'signatures'), blob(serializedMessage.length, 'serializedMessage')]);
+	    const transactionLayout = struct([blob$1(encodedSignaturesLength.length, 'encodedSignaturesLength'), seq(signature(), this.signatures.length, 'signatures'), blob$1(serializedMessage.length, 'serializedMessage')]);
 	    const serializedTransaction = new Uint8Array(2048);
 	    const serializedTransactionLength = transactionLayout.encode({
 	      encodedSignaturesLength: new Uint8Array(encodedSignaturesLength),
@@ -17802,7 +17802,7 @@ var solanaStakePool = (function (exports, bufferLayout) {
 	  };
 	};
 	const bigInt$1 = length => property => {
-	  const layout = blob(length, property);
+	  const layout = blob$1(length, property);
 	  const {
 	    encode,
 	    decode
@@ -18650,7 +18650,7 @@ var solanaStakePool = (function (exports, bufferLayout) {
 	        });
 	      }
 	    }
-	    const dataLayout = struct([u32('instruction'), u32('offset'), u32('bytesLength'), u32('bytesLengthPadding'), seq(u8('byte'), offset(u32(), -8), 'bytes')]);
+	    const dataLayout = struct([u32('instruction'), u32('offset'), u32('bytesLength'), u32('bytesLengthPadding'), seq(u8$1('byte'), offset(u32(), -8), 'bytes')]);
 	    const chunkSize = Loader.chunkSize;
 	    let offset$1 = 0;
 	    let array = data;
@@ -19078,9 +19078,9 @@ var solanaStakePool = (function (exports, bufferLayout) {
 	}
 	const LookupTableMetaLayout = {
 	  index: 1,
-	  layout: struct([u32('typeIndex'), u64$1('deactivationSlot'), nu64('lastExtendedSlot'), u8('lastExtendedStartIndex'), u8(),
+	  layout: struct([u32('typeIndex'), u64$1('deactivationSlot'), nu64('lastExtendedSlot'), u8$1('lastExtendedStartIndex'), u8$1(),
 	  // option
-	  seq(publicKey$1(), offset(u8(), -1), 'authority')])
+	  seq(publicKey$1(), offset(u8$1(), -1), 'authority')])
 	};
 
 	const URL_RE = /^[^:]+:\/\/([^:[]+|\[[^\]]+\])(:\d+)?(.*)/i;
@@ -23622,7 +23622,7 @@ var solanaStakePool = (function (exports, bufferLayout) {
 	const LOOKUP_TABLE_INSTRUCTION_LAYOUTS = Object.freeze({
 	  CreateLookupTable: {
 	    index: 0,
-	    layout: struct([u32('instruction'), u64$1('recentSlot'), u8('bumpSeed')])
+	    layout: struct([u32('instruction'), u64$1('recentSlot'), u8$1('bumpSeed')])
 	  },
 	  FreezeLookupTable: {
 	    index: 1,
@@ -23873,7 +23873,7 @@ var solanaStakePool = (function (exports, bufferLayout) {
 	   */
 	  static decodeInstructionType(instruction) {
 	    this.checkProgramId(instruction.programId);
-	    const instructionTypeLayout = u8('instruction');
+	    const instructionTypeLayout = u8$1('instruction');
 	    const typeIndex = instructionTypeLayout.decode(instruction.data);
 	    let type;
 	    for (const [ixType, layout] of Object.entries(COMPUTE_BUDGET_INSTRUCTION_LAYOUTS)) {
@@ -23979,19 +23979,19 @@ var solanaStakePool = (function (exports, bufferLayout) {
 	const COMPUTE_BUDGET_INSTRUCTION_LAYOUTS = Object.freeze({
 	  RequestUnits: {
 	    index: 0,
-	    layout: struct([u8('instruction'), u32('units'), u32('additionalFee')])
+	    layout: struct([u8$1('instruction'), u32('units'), u32('additionalFee')])
 	  },
 	  RequestHeapFrame: {
 	    index: 1,
-	    layout: struct([u8('instruction'), u32('bytes')])
+	    layout: struct([u8$1('instruction'), u32('bytes')])
 	  },
 	  SetComputeUnitLimit: {
 	    index: 2,
-	    layout: struct([u8('instruction'), u32('units')])
+	    layout: struct([u8$1('instruction'), u32('units')])
 	  },
 	  SetComputeUnitPrice: {
 	    index: 3,
-	    layout: struct([u8('instruction'), u64$1('microLamports')])
+	    layout: struct([u8$1('instruction'), u64$1('microLamports')])
 	  }
 	});
 
@@ -24064,7 +24064,7 @@ var solanaStakePool = (function (exports, bufferLayout) {
 	 * Params for creating an ed25519 instruction using a private key
 	 */
 
-	const ED25519_INSTRUCTION_LAYOUT = struct([u8('numSignatures'), u8('padding'), u16('signatureOffset'), u16('signatureInstructionIndex'), u16('publicKeyOffset'), u16('publicKeyInstructionIndex'), u16('messageDataOffset'), u16('messageDataSize'), u16('messageInstructionIndex')]);
+	const ED25519_INSTRUCTION_LAYOUT = struct([u8$1('numSignatures'), u8$1('padding'), u16('signatureOffset'), u16('signatureInstructionIndex'), u16('publicKeyOffset'), u16('publicKeyInstructionIndex'), u16('messageDataOffset'), u16('messageDataSize'), u16('messageInstructionIndex')]);
 	class Ed25519Program {
 	  /**
 	   * @internal
@@ -24169,7 +24169,7 @@ var solanaStakePool = (function (exports, bufferLayout) {
 	 * Params for creating an secp256k1 instruction using a private key
 	 */
 
-	const SECP256K1_INSTRUCTION_LAYOUT = struct([u8('numSignatures'), u16('signatureOffset'), u8('signatureInstructionIndex'), u16('ethAddressOffset'), u8('ethAddressInstructionIndex'), u16('messageDataOffset'), u16('messageDataSize'), u8('messageInstructionIndex'), blob(20, 'ethAddress'), blob(64, 'signature'), u8('recoveryId')]);
+	const SECP256K1_INSTRUCTION_LAYOUT = struct([u8$1('numSignatures'), u16('signatureOffset'), u8$1('signatureInstructionIndex'), u16('ethAddressOffset'), u8$1('ethAddressInstructionIndex'), u16('messageDataOffset'), u16('messageDataSize'), u8$1('messageInstructionIndex'), blob$1(20, 'ethAddress'), blob$1(64, 'signature'), u8$1('recoveryId')]);
 	class Secp256k1Program {
 	  /**
 	   * @internal
@@ -25578,11 +25578,11 @@ var solanaStakePool = (function (exports, bufferLayout) {
 	 *
 	 * @internal
 	 */
-	const VoteAccountLayout = struct([publicKey$1('nodePubkey'), publicKey$1('authorizedWithdrawer'), u8('commission'), nu64(),
+	const VoteAccountLayout = struct([publicKey$1('nodePubkey'), publicKey$1('authorizedWithdrawer'), u8$1('commission'), nu64(),
 	// votes.length
-	seq(struct([nu64('slot'), u32('confirmationCount')]), offset(u32(), -8), 'votes'), u8('rootSlotValid'), nu64('rootSlot'), nu64(),
+	seq(struct([nu64('slot'), u32('confirmationCount')]), offset(u32(), -8), 'votes'), u8$1('rootSlotValid'), nu64('rootSlot'), nu64(),
 	// authorizedVoters.length
-	seq(struct([nu64('epoch'), publicKey$1('authorizedVoter')]), offset(u32(), -8), 'authorizedVoters'), struct([seq(struct([publicKey$1('authorizedPubkey'), nu64('epochOfLastAuthorizedSwitch'), nu64('targetEpoch')]), 32, 'buf'), nu64('idx'), u8('isEmpty')], 'priorVoters'), nu64(),
+	seq(struct([nu64('epoch'), publicKey$1('authorizedVoter')]), offset(u32(), -8), 'authorizedVoters'), struct([seq(struct([publicKey$1('authorizedPubkey'), nu64('epochOfLastAuthorizedSwitch'), nu64('targetEpoch')]), 32, 'buf'), nu64('idx'), u8$1('isEmpty')], 'priorVoters'), nu64(),
 	// epochCredits.length
 	seq(struct([nu64('epoch'), nu64('credits'), nu64('prevCredits')]), offset(u32(), -8), 'epochCredits'), struct([nu64('slot'), nu64('timestamp')], 'lastTimestamp')]);
 	/**
@@ -25848,7 +25848,7 @@ var solanaStakePool = (function (exports, bufferLayout) {
 	};
 
 	const bigInt = (length) => (property) => {
-	    const layout = blob(length, property);
+	    const layout = blob$1(length, property);
 	    const { encode, decode } = encodeDecode(layout);
 	    const bigIntLayout = layout;
 	    bigIntLayout.decode = (buffer, offset) => {
@@ -25864,7 +25864,7 @@ var solanaStakePool = (function (exports, bufferLayout) {
 	const u64 = bigInt(8);
 
 	const bool = (property) => {
-	    const layout = u8(property);
+	    const layout = u8$1(property);
 	    const { encode, decode } = encodeDecode(layout);
 	    const boolLayout = layout;
 	    boolLayout.decode = (buffer, offset) => {
@@ -25879,7 +25879,7 @@ var solanaStakePool = (function (exports, bufferLayout) {
 	};
 
 	const publicKey = (property) => {
-	    const layout = blob(32, property);
+	    const layout = blob$1(32, property);
 	    const { encode, decode } = encodeDecode(layout);
 	    const publicKeyLayout = layout;
 	    publicKeyLayout.decode = (buffer, offset) => {
@@ -25999,7 +25999,7 @@ var solanaStakePool = (function (exports, bufferLayout) {
 	}
 
 	/** TODO: docs */
-	const approveInstructionData = struct([u8('instruction'), u64('amount')]);
+	const approveInstructionData = struct([u8$1('instruction'), u64('amount')]);
 	/**
 	 * Construct an Approve instruction
 	 *
@@ -26035,8 +26035,8 @@ var solanaStakePool = (function (exports, bufferLayout) {
 
 	/** Buffer layout for de/serializing a multisig */
 	const MultisigLayout = struct([
-	    u8('m'),
-	    u8('n'),
+	    u8$1('m'),
+	    u8$1('n'),
 	    bool('isInitialized'),
 	    publicKey('signer1'),
 	    publicKey('signer2'),
@@ -26067,7 +26067,7 @@ var solanaStakePool = (function (exports, bufferLayout) {
 	    u64('amount'),
 	    u32('delegateOption'),
 	    publicKey('delegate'),
-	    u8('state'),
+	    u8$1('state'),
 	    u32('isNativeOption'),
 	    u64('isNative'),
 	    u64('delegatedAmount'),
@@ -26136,7 +26136,7 @@ var solanaStakePool = (function (exports, bufferLayout) {
 	    u32('mintAuthorityOption'),
 	    publicKey('mintAuthority'),
 	    u64('supply'),
-	    u8('decimals'),
+	    u8$1('decimals'),
 	    bool('isInitialized'),
 	    u32('freezeAuthorityOption'),
 	    publicKey('freezeAuthority'),
@@ -26891,7 +26891,7 @@ var solanaStakePool = (function (exports, bufferLayout) {
 	    return undefined;
 	  }
 	}
-	Layout$1.Layout = Layout;
+	var Layout_2 = Layout$1.Layout = Layout;
 
 	/* Provide text that carries a name (such as for a function that will
 	 * be throwing an error) annotated with the property of a given layout
@@ -29154,7 +29154,7 @@ var solanaStakePool = (function (exports, bufferLayout) {
 
 	/** Factory for {@link UInt|unsigned int layouts} spanning one
 	 * byte. */
-	Layout$1.u8 = (property => new UInt(1, property));
+	var u8 = Layout$1.u8 = (property => new UInt(1, property));
 
 	/** Factory for {@link UInt|little-endian unsigned int layouts}
 	 * spanning two bytes. */
@@ -29284,7 +29284,7 @@ var solanaStakePool = (function (exports, bufferLayout) {
 	Layout$1.unionLayoutDiscriminator = ((layout, property) => new UnionLayoutDiscriminator(layout, property));
 
 	/** Factory for {@link Blob} values. */
-	Layout$1.blob = ((length, property) => new Blob(length, property));
+	var blob = Layout$1.blob = ((length, property) => new Blob(length, property));
 
 	/** Factory for {@link CString} values. */
 	Layout$1.cstr = (property => new CString(property));
@@ -29791,11 +29791,11 @@ var solanaStakePool = (function (exports, bufferLayout) {
 	    return buffer.Buffer.from(new Uint8Array(data.buffer).slice(0, offset));
 	}
 
-	class FutureEpochLayout extends bufferLayout.Layout {
+	class FutureEpochLayout extends Layout_2 {
 	    constructor(layout, property) {
 	        super(-1, property);
 	        this.layout = layout;
-	        this.discriminator = bufferLayout.u8();
+	        this.discriminator = u8();
 	    }
 	    encode(src, b, offset = 0) {
 	        if (src === null || src === undefined) {
@@ -29851,11 +29851,11 @@ var solanaStakePool = (function (exports, bufferLayout) {
 	        layout: dist.struct([
 	            dist.u8('instruction'),
 	            dist.u32('nameLen'),
-	            bufferLayout.blob(nameLength, 'name'),
+	            blob(nameLength, 'name'),
 	            dist.u32('symbolLen'),
-	            bufferLayout.blob(symbolLength, 'symbol'),
+	            blob(symbolLength, 'symbol'),
 	            dist.u32('uriLen'),
-	            bufferLayout.blob(uriLength, 'uri'),
+	            blob(uriLength, 'uri'),
 	        ]),
 	    };
 	}
@@ -31537,5 +31537,5 @@ var solanaStakePool = (function (exports, bufferLayout) {
 
 	return exports;
 
-})({}, bufferLayout);
+})({});
 //# sourceMappingURL=index.iife.js.map
