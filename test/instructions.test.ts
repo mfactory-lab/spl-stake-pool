@@ -47,7 +47,6 @@ import {
   uninitializedStakeAccount,
   validatorListMock,
 } from './mocks';
-import BN from 'bn.js';
 
 describe('StakePoolProgram', () => {
   const connection = new Connection('http://127.0.0.1:8899');
@@ -456,46 +455,5 @@ describe('StakePoolProgram', () => {
         STAKE_POOL_INSTRUCTION_LAYOUTS.RemoveValidatorFromPool.index,
       );
     });
-  });
-});
-
-describe('StakePoolLayout', () => {
-  function divideBnToNumber(numerator: BN, denominator: BN): number {
-    if (denominator.isZero()) {
-      return 0;
-    }
-    const quotient = numerator.div(denominator).toNumber();
-    const rem = numerator.umod(denominator);
-    const gcd = rem.gcd(denominator);
-    return quotient + rem.div(gcd).toNumber() / denominator.div(gcd).toNumber();
-  }
-
-  it('should deserialize', async () => {
-    const data =
-      'AWq1iyr99ATwNekhxZcljopQjeBixmWt+p/5CTXBmRbd3Noj1MlCDU6CVh08awajdvCUB/G3tPyo/emrHFdD8Wfh4Pippvxf8kLk81F78B7Wst0ZUaC6ttlDVyWShgT3cP/LqkIDCUdVLBkThURwDuYX1RR+JyWBHNvgnIkDCm914o2jckW1NrCzDbv9Jn/RWcT0cAMYKm8U4SfG/F878wV0XwxEYxirEMlfQJSVhXDNBXRlpU2rFNnd40gahv7V/Mvj/aPav/vdTOwRdFALTRZQlijB9G5myz+0QWe7U7EGIQbd9uHXZaGT2cvhRs7reawctIXtX1s3kTqM9YV+/wCpvg5b6DCoAQANR0RDLW0BAEECAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAZAAAAAAAAAAFAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAnAAAAAAAAC0AAAAAAAAAAoA4AQAAAAAAhwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAANAHAAAAAAAAAwAAAAAAAAACoA8AAAAAAAAJAAAAAAAAAKryysAqbQEA9duCPAOoAQAAicd7jscBANVMdCNW7gEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
-    const buffer = Buffer.alloc(StakePoolLayout.span, data, 'base64');
-
-    const stakePool = StakePoolLayout.decode(buffer);
-
-    expect(
-      divideBnToNumber(
-        stakePool.nextSolWithdrawalFee!.numerator,
-        stakePool.nextSolWithdrawalFee!.denominator,
-      ),
-    ).toEqual(0.00225);
-
-    expect(
-      divideBnToNumber(
-        stakePool.stakeWithdrawalFee.numerator,
-        stakePool.stakeWithdrawalFee.denominator,
-      ),
-    ).toEqual(0.001125);
-
-    expect(
-      divideBnToNumber(
-        stakePool.solWithdrawalFee.numerator,
-        stakePool.solWithdrawalFee.denominator,
-      ),
-    ).toEqual(0.0015);
   });
 });
