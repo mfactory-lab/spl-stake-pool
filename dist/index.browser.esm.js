@@ -1,7 +1,7 @@
 import { LAMPORTS_PER_SOL, PublicKey, StakeProgram, Keypair, SystemProgram, TransactionInstruction, SYSVAR_RENT_PUBKEY, SYSVAR_CLOCK_PUBKEY, SYSVAR_STAKE_HISTORY_PUBKEY, STAKE_CONFIG_ID, StakeAuthorizationLayout } from '@solana/web3.js';
 import { TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync, createAssociatedTokenAccountIdempotentInstruction, getAccount, createApproveInstruction } from '@solana/spl-token';
 import BN from 'bn.js';
-import { struct, u8 as u8$1, publicKey, u64, option, u32, vec } from '@coral-xyz/borsh';
+import { struct, u64, u8 as u8$1, publicKey, option, u32, vec } from '@coral-xyz/borsh';
 import { Buffer as Buffer$1 } from 'buffer';
 
 /**
@@ -916,8 +916,8 @@ function findMetadataAddress(mint) {
     return publicKey;
 }
 
-const lockup = (property) => struct([u64('unixTimestamp'), u64('epoch'), publicKey('custodian')], property);
 const fee = (property) => struct([u64('denominator'), u64('numerator')], property);
+const lockup = (property) => struct([u64('unixTimestamp'), u64('epoch'), publicKey('custodian')], property);
 var AccountType;
 (function (AccountType) {
     AccountType[AccountType["Uninitialized"] = 0] = "Uninitialized";
@@ -979,7 +979,6 @@ const StakePoolLayout = struct([
     option(publicKey(), 'preferredWithdrawValidatorVoteAddress'),
     fee('stakeDepositFee'),
     fee('stakeWithdrawalFee'),
-    fee('nextStakeWithdrawalFee'),
     futureEpoch(fee(), 'nextStakeWithdrawalFee'),
     u8$1('stakeReferralFee'),
     option(publicKey(), 'solDepositAuthority'),
@@ -991,8 +990,8 @@ const StakePoolLayout = struct([
     u64('lastEpochPoolTokenSupply'),
     u64('lastEpochTotalLamports'),
 ]);
-// 1 + 32*3 + 1 + 32*5 + 8*3 + (8+8+32) + 16 + 17  + 33*2 + 16*3 + 17 + 1 + 33 + 16 + 1 + 33 + 16 + 17 + 8 + 8
-StakePoolLayout.span = 627;
+// 1 + 32*3 + 1 + 32*5 + 8*3 + (8+8+32) + 16 + 17  + 33*2 + 16*2 + 17 + 1 + 33 + 16 + 1 + 33 + 16 + 17 + 8 + 8
+StakePoolLayout.span = 611;
 var ValidatorStakeInfoStatus;
 (function (ValidatorStakeInfoStatus) {
     ValidatorStakeInfoStatus[ValidatorStakeInfoStatus["Active"] = 0] = "Active";
@@ -1196,9 +1195,6 @@ function arrayChunk(array, size) {
 
 // 'UpdateTokenMetadata' and 'CreateTokenMetadata' have dynamic layouts
 const MOVE_STAKE_LAYOUT = struct([u8$1('instruction'), u64('lamports'), u64('transientStakeSeed')]);
-function feeLayout(property) {
-    return struct([u64('denominator'), u64('numerator')], property);
-}
 function tokenMetadataLayout(instruction, nameLength, symbolLength, uriLength) {
     if (nameLength > METADATA_MAX_NAME_LENGTH) {
         throw new Error(`maximum token name length is ${METADATA_MAX_NAME_LENGTH} characters`);
@@ -1232,9 +1228,9 @@ const STAKE_POOL_INSTRUCTION_LAYOUTS = Object.freeze({
         index: 0,
         layout: struct([
             u8$1('instruction'),
-            feeLayout('fee'),
-            feeLayout('withdrawalFee'),
-            feeLayout('depositFee'),
+            fee('fee'),
+            fee('withdrawalFee'),
+            fee('depositFee'),
             u8$1('referralFee'),
             u32('maxValidators'),
         ]),

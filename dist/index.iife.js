@@ -29553,8 +29553,8 @@ var solanaStakePool = (function (exports) {
 		
 	} (dist));
 
-	const lockup = (property) => dist.struct([dist.u64('unixTimestamp'), dist.u64('epoch'), dist.publicKey('custodian')], property);
 	const fee = (property) => dist.struct([dist.u64('denominator'), dist.u64('numerator')], property);
+	const lockup = (property) => dist.struct([dist.u64('unixTimestamp'), dist.u64('epoch'), dist.publicKey('custodian')], property);
 	var AccountType;
 	(function (AccountType) {
 	    AccountType[AccountType["Uninitialized"] = 0] = "Uninitialized";
@@ -29616,7 +29616,6 @@ var solanaStakePool = (function (exports) {
 	    dist.option(dist.publicKey(), 'preferredWithdrawValidatorVoteAddress'),
 	    fee('stakeDepositFee'),
 	    fee('stakeWithdrawalFee'),
-	    fee('nextStakeWithdrawalFee'),
 	    futureEpoch(fee(), 'nextStakeWithdrawalFee'),
 	    dist.u8('stakeReferralFee'),
 	    dist.option(dist.publicKey(), 'solDepositAuthority'),
@@ -29628,8 +29627,8 @@ var solanaStakePool = (function (exports) {
 	    dist.u64('lastEpochPoolTokenSupply'),
 	    dist.u64('lastEpochTotalLamports'),
 	]);
-	// 1 + 32*3 + 1 + 32*5 + 8*3 + (8+8+32) + 16 + 17  + 33*2 + 16*3 + 17 + 1 + 33 + 16 + 1 + 33 + 16 + 17 + 8 + 8
-	StakePoolLayout.span = 627;
+	// 1 + 32*3 + 1 + 32*5 + 8*3 + (8+8+32) + 16 + 17  + 33*2 + 16*2 + 17 + 1 + 33 + 16 + 1 + 33 + 16 + 17 + 8 + 8
+	StakePoolLayout.span = 611;
 	var ValidatorStakeInfoStatus;
 	(function (ValidatorStakeInfoStatus) {
 	    ValidatorStakeInfoStatus[ValidatorStakeInfoStatus["Active"] = 0] = "Active";
@@ -29833,9 +29832,6 @@ var solanaStakePool = (function (exports) {
 
 	// 'UpdateTokenMetadata' and 'CreateTokenMetadata' have dynamic layouts
 	const MOVE_STAKE_LAYOUT = dist.struct([dist.u8('instruction'), dist.u64('lamports'), dist.u64('transientStakeSeed')]);
-	function feeLayout(property) {
-	    return dist.struct([dist.u64('denominator'), dist.u64('numerator')], property);
-	}
 	function tokenMetadataLayout(instruction, nameLength, symbolLength, uriLength) {
 	    if (nameLength > METADATA_MAX_NAME_LENGTH) {
 	        throw new Error(`maximum token name length is ${METADATA_MAX_NAME_LENGTH} characters`);
@@ -29869,9 +29865,9 @@ var solanaStakePool = (function (exports) {
 	        index: 0,
 	        layout: dist.struct([
 	            dist.u8('instruction'),
-	            feeLayout('fee'),
-	            feeLayout('withdrawalFee'),
-	            feeLayout('depositFee'),
+	            fee('fee'),
+	            fee('withdrawalFee'),
+	            fee('depositFee'),
 	            dist.u8('referralFee'),
 	            dist.u32('maxValidators'),
 	        ]),

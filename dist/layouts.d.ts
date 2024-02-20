@@ -11,6 +11,7 @@ export interface Lockup {
     epoch: BN;
     custodian: PublicKey;
 }
+export declare const fee: (property?: string) => import("buffer-layout").Layout<Fee>;
 export declare enum AccountType {
     Uninitialized = 0,
     StakePool = 1,
