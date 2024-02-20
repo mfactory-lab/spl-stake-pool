@@ -20,7 +20,7 @@ import {
 } from './constants';
 import type { InstructionType } from './utils';
 import { encodeData } from './utils';
-import { Fee } from './layouts';
+import { fee, Fee } from './layouts';
 import { Buffer } from 'buffer';
 import { blob } from 'buffer-layout';
 
@@ -57,10 +57,6 @@ export type StakePoolInstructionType =
 // 'UpdateTokenMetadata' and 'CreateTokenMetadata' have dynamic layouts
 
 const MOVE_STAKE_LAYOUT = struct([u8('instruction'), u64('lamports'), u64('transientStakeSeed')]);
-
-function feeLayout(property?: string) {
-  return struct([u64('denominator'), u64('numerator')], property);
-}
 
 export function tokenMetadataLayout(
   instruction: number,
@@ -106,9 +102,9 @@ export const STAKE_POOL_INSTRUCTION_LAYOUTS: {
     index: 0,
     layout: struct([
       u8('instruction'),
-      feeLayout('fee'),
-      feeLayout('withdrawalFee'),
-      feeLayout('depositFee'),
+      fee('fee'),
+      fee('withdrawalFee'),
+      fee('depositFee'),
       u8('referralFee'),
       u32('maxValidators'),
     ]),

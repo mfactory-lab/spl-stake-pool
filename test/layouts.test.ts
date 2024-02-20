@@ -61,6 +61,13 @@ describe('layouts', () => {
 
       expect(
         divideBnToNumber(
+          stakePool.nextStakeWithdrawalFee!.numerator,
+          stakePool.nextStakeWithdrawalFee!.denominator,
+        ),
+      ).toEqual(0.0016875);
+
+      expect(
+        divideBnToNumber(
           stakePool.stakeWithdrawalFee.numerator,
           stakePool.stakeWithdrawalFee.denominator,
         ),

@@ -16,10 +16,11 @@ export interface Lockup {
   custodian: PublicKey;
 }
 
+export const fee = (property?: string) =>
+  struct<Fee>([u64('denominator'), u64('numerator')], property);
+
 const lockup = (property?: string) =>
   struct<Lockup>([u64('unixTimestamp'), u64('epoch'), publicKey('custodian')], property);
-
-const fee = (property?: string) => struct<Fee>([u64('denominator'), u64('numerator')], property);
 
 export enum AccountType {
   Uninitialized,
@@ -131,7 +132,6 @@ export const StakePoolLayout = struct<StakePool>([
   option(publicKey(), 'preferredWithdrawValidatorVoteAddress'),
   fee('stakeDepositFee'),
   fee('stakeWithdrawalFee'),
-  fee('nextStakeWithdrawalFee'),
   futureEpoch(fee(), 'nextStakeWithdrawalFee'),
   u8('stakeReferralFee'),
   option(publicKey(), 'solDepositAuthority'),
@@ -144,8 +144,8 @@ export const StakePoolLayout = struct<StakePool>([
   u64('lastEpochTotalLamports'),
 ]);
 
-// 1 + 32*3 + 1 + 32*5 + 8*3 + (8+8+32) + 16 + 17  + 33*2 + 16*3 + 17 + 1 + 33 + 16 + 1 + 33 + 16 + 17 + 8 + 8
-StakePoolLayout.span = 627;
+// 1 + 32*3 + 1 + 32*5 + 8*3 + (8+8+32) + 16 + 17  + 33*2 + 16*2 + 17 + 1 + 33 + 16 + 1 + 33 + 16 + 17 + 8 + 8
+StakePoolLayout.span = 611;
 
 export enum ValidatorStakeInfoStatus {
   Active,
