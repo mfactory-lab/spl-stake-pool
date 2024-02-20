@@ -26670,7 +26670,7 @@ var solanaStakePool = (function (exports, bufferLayout) {
 	        TRANSIENT_STAKE_SEED_PREFIX,
 	        voteAccountAddress.toBuffer(),
 	        stakePoolAddress.toBuffer(),
-	        seed.toBuffer('le', 8),
+	        seed.toArrayLike(buffer.Buffer, 'le', 8),
 	    ], programId);
 	    return publicKey;
 	}
@@ -26678,7 +26678,7 @@ var solanaStakePool = (function (exports, bufferLayout) {
 	 * Generates the ephemeral program address for stake pool re-delegation
 	 */
 	function findEphemeralStakeProgramAddress(programId, stakePoolAddress, seed) {
-	    const [publicKey] = PublicKey.findProgramAddressSync([EPHEMERAL_STAKE_SEED_PREFIX, stakePoolAddress.toBuffer(), seed.toBuffer('le', 8)], programId);
+	    const [publicKey] = PublicKey.findProgramAddressSync([EPHEMERAL_STAKE_SEED_PREFIX, stakePoolAddress.toBuffer(), seed.toArrayLike(buffer.Buffer, 'le', 8)], programId);
 	    return publicKey;
 	}
 	/**
@@ -29579,23 +29579,25 @@ var solanaStakePool = (function (exports, bufferLayout) {
 	    dist.u64('lastUpdateEpoch'),
 	    lockup('lockup'),
 	    fee('epochFee'),
-	    dist.option(fee(), 'nextEpochFee'),
+	    futureEpoch(fee(), 'nextEpochFee'),
 	    dist.option(dist.publicKey(), 'preferredDepositValidatorVoteAddress'),
 	    dist.option(dist.publicKey(), 'preferredWithdrawValidatorVoteAddress'),
 	    fee('stakeDepositFee'),
 	    fee('stakeWithdrawalFee'),
-	    dist.option(fee(), 'nextStakeWithdrawalFee'),
+	    fee('nextStakeWithdrawalFee'),
+	    futureEpoch(fee(), 'nextStakeWithdrawalFee'),
 	    dist.u8('stakeReferralFee'),
 	    dist.option(dist.publicKey(), 'solDepositAuthority'),
 	    fee('solDepositFee'),
 	    dist.u8('solReferralFee'),
 	    dist.option(dist.publicKey(), 'solWithdrawAuthority'),
 	    fee('solWithdrawalFee'),
-	    dist.option(fee(), 'nextSolWithdrawalFee'),
+	    futureEpoch(fee(), 'nextSolWithdrawalFee'),
 	    dist.u64('lastEpochPoolTokenSupply'),
 	    dist.u64('lastEpochTotalLamports'),
 	]);
-	StakePoolLayout.span = 501;
+	// 1 + 32*3 + 1 + 32*5 + 8*3 + (8+8+32) + 16 + 17  + 33*2 + 16*3 + 17 + 1 + 33 + 16 + 1 + 33 + 16 + 17 + 8 + 8
+	StakePoolLayout.span = 627;
 	var ValidatorStakeInfoStatus;
 	(function (ValidatorStakeInfoStatus) {
 	    ValidatorStakeInfoStatus[ValidatorStakeInfoStatus["Active"] = 0] = "Active";
@@ -29627,7 +29629,8 @@ var solanaStakePool = (function (exports, bufferLayout) {
 	    dist.u32('maxValidators'),
 	    dist.vec(ValidatorStakeInfoLayout, 'validators'),
 	]);
-	ValidatorListLayout.span = 1 + 4 + 4;
+	// 1 + 4 + 4
+	ValidatorListLayout.span = 9;
 
 	async function getValidatorListAccount(connection, pubkey) {
 	    const account = await connection.getAccountInfo(pubkey);
@@ -29786,6 +29789,38 @@ var solanaStakePool = (function (exports, bufferLayout) {
 	    const layoutFields = Object.assign({ instruction: type.index }, fields);
 	    const offset = type.layout.encode(layoutFields, data);
 	    return buffer.Buffer.from(new Uint8Array(data.buffer).slice(0, offset));
+	}
+
+	class FutureEpochLayout extends bufferLayout.Layout {
+	    constructor(layout, property) {
+	        super(-1, property);
+	        this.layout = layout;
+	        this.discriminator = bufferLayout.u8();
+	    }
+	    encode(src, b, offset = 0) {
+	        if (src === null || src === undefined) {
+	            return this.discriminator.encode(0, b, offset);
+	        }
+	        this.discriminator.encode(1, b, offset);
+	        return this.layout.encode(src, b, offset + 1) + 1;
+	    }
+	    decode(b, offset = 0) {
+	        const discriminator = this.discriminator.decode(b, offset);
+	        if (discriminator === 0) {
+	            return null;
+	        }
+	        return this.layout.decode(b, offset + 1);
+	    }
+	    getSpan(b, offset = 0) {
+	        const discriminator = this.discriminator.decode(b, offset);
+	        if (discriminator === 0) {
+	            return 1;
+	        }
+	        return this.layout.getSpan(b, offset + 1) + 1;
+	    }
+	}
+	function futureEpoch(layout, property) {
+	    return new FutureEpochLayout(layout, property);
 	}
 
 	function arrayChunk(array, size) {
@@ -31047,7 +31082,10 @@ var solanaStakePool = (function (exports, bufferLayout) {
 	        throw new Error('Vote account not found in validator list');
 	    }
 	    const withdrawAuthority = findWithdrawAuthorityProgramAddress(STAKE_POOL_PROGRAM_ID, stakePoolAddress);
-	    const transientStakeSeed = validatorInfo.transientSeedSuffixStart.addn(1); // bump up by one to avoid reuse
+	    // Bump transient seed suffix by one to avoid reuse when not using the increaseAdditionalStake instruction
+	    const transientStakeSeed = ephemeralStakeSeed === undefined
+	        ? validatorInfo.transientSeedSuffixStart.addn(1)
+	        : validatorInfo.transientSeedSuffixStart;
 	    const transientStake = findTransientStakeProgramAddress(STAKE_POOL_PROGRAM_ID, validatorInfo.voteAccountAddress, stakePoolAddress, transientStakeSeed);
 	    const validatorStake = findStakeProgramAddress(STAKE_POOL_PROGRAM_ID, validatorInfo.voteAccountAddress, stakePoolAddress);
 	    const instructions = [];
@@ -31098,7 +31136,10 @@ var solanaStakePool = (function (exports, bufferLayout) {
 	    }
 	    const withdrawAuthority = findWithdrawAuthorityProgramAddress(STAKE_POOL_PROGRAM_ID, stakePoolAddress);
 	    const validatorStake = findStakeProgramAddress(STAKE_POOL_PROGRAM_ID, validatorInfo.voteAccountAddress, stakePoolAddress);
-	    const transientStakeSeed = validatorInfo.transientSeedSuffixStart.addn(1); // bump up by one to avoid reuse
+	    // Bump transient seed suffix by one to avoid reuse when not using the decreaseAdditionalStake instruction
+	    const transientStakeSeed = ephemeralStakeSeed === undefined
+	        ? validatorInfo.transientSeedSuffixStart.addn(1)
+	        : validatorInfo.transientSeedSuffixStart;
 	    const transientStake = findTransientStakeProgramAddress(STAKE_POOL_PROGRAM_ID, validatorInfo.voteAccountAddress, stakePoolAddress, transientStakeSeed);
 	    const instructions = [];
 	    if (ephemeralStakeSeed !== undefined) {

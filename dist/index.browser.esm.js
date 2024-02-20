@@ -3,7 +3,7 @@ import { TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync, createAssociatedTokenA
 import BN from 'bn.js';
 import { struct, u8, publicKey, u64, option, u32, vec } from '@coral-xyz/borsh';
 import { Buffer as Buffer$1 } from 'buffer';
-import { blob } from 'buffer-layout';
+import { Layout, u8 as u8$1, blob } from 'buffer-layout';
 
 /**
  * A `StructFailure` represents a single specific failure in validation.
@@ -483,7 +483,7 @@ function findTransientStakeProgramAddress(programId, voteAccountAddress, stakePo
         TRANSIENT_STAKE_SEED_PREFIX,
         voteAccountAddress.toBuffer(),
         stakePoolAddress.toBuffer(),
-        seed.toBuffer('le', 8),
+        seed.toArrayLike(Buffer$1, 'le', 8),
     ], programId);
     return publicKey;
 }
@@ -491,7 +491,7 @@ function findTransientStakeProgramAddress(programId, voteAccountAddress, stakePo
  * Generates the ephemeral program address for stake pool re-delegation
  */
 function findEphemeralStakeProgramAddress(programId, stakePoolAddress, seed) {
-    const [publicKey] = PublicKey.findProgramAddressSync([EPHEMERAL_STAKE_SEED_PREFIX, stakePoolAddress.toBuffer(), seed.toBuffer('le', 8)], programId);
+    const [publicKey] = PublicKey.findProgramAddressSync([EPHEMERAL_STAKE_SEED_PREFIX, stakePoolAddress.toBuffer(), seed.toArrayLike(Buffer$1, 'le', 8)], programId);
     return publicKey;
 }
 /**
@@ -560,23 +560,25 @@ const StakePoolLayout = struct([
     u64('lastUpdateEpoch'),
     lockup('lockup'),
     fee('epochFee'),
-    option(fee(), 'nextEpochFee'),
+    futureEpoch(fee(), 'nextEpochFee'),
     option(publicKey(), 'preferredDepositValidatorVoteAddress'),
     option(publicKey(), 'preferredWithdrawValidatorVoteAddress'),
     fee('stakeDepositFee'),
     fee('stakeWithdrawalFee'),
-    option(fee(), 'nextStakeWithdrawalFee'),
+    fee('nextStakeWithdrawalFee'),
+    futureEpoch(fee(), 'nextStakeWithdrawalFee'),
     u8('stakeReferralFee'),
     option(publicKey(), 'solDepositAuthority'),
     fee('solDepositFee'),
     u8('solReferralFee'),
     option(publicKey(), 'solWithdrawAuthority'),
     fee('solWithdrawalFee'),
-    option(fee(), 'nextSolWithdrawalFee'),
+    futureEpoch(fee(), 'nextSolWithdrawalFee'),
     u64('lastEpochPoolTokenSupply'),
     u64('lastEpochTotalLamports'),
 ]);
-StakePoolLayout.span = 501;
+// 1 + 32*3 + 1 + 32*5 + 8*3 + (8+8+32) + 16 + 17  + 33*2 + 16*3 + 17 + 1 + 33 + 16 + 1 + 33 + 16 + 17 + 8 + 8
+StakePoolLayout.span = 627;
 var ValidatorStakeInfoStatus;
 (function (ValidatorStakeInfoStatus) {
     ValidatorStakeInfoStatus[ValidatorStakeInfoStatus["Active"] = 0] = "Active";
@@ -608,7 +610,8 @@ const ValidatorListLayout = struct([
     u32('maxValidators'),
     vec(ValidatorStakeInfoLayout, 'validators'),
 ]);
-ValidatorListLayout.span = 1 + 4 + 4;
+// 1 + 4 + 4
+ValidatorListLayout.span = 9;
 
 async function getValidatorListAccount(connection, pubkey) {
     const account = await connection.getAccountInfo(pubkey);
@@ -767,6 +770,38 @@ function encodeData(type, fields) {
     const layoutFields = Object.assign({ instruction: type.index }, fields);
     const offset = type.layout.encode(layoutFields, data);
     return Buffer$1.from(new Uint8Array(data.buffer).slice(0, offset));
+}
+
+class FutureEpochLayout extends Layout {
+    constructor(layout, property) {
+        super(-1, property);
+        this.layout = layout;
+        this.discriminator = u8$1();
+    }
+    encode(src, b, offset = 0) {
+        if (src === null || src === undefined) {
+            return this.discriminator.encode(0, b, offset);
+        }
+        this.discriminator.encode(1, b, offset);
+        return this.layout.encode(src, b, offset + 1) + 1;
+    }
+    decode(b, offset = 0) {
+        const discriminator = this.discriminator.decode(b, offset);
+        if (discriminator === 0) {
+            return null;
+        }
+        return this.layout.decode(b, offset + 1);
+    }
+    getSpan(b, offset = 0) {
+        const discriminator = this.discriminator.decode(b, offset);
+        if (discriminator === 0) {
+            return 1;
+        }
+        return this.layout.getSpan(b, offset + 1) + 1;
+    }
+}
+function futureEpoch(layout, property) {
+    return new FutureEpochLayout(layout, property);
 }
 
 function arrayChunk(array, size) {
@@ -2028,7 +2063,10 @@ async function increaseValidatorStake(connection, stakePoolAddress, validatorVot
         throw new Error('Vote account not found in validator list');
     }
     const withdrawAuthority = findWithdrawAuthorityProgramAddress(STAKE_POOL_PROGRAM_ID, stakePoolAddress);
-    const transientStakeSeed = validatorInfo.transientSeedSuffixStart.addn(1); // bump up by one to avoid reuse
+    // Bump transient seed suffix by one to avoid reuse when not using the increaseAdditionalStake instruction
+    const transientStakeSeed = ephemeralStakeSeed === undefined
+        ? validatorInfo.transientSeedSuffixStart.addn(1)
+        : validatorInfo.transientSeedSuffixStart;
     const transientStake = findTransientStakeProgramAddress(STAKE_POOL_PROGRAM_ID, validatorInfo.voteAccountAddress, stakePoolAddress, transientStakeSeed);
     const validatorStake = findStakeProgramAddress(STAKE_POOL_PROGRAM_ID, validatorInfo.voteAccountAddress, stakePoolAddress);
     const instructions = [];
@@ -2079,7 +2117,10 @@ async function decreaseValidatorStake(connection, stakePoolAddress, validatorVot
     }
     const withdrawAuthority = findWithdrawAuthorityProgramAddress(STAKE_POOL_PROGRAM_ID, stakePoolAddress);
     const validatorStake = findStakeProgramAddress(STAKE_POOL_PROGRAM_ID, validatorInfo.voteAccountAddress, stakePoolAddress);
-    const transientStakeSeed = validatorInfo.transientSeedSuffixStart.addn(1); // bump up by one to avoid reuse
+    // Bump transient seed suffix by one to avoid reuse when not using the decreaseAdditionalStake instruction
+    const transientStakeSeed = ephemeralStakeSeed === undefined
+        ? validatorInfo.transientSeedSuffixStart.addn(1)
+        : validatorInfo.transientSeedSuffixStart;
     const transientStake = findTransientStakeProgramAddress(STAKE_POOL_PROGRAM_ID, validatorInfo.voteAccountAddress, stakePoolAddress, transientStakeSeed);
     const instructions = [];
     if (ephemeralStakeSeed !== undefined) {
