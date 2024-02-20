@@ -26606,91 +26606,6 @@ var solanaStakePool = (function (exports) {
 	    });
 	}
 
-	function solToLamports(amount) {
-	    if (isNaN(amount))
-	        return Number(0);
-	    return Number(amount * LAMPORTS_PER_SOL);
-	}
-	function lamportsToSol(lamports) {
-	    if (typeof lamports === 'number') {
-	        return Math.abs(lamports) / LAMPORTS_PER_SOL;
-	    }
-	    if (typeof lamports === 'bigint') {
-	        return Math.abs(Number(lamports)) / LAMPORTS_PER_SOL;
-	    }
-	    let signMultiplier = 1;
-	    if (lamports.isNeg()) {
-	        signMultiplier = -1;
-	    }
-	    const absLamports = lamports.abs();
-	    const lamportsString = absLamports.toString(10).padStart(10, '0');
-	    const splitIndex = lamportsString.length - 9;
-	    const solString = lamportsString.slice(0, splitIndex) + '.' + lamportsString.slice(splitIndex);
-	    return signMultiplier * parseFloat(solString);
-	}
-
-	// Public key that identifies the metadata program.
-	const METADATA_PROGRAM_ID = new PublicKey('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s');
-	const METADATA_MAX_NAME_LENGTH = 32;
-	const METADATA_MAX_SYMBOL_LENGTH = 10;
-	const METADATA_MAX_URI_LENGTH = 200;
-	// Public key that identifies the SPL Stake Pool program.
-	const STAKE_POOL_PROGRAM_ID = new PublicKey('SPoo1Ku8WFXoNDMHPsrGSTSG1Y47rzgn41SLUNakuHy');
-	// Maximum number of validators to update during UpdateValidatorListBalance.
-	const MAX_VALIDATORS_TO_UPDATE = 5;
-	// Seed for ephemeral stake account
-	const EPHEMERAL_STAKE_SEED_PREFIX = buffer.Buffer.from('ephemeral');
-	// Seed used to derive transient stake accounts.
-	const TRANSIENT_STAKE_SEED_PREFIX = buffer.Buffer.from('transient');
-	// Minimum amount of staked SOL required in a validator stake account to allow
-	// for merges without a mismatch on credits observed
-	const MINIMUM_ACTIVE_STAKE = 1000000;
-	/// Current supported max by the program
-	const DEFAULT_MAX_VALIDATORS = 2950;
-
-	/**
-	 * Generates the withdraw authority program address for the stake pool
-	 */
-	function findWithdrawAuthorityProgramAddress(programId, stakePoolAddress) {
-	    const [publicKey] = PublicKey.findProgramAddressSync([stakePoolAddress.toBuffer(), buffer.Buffer.from('withdraw')], programId);
-	    return publicKey;
-	}
-	/**
-	 * Generates the stake program address for a validator's vote account
-	 */
-	function findStakeProgramAddress(programId, voteAccountAddress, stakePoolAddress) {
-	    const [publicKey] = PublicKey.findProgramAddressSync([voteAccountAddress.toBuffer(), stakePoolAddress.toBuffer()], programId);
-	    return publicKey;
-	}
-	/**
-	 * Generates the stake program address for a validator's vote account
-	 */
-	function findTransientStakeProgramAddress(programId, voteAccountAddress, stakePoolAddress, seed) {
-	    const [publicKey] = PublicKey.findProgramAddressSync([
-	        TRANSIENT_STAKE_SEED_PREFIX,
-	        voteAccountAddress.toBuffer(),
-	        stakePoolAddress.toBuffer(),
-	        seed.toArrayLike(buffer.Buffer, 'le', 8),
-	    ], programId);
-	    return publicKey;
-	}
-	/**
-	 * Generates the ephemeral program address for stake pool re-delegation
-	 */
-	function findEphemeralStakeProgramAddress(programId, stakePoolAddress, seed) {
-	    const [publicKey] = PublicKey.findProgramAddressSync([EPHEMERAL_STAKE_SEED_PREFIX, stakePoolAddress.toBuffer(), seed.toArrayLike(buffer.Buffer, 'le', 8)], programId);
-	    return publicKey;
-	}
-	/**
-	 * Generates the token metadata address by {@link mint}
-	 */
-	function findMetadataAddress(mint) {
-	    const [publicKey] = PublicKey.findProgramAddressSync([buffer.Buffer.from('metadata'), METADATA_PROGRAM_ID.toBuffer(), mint.toBuffer()], METADATA_PROGRAM_ID);
-	    return publicKey;
-	}
-
-	var dist = {};
-
 	var Layout$1 = {};
 
 	/* The MIT License (MIT)
@@ -29295,6 +29210,123 @@ var solanaStakePool = (function (exports) {
 	/** Factory for {@link Constant} values. */
 	Layout$1.const = ((value, property) => new Constant(value, property));
 
+	class FutureEpochLayout extends Layout_2 {
+	    constructor(layout, property) {
+	        super(-1, property);
+	        this.layout = layout;
+	        this.discriminator = u8();
+	    }
+	    encode(src, b, offset = 0) {
+	        if (src === null || src === undefined) {
+	            return this.discriminator.encode(0, b, offset);
+	        }
+	        this.discriminator.encode(1, b, offset);
+	        return this.layout.encode(src, b, offset + 1) + 1;
+	    }
+	    decode(b, offset = 0) {
+	        const discriminator = this.discriminator.decode(b, offset);
+	        if (discriminator === 0) {
+	            return null;
+	        }
+	        return this.layout.decode(b, offset + 1);
+	    }
+	    getSpan(b, offset = 0) {
+	        const discriminator = this.discriminator.decode(b, offset);
+	        if (discriminator === 0) {
+	            return 1;
+	        }
+	        return this.layout.getSpan(b, offset + 1) + 1;
+	    }
+	}
+	function futureEpoch(layout, property) {
+	    return new FutureEpochLayout(layout, property);
+	}
+
+	function solToLamports(amount) {
+	    if (isNaN(amount))
+	        return Number(0);
+	    return Number(amount * LAMPORTS_PER_SOL);
+	}
+	function lamportsToSol(lamports) {
+	    if (typeof lamports === 'number') {
+	        return Math.abs(lamports) / LAMPORTS_PER_SOL;
+	    }
+	    if (typeof lamports === 'bigint') {
+	        return Math.abs(Number(lamports)) / LAMPORTS_PER_SOL;
+	    }
+	    let signMultiplier = 1;
+	    if (lamports.isNeg()) {
+	        signMultiplier = -1;
+	    }
+	    const absLamports = lamports.abs();
+	    const lamportsString = absLamports.toString(10).padStart(10, '0');
+	    const splitIndex = lamportsString.length - 9;
+	    const solString = lamportsString.slice(0, splitIndex) + '.' + lamportsString.slice(splitIndex);
+	    return signMultiplier * parseFloat(solString);
+	}
+
+	// Public key that identifies the metadata program.
+	const METADATA_PROGRAM_ID = new PublicKey('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s');
+	const METADATA_MAX_NAME_LENGTH = 32;
+	const METADATA_MAX_SYMBOL_LENGTH = 10;
+	const METADATA_MAX_URI_LENGTH = 200;
+	// Public key that identifies the SPL Stake Pool program.
+	const STAKE_POOL_PROGRAM_ID = new PublicKey('SPoo1Ku8WFXoNDMHPsrGSTSG1Y47rzgn41SLUNakuHy');
+	// Maximum number of validators to update during UpdateValidatorListBalance.
+	const MAX_VALIDATORS_TO_UPDATE = 5;
+	// Seed for ephemeral stake account
+	const EPHEMERAL_STAKE_SEED_PREFIX = buffer.Buffer.from('ephemeral');
+	// Seed used to derive transient stake accounts.
+	const TRANSIENT_STAKE_SEED_PREFIX = buffer.Buffer.from('transient');
+	// Minimum amount of staked SOL required in a validator stake account to allow
+	// for merges without a mismatch on credits observed
+	const MINIMUM_ACTIVE_STAKE = 1000000;
+	/// Current supported max by the program
+	const DEFAULT_MAX_VALIDATORS = 2950;
+
+	/**
+	 * Generates the withdraw authority program address for the stake pool
+	 */
+	function findWithdrawAuthorityProgramAddress(programId, stakePoolAddress) {
+	    const [publicKey] = PublicKey.findProgramAddressSync([stakePoolAddress.toBuffer(), buffer.Buffer.from('withdraw')], programId);
+	    return publicKey;
+	}
+	/**
+	 * Generates the stake program address for a validator's vote account
+	 */
+	function findStakeProgramAddress(programId, voteAccountAddress, stakePoolAddress) {
+	    const [publicKey] = PublicKey.findProgramAddressSync([voteAccountAddress.toBuffer(), stakePoolAddress.toBuffer()], programId);
+	    return publicKey;
+	}
+	/**
+	 * Generates the stake program address for a validator's vote account
+	 */
+	function findTransientStakeProgramAddress(programId, voteAccountAddress, stakePoolAddress, seed) {
+	    const [publicKey] = PublicKey.findProgramAddressSync([
+	        TRANSIENT_STAKE_SEED_PREFIX,
+	        voteAccountAddress.toBuffer(),
+	        stakePoolAddress.toBuffer(),
+	        seed.toArrayLike(buffer.Buffer, 'le', 8),
+	    ], programId);
+	    return publicKey;
+	}
+	/**
+	 * Generates the ephemeral program address for stake pool re-delegation
+	 */
+	function findEphemeralStakeProgramAddress(programId, stakePoolAddress, seed) {
+	    const [publicKey] = PublicKey.findProgramAddressSync([EPHEMERAL_STAKE_SEED_PREFIX, stakePoolAddress.toBuffer(), seed.toArrayLike(buffer.Buffer, 'le', 8)], programId);
+	    return publicKey;
+	}
+	/**
+	 * Generates the token metadata address by {@link mint}
+	 */
+	function findMetadataAddress(mint) {
+	    const [publicKey] = PublicKey.findProgramAddressSync([buffer.Buffer.from('metadata'), METADATA_PROGRAM_ID.toBuffer(), mint.toBuffer()], METADATA_PROGRAM_ID);
+	    return publicKey;
+	}
+
+	var dist = {};
+
 	var require$$1 = /*@__PURE__*/getAugmentedNamespace(index_browser_esm);
 
 	(function (exports) {
@@ -29789,38 +29821,6 @@ var solanaStakePool = (function (exports) {
 	    const layoutFields = Object.assign({ instruction: type.index }, fields);
 	    const offset = type.layout.encode(layoutFields, data);
 	    return buffer.Buffer.from(new Uint8Array(data.buffer).slice(0, offset));
-	}
-
-	class FutureEpochLayout extends Layout_2 {
-	    constructor(layout, property) {
-	        super(-1, property);
-	        this.layout = layout;
-	        this.discriminator = u8();
-	    }
-	    encode(src, b, offset = 0) {
-	        if (src === null || src === undefined) {
-	            return this.discriminator.encode(0, b, offset);
-	        }
-	        this.discriminator.encode(1, b, offset);
-	        return this.layout.encode(src, b, offset + 1) + 1;
-	    }
-	    decode(b, offset = 0) {
-	        const discriminator = this.discriminator.decode(b, offset);
-	        if (discriminator === 0) {
-	            return null;
-	        }
-	        return this.layout.decode(b, offset + 1);
-	    }
-	    getSpan(b, offset = 0) {
-	        const discriminator = this.discriminator.decode(b, offset);
-	        if (discriminator === 0) {
-	            return 1;
-	        }
-	        return this.layout.getSpan(b, offset + 1) + 1;
-	    }
-	}
-	function futureEpoch(layout, property) {
-	    return new FutureEpochLayout(layout, property);
 	}
 
 	function arrayChunk(array, size) {

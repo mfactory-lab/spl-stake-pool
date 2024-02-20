@@ -420,359 +420,6 @@ function coerce(struct, condition, coercer) {
     });
 }
 
-function solToLamports(amount) {
-    if (isNaN(amount))
-        return Number(0);
-    return Number(amount * web3_js.LAMPORTS_PER_SOL);
-}
-function lamportsToSol(lamports) {
-    if (typeof lamports === 'number') {
-        return Math.abs(lamports) / web3_js.LAMPORTS_PER_SOL;
-    }
-    if (typeof lamports === 'bigint') {
-        return Math.abs(Number(lamports)) / web3_js.LAMPORTS_PER_SOL;
-    }
-    let signMultiplier = 1;
-    if (lamports.isNeg()) {
-        signMultiplier = -1;
-    }
-    const absLamports = lamports.abs();
-    const lamportsString = absLamports.toString(10).padStart(10, '0');
-    const splitIndex = lamportsString.length - 9;
-    const solString = lamportsString.slice(0, splitIndex) + '.' + lamportsString.slice(splitIndex);
-    return signMultiplier * parseFloat(solString);
-}
-
-// Public key that identifies the metadata program.
-const METADATA_PROGRAM_ID = new web3_js.PublicKey('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s');
-const METADATA_MAX_NAME_LENGTH = 32;
-const METADATA_MAX_SYMBOL_LENGTH = 10;
-const METADATA_MAX_URI_LENGTH = 200;
-// Public key that identifies the SPL Stake Pool program.
-const STAKE_POOL_PROGRAM_ID = new web3_js.PublicKey('SPoo1Ku8WFXoNDMHPsrGSTSG1Y47rzgn41SLUNakuHy');
-// Maximum number of validators to update during UpdateValidatorListBalance.
-const MAX_VALIDATORS_TO_UPDATE = 5;
-// Seed for ephemeral stake account
-const EPHEMERAL_STAKE_SEED_PREFIX = buffer.Buffer.from('ephemeral');
-// Seed used to derive transient stake accounts.
-const TRANSIENT_STAKE_SEED_PREFIX = buffer.Buffer.from('transient');
-// Minimum amount of staked SOL required in a validator stake account to allow
-// for merges without a mismatch on credits observed
-const MINIMUM_ACTIVE_STAKE = 1000000;
-/// Current supported max by the program
-const DEFAULT_MAX_VALIDATORS = 2950;
-
-/**
- * Generates the withdraw authority program address for the stake pool
- */
-function findWithdrawAuthorityProgramAddress(programId, stakePoolAddress) {
-    const [publicKey] = web3_js.PublicKey.findProgramAddressSync([stakePoolAddress.toBuffer(), buffer.Buffer.from('withdraw')], programId);
-    return publicKey;
-}
-/**
- * Generates the stake program address for a validator's vote account
- */
-function findStakeProgramAddress(programId, voteAccountAddress, stakePoolAddress) {
-    const [publicKey] = web3_js.PublicKey.findProgramAddressSync([voteAccountAddress.toBuffer(), stakePoolAddress.toBuffer()], programId);
-    return publicKey;
-}
-/**
- * Generates the stake program address for a validator's vote account
- */
-function findTransientStakeProgramAddress(programId, voteAccountAddress, stakePoolAddress, seed) {
-    const [publicKey] = web3_js.PublicKey.findProgramAddressSync([
-        TRANSIENT_STAKE_SEED_PREFIX,
-        voteAccountAddress.toBuffer(),
-        stakePoolAddress.toBuffer(),
-        seed.toArrayLike(buffer.Buffer, 'le', 8),
-    ], programId);
-    return publicKey;
-}
-/**
- * Generates the ephemeral program address for stake pool re-delegation
- */
-function findEphemeralStakeProgramAddress(programId, stakePoolAddress, seed) {
-    const [publicKey] = web3_js.PublicKey.findProgramAddressSync([EPHEMERAL_STAKE_SEED_PREFIX, stakePoolAddress.toBuffer(), seed.toArrayLike(buffer.Buffer, 'le', 8)], programId);
-    return publicKey;
-}
-/**
- * Generates the token metadata address by {@link mint}
- */
-function findMetadataAddress(mint) {
-    const [publicKey] = web3_js.PublicKey.findProgramAddressSync([buffer.Buffer.from('metadata'), METADATA_PROGRAM_ID.toBuffer(), mint.toBuffer()], METADATA_PROGRAM_ID);
-    return publicKey;
-}
-
-const lockup = (property) => borsh.struct([borsh.u64('unixTimestamp'), borsh.u64('epoch'), borsh.publicKey('custodian')], property);
-const fee = (property) => borsh.struct([borsh.u64('denominator'), borsh.u64('numerator')], property);
-var AccountType;
-(function (AccountType) {
-    AccountType[AccountType["Uninitialized"] = 0] = "Uninitialized";
-    AccountType[AccountType["StakePool"] = 1] = "StakePool";
-    AccountType[AccountType["ValidatorList"] = 2] = "ValidatorList";
-})(AccountType || (AccountType = {}));
-const BigNumFromString = coerce(instance(BN), string(), (value) => {
-    return new BN(value, 10);
-});
-const PublicKeyFromString = coerce(instance(web3_js.PublicKey), string(), (value) => new web3_js.PublicKey(value));
-const StakeAccountType = enums(['uninitialized', 'initialized', 'delegated', 'rewardsPool']);
-const StakeMeta = type({
-    rentExemptReserve: BigNumFromString,
-    authorized: type({
-        staker: PublicKeyFromString,
-        withdrawer: PublicKeyFromString,
-    }),
-    lockup: type({
-        unixTimestamp: number(),
-        epoch: number(),
-        custodian: PublicKeyFromString,
-    }),
-});
-const StakeAccountInfo = type({
-    meta: StakeMeta,
-    stake: nullable(type({
-        delegation: type({
-            voter: PublicKeyFromString,
-            stake: BigNumFromString,
-            activationEpoch: BigNumFromString,
-            deactivationEpoch: BigNumFromString,
-            warmupCooldownRate: number(),
-        }),
-        creditsObserved: number(),
-    })),
-});
-const StakeAccount = type({
-    type: StakeAccountType,
-    info: optional(StakeAccountInfo),
-});
-const StakePoolLayout = borsh.struct([
-    borsh.u8('accountType'),
-    borsh.publicKey('manager'),
-    borsh.publicKey('staker'),
-    borsh.publicKey('stakeDepositAuthority'),
-    borsh.u8('stakeWithdrawBumpSeed'),
-    borsh.publicKey('validatorList'),
-    borsh.publicKey('reserveStake'),
-    borsh.publicKey('poolMint'),
-    borsh.publicKey('managerFeeAccount'),
-    borsh.publicKey('tokenProgramId'),
-    borsh.u64('totalLamports'),
-    borsh.u64('poolTokenSupply'),
-    borsh.u64('lastUpdateEpoch'),
-    lockup('lockup'),
-    fee('epochFee'),
-    futureEpoch(fee(), 'nextEpochFee'),
-    borsh.option(borsh.publicKey(), 'preferredDepositValidatorVoteAddress'),
-    borsh.option(borsh.publicKey(), 'preferredWithdrawValidatorVoteAddress'),
-    fee('stakeDepositFee'),
-    fee('stakeWithdrawalFee'),
-    fee('nextStakeWithdrawalFee'),
-    futureEpoch(fee(), 'nextStakeWithdrawalFee'),
-    borsh.u8('stakeReferralFee'),
-    borsh.option(borsh.publicKey(), 'solDepositAuthority'),
-    fee('solDepositFee'),
-    borsh.u8('solReferralFee'),
-    borsh.option(borsh.publicKey(), 'solWithdrawAuthority'),
-    fee('solWithdrawalFee'),
-    futureEpoch(fee(), 'nextSolWithdrawalFee'),
-    borsh.u64('lastEpochPoolTokenSupply'),
-    borsh.u64('lastEpochTotalLamports'),
-]);
-// 1 + 32*3 + 1 + 32*5 + 8*3 + (8+8+32) + 16 + 17  + 33*2 + 16*3 + 17 + 1 + 33 + 16 + 1 + 33 + 16 + 17 + 8 + 8
-StakePoolLayout.span = 627;
-var ValidatorStakeInfoStatus;
-(function (ValidatorStakeInfoStatus) {
-    ValidatorStakeInfoStatus[ValidatorStakeInfoStatus["Active"] = 0] = "Active";
-    ValidatorStakeInfoStatus[ValidatorStakeInfoStatus["DeactivatingTransient"] = 1] = "DeactivatingTransient";
-    ValidatorStakeInfoStatus[ValidatorStakeInfoStatus["ReadyForRemoval"] = 2] = "ReadyForRemoval";
-})(ValidatorStakeInfoStatus || (ValidatorStakeInfoStatus = {}));
-const ValidatorStakeInfoLayout = borsh.struct([
-    /// Amount of active stake delegated to this validator
-    /// Note that if `last_update_epoch` does not match the current epoch then
-    /// this field may not be accurate
-    borsh.u64('activeStakeLamports'),
-    /// Amount of transient stake delegated to this validator
-    /// Note that if `last_update_epoch` does not match the current epoch then
-    /// this field may not be accurate
-    borsh.u64('transientStakeLamports'),
-    /// Last epoch the active and transient stake lamports fields were updated
-    borsh.u64('lastUpdateEpoch'),
-    /// Start of the validator transient account seed suffixes
-    borsh.u64('transientSeedSuffixStart'),
-    /// End of the validator transient account seed suffixes
-    borsh.u64('transientSeedSuffixEnd'),
-    /// Status of the validator stake account
-    borsh.u8('status'),
-    /// Validator vote account address
-    borsh.publicKey('voteAccountAddress'),
-]);
-const ValidatorListLayout = borsh.struct([
-    borsh.u8('accountType'),
-    borsh.u32('maxValidators'),
-    borsh.vec(ValidatorStakeInfoLayout, 'validators'),
-]);
-// 1 + 4 + 4
-ValidatorListLayout.span = 9;
-
-async function getValidatorListAccount(connection, pubkey) {
-    const account = await connection.getAccountInfo(pubkey);
-    if (!account) {
-        throw new Error('Invalid validator list account');
-    }
-    return {
-        pubkey,
-        account: {
-            data: ValidatorListLayout.decode(account === null || account === void 0 ? void 0 : account.data),
-            executable: account.executable,
-            lamports: account.lamports,
-            owner: account.owner,
-        },
-    };
-}
-async function prepareWithdrawAccounts(connection, stakePool, stakePoolAddress, amount, compareFn, skipFee) {
-    var _a, _b, _c;
-    const validatorListAcc = await connection.getAccountInfo(stakePool.validatorList);
-    const validatorList = ValidatorListLayout.decode(Buffer.from((_a = validatorListAcc === null || validatorListAcc === void 0 ? void 0 : validatorListAcc.data) !== null && _a !== void 0 ? _a : []));
-    if (!(validatorList === null || validatorList === void 0 ? void 0 : validatorList.validators) || (validatorList === null || validatorList === void 0 ? void 0 : validatorList.validators.length) === 0) {
-        throw new Error('No accounts found');
-    }
-    const minBalanceForRentExemption = await connection.getMinimumBalanceForRentExemption(web3_js.StakeProgram.space);
-    const minBalance = minBalanceForRentExemption + MINIMUM_ACTIVE_STAKE;
-    const types = ['preferred', 'active', 'transient', 'reserve'];
-    let accounts = [];
-    // Prepare accounts
-    for (const validator of validatorList.validators) {
-        if (validator.status !== ValidatorStakeInfoStatus.Active) {
-            continue;
-        }
-        const stakeAccountAddress = findStakeProgramAddress(STAKE_POOL_PROGRAM_ID, validator.voteAccountAddress, stakePoolAddress);
-        if (!validator.activeStakeLamports.isZero()) {
-            const isPreferred = (_b = stakePool === null || stakePool === void 0 ? void 0 : stakePool.preferredWithdrawValidatorVoteAddress) === null || _b === void 0 ? void 0 : _b.equals(validator.voteAccountAddress);
-            accounts.push({
-                type: isPreferred ? 'preferred' : 'active',
-                voteAddress: validator.voteAccountAddress,
-                stakeAddress: stakeAccountAddress,
-                lamports: validator.activeStakeLamports.toNumber(),
-            });
-        }
-        const transientStakeLamports = validator.transientStakeLamports.toNumber() - minBalance;
-        if (transientStakeLamports > 0) {
-            const transientStakeAccountAddress = findTransientStakeProgramAddress(STAKE_POOL_PROGRAM_ID, validator.voteAccountAddress, stakePoolAddress, validator.transientSeedSuffixStart);
-            accounts.push({
-                type: 'transient',
-                voteAddress: validator.voteAccountAddress,
-                stakeAddress: transientStakeAccountAddress,
-                lamports: transientStakeLamports,
-            });
-        }
-    }
-    // Sort from highest to lowest balance
-    accounts = accounts.sort(compareFn || ((a, b) => b.lamports - a.lamports));
-    const reserveStake = await connection.getAccountInfo(stakePool.reserveStake);
-    const reserveStakeBalance = ((_c = reserveStake === null || reserveStake === void 0 ? void 0 : reserveStake.lamports) !== null && _c !== void 0 ? _c : 0) - minBalanceForRentExemption - 1;
-    if (reserveStakeBalance > 0) {
-        accounts.push({
-            type: 'reserve',
-            stakeAddress: stakePool.reserveStake,
-            lamports: reserveStakeBalance,
-        });
-    }
-    // Prepare the list of accounts to withdraw from
-    const withdrawFrom = [];
-    let remainingAmount = amount;
-    const fee = stakePool.stakeWithdrawalFee;
-    const inverseFee = {
-        numerator: fee.denominator.sub(fee.numerator),
-        denominator: fee.denominator,
-    };
-    for (const type of types) {
-        const filteredAccounts = accounts.filter((a) => a.type === type);
-        for (const { stakeAddress, voteAddress, lamports } of filteredAccounts) {
-            if (lamports <= minBalance && type === 'transient') {
-                continue;
-            }
-            let availableForWithdrawal = calcPoolTokensForDeposit(stakePool, lamports);
-            if (!skipFee && !inverseFee.numerator.isZero()) {
-                availableForWithdrawal = divideBnToNumber(new BN(availableForWithdrawal).mul(inverseFee.denominator), inverseFee.numerator);
-            }
-            const poolAmount = Math.min(availableForWithdrawal, remainingAmount);
-            if (poolAmount <= 0) {
-                continue;
-            }
-            // Those accounts will be withdrawn completely with `claim` instruction
-            withdrawFrom.push({ stakeAddress, voteAddress, poolAmount });
-            remainingAmount -= poolAmount;
-            if (remainingAmount === 0) {
-                break;
-            }
-        }
-        if (remainingAmount === 0) {
-            break;
-        }
-    }
-    // Not enough stake to withdraw the specified amount
-    if (remainingAmount > 0) {
-        throw new Error(`No stake accounts found in this pool with enough balance to withdraw ${lamportsToSol(amount)} pool tokens.`);
-    }
-    return withdrawFrom;
-}
-/**
- * Calculate the pool tokens that should be minted for a deposit of `stakeLamports`
- */
-function calcPoolTokensForDeposit(stakePool, stakeLamports) {
-    if (stakePool.poolTokenSupply.isZero() || stakePool.totalLamports.isZero()) {
-        return stakeLamports;
-    }
-    return Math.floor(divideBnToNumber(new BN(stakeLamports).mul(stakePool.poolTokenSupply), stakePool.totalLamports));
-}
-/**
- * Calculate lamports amount on withdrawal
- */
-function calcLamportsWithdrawAmount(stakePool, poolTokens) {
-    const numerator = new BN(poolTokens).mul(stakePool.totalLamports);
-    const denominator = stakePool.poolTokenSupply;
-    if (numerator.lt(denominator)) {
-        return 0;
-    }
-    return divideBnToNumber(numerator, denominator);
-}
-function divideBnToNumber(numerator, denominator) {
-    if (denominator.isZero()) {
-        return 0;
-    }
-    const quotient = numerator.div(denominator).toNumber();
-    const rem = numerator.umod(denominator);
-    const gcd = rem.gcd(denominator);
-    return quotient + rem.div(gcd).toNumber() / denominator.div(gcd).toNumber();
-}
-function newStakeAccount(feePayer, instructions, lamports) {
-    // Account for tokens not specified, creating one
-    const stakeReceiverKeypair = web3_js.Keypair.generate();
-    console.log(`Creating account to receive stake ${stakeReceiverKeypair.publicKey}`);
-    instructions.push(
-    // Creating new account
-    web3_js.SystemProgram.createAccount({
-        fromPubkey: feePayer,
-        newAccountPubkey: stakeReceiverKeypair.publicKey,
-        lamports,
-        space: web3_js.StakeProgram.space,
-        programId: web3_js.StakeProgram.programId,
-    }));
-    return stakeReceiverKeypair;
-}
-
-/**
- * Populate a buffer of instruction data using an InstructionType
- * @internal
- */
-function encodeData(type, fields) {
-    const allocLength = type.layout.span;
-    const data = buffer.Buffer.alloc(allocLength < 0 ? 1024 : allocLength);
-    const layoutFields = Object.assign({ instruction: type.index }, fields);
-    const offset = type.layout.encode(layoutFields, data);
-    return buffer.Buffer.from(new Uint8Array(data.buffer).slice(0, offset));
-}
-
 /* The MIT License (MIT)
  *
  * Copyright 2015-2018 Peter A. Bigot
@@ -1186,6 +833,359 @@ class FutureEpochLayout extends Layout_2 {
 }
 function futureEpoch(layout, property) {
     return new FutureEpochLayout(layout, property);
+}
+
+function solToLamports(amount) {
+    if (isNaN(amount))
+        return Number(0);
+    return Number(amount * web3_js.LAMPORTS_PER_SOL);
+}
+function lamportsToSol(lamports) {
+    if (typeof lamports === 'number') {
+        return Math.abs(lamports) / web3_js.LAMPORTS_PER_SOL;
+    }
+    if (typeof lamports === 'bigint') {
+        return Math.abs(Number(lamports)) / web3_js.LAMPORTS_PER_SOL;
+    }
+    let signMultiplier = 1;
+    if (lamports.isNeg()) {
+        signMultiplier = -1;
+    }
+    const absLamports = lamports.abs();
+    const lamportsString = absLamports.toString(10).padStart(10, '0');
+    const splitIndex = lamportsString.length - 9;
+    const solString = lamportsString.slice(0, splitIndex) + '.' + lamportsString.slice(splitIndex);
+    return signMultiplier * parseFloat(solString);
+}
+
+// Public key that identifies the metadata program.
+const METADATA_PROGRAM_ID = new web3_js.PublicKey('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s');
+const METADATA_MAX_NAME_LENGTH = 32;
+const METADATA_MAX_SYMBOL_LENGTH = 10;
+const METADATA_MAX_URI_LENGTH = 200;
+// Public key that identifies the SPL Stake Pool program.
+const STAKE_POOL_PROGRAM_ID = new web3_js.PublicKey('SPoo1Ku8WFXoNDMHPsrGSTSG1Y47rzgn41SLUNakuHy');
+// Maximum number of validators to update during UpdateValidatorListBalance.
+const MAX_VALIDATORS_TO_UPDATE = 5;
+// Seed for ephemeral stake account
+const EPHEMERAL_STAKE_SEED_PREFIX = buffer.Buffer.from('ephemeral');
+// Seed used to derive transient stake accounts.
+const TRANSIENT_STAKE_SEED_PREFIX = buffer.Buffer.from('transient');
+// Minimum amount of staked SOL required in a validator stake account to allow
+// for merges without a mismatch on credits observed
+const MINIMUM_ACTIVE_STAKE = 1000000;
+/// Current supported max by the program
+const DEFAULT_MAX_VALIDATORS = 2950;
+
+/**
+ * Generates the withdraw authority program address for the stake pool
+ */
+function findWithdrawAuthorityProgramAddress(programId, stakePoolAddress) {
+    const [publicKey] = web3_js.PublicKey.findProgramAddressSync([stakePoolAddress.toBuffer(), buffer.Buffer.from('withdraw')], programId);
+    return publicKey;
+}
+/**
+ * Generates the stake program address for a validator's vote account
+ */
+function findStakeProgramAddress(programId, voteAccountAddress, stakePoolAddress) {
+    const [publicKey] = web3_js.PublicKey.findProgramAddressSync([voteAccountAddress.toBuffer(), stakePoolAddress.toBuffer()], programId);
+    return publicKey;
+}
+/**
+ * Generates the stake program address for a validator's vote account
+ */
+function findTransientStakeProgramAddress(programId, voteAccountAddress, stakePoolAddress, seed) {
+    const [publicKey] = web3_js.PublicKey.findProgramAddressSync([
+        TRANSIENT_STAKE_SEED_PREFIX,
+        voteAccountAddress.toBuffer(),
+        stakePoolAddress.toBuffer(),
+        seed.toArrayLike(buffer.Buffer, 'le', 8),
+    ], programId);
+    return publicKey;
+}
+/**
+ * Generates the ephemeral program address for stake pool re-delegation
+ */
+function findEphemeralStakeProgramAddress(programId, stakePoolAddress, seed) {
+    const [publicKey] = web3_js.PublicKey.findProgramAddressSync([EPHEMERAL_STAKE_SEED_PREFIX, stakePoolAddress.toBuffer(), seed.toArrayLike(buffer.Buffer, 'le', 8)], programId);
+    return publicKey;
+}
+/**
+ * Generates the token metadata address by {@link mint}
+ */
+function findMetadataAddress(mint) {
+    const [publicKey] = web3_js.PublicKey.findProgramAddressSync([buffer.Buffer.from('metadata'), METADATA_PROGRAM_ID.toBuffer(), mint.toBuffer()], METADATA_PROGRAM_ID);
+    return publicKey;
+}
+
+const lockup = (property) => borsh.struct([borsh.u64('unixTimestamp'), borsh.u64('epoch'), borsh.publicKey('custodian')], property);
+const fee = (property) => borsh.struct([borsh.u64('denominator'), borsh.u64('numerator')], property);
+var AccountType;
+(function (AccountType) {
+    AccountType[AccountType["Uninitialized"] = 0] = "Uninitialized";
+    AccountType[AccountType["StakePool"] = 1] = "StakePool";
+    AccountType[AccountType["ValidatorList"] = 2] = "ValidatorList";
+})(AccountType || (AccountType = {}));
+const BigNumFromString = coerce(instance(BN), string(), (value) => {
+    return new BN(value, 10);
+});
+const PublicKeyFromString = coerce(instance(web3_js.PublicKey), string(), (value) => new web3_js.PublicKey(value));
+const StakeAccountType = enums(['uninitialized', 'initialized', 'delegated', 'rewardsPool']);
+const StakeMeta = type({
+    rentExemptReserve: BigNumFromString,
+    authorized: type({
+        staker: PublicKeyFromString,
+        withdrawer: PublicKeyFromString,
+    }),
+    lockup: type({
+        unixTimestamp: number(),
+        epoch: number(),
+        custodian: PublicKeyFromString,
+    }),
+});
+const StakeAccountInfo = type({
+    meta: StakeMeta,
+    stake: nullable(type({
+        delegation: type({
+            voter: PublicKeyFromString,
+            stake: BigNumFromString,
+            activationEpoch: BigNumFromString,
+            deactivationEpoch: BigNumFromString,
+            warmupCooldownRate: number(),
+        }),
+        creditsObserved: number(),
+    })),
+});
+const StakeAccount = type({
+    type: StakeAccountType,
+    info: optional(StakeAccountInfo),
+});
+const StakePoolLayout = borsh.struct([
+    borsh.u8('accountType'),
+    borsh.publicKey('manager'),
+    borsh.publicKey('staker'),
+    borsh.publicKey('stakeDepositAuthority'),
+    borsh.u8('stakeWithdrawBumpSeed'),
+    borsh.publicKey('validatorList'),
+    borsh.publicKey('reserveStake'),
+    borsh.publicKey('poolMint'),
+    borsh.publicKey('managerFeeAccount'),
+    borsh.publicKey('tokenProgramId'),
+    borsh.u64('totalLamports'),
+    borsh.u64('poolTokenSupply'),
+    borsh.u64('lastUpdateEpoch'),
+    lockup('lockup'),
+    fee('epochFee'),
+    futureEpoch(fee(), 'nextEpochFee'),
+    borsh.option(borsh.publicKey(), 'preferredDepositValidatorVoteAddress'),
+    borsh.option(borsh.publicKey(), 'preferredWithdrawValidatorVoteAddress'),
+    fee('stakeDepositFee'),
+    fee('stakeWithdrawalFee'),
+    fee('nextStakeWithdrawalFee'),
+    futureEpoch(fee(), 'nextStakeWithdrawalFee'),
+    borsh.u8('stakeReferralFee'),
+    borsh.option(borsh.publicKey(), 'solDepositAuthority'),
+    fee('solDepositFee'),
+    borsh.u8('solReferralFee'),
+    borsh.option(borsh.publicKey(), 'solWithdrawAuthority'),
+    fee('solWithdrawalFee'),
+    futureEpoch(fee(), 'nextSolWithdrawalFee'),
+    borsh.u64('lastEpochPoolTokenSupply'),
+    borsh.u64('lastEpochTotalLamports'),
+]);
+// 1 + 32*3 + 1 + 32*5 + 8*3 + (8+8+32) + 16 + 17  + 33*2 + 16*3 + 17 + 1 + 33 + 16 + 1 + 33 + 16 + 17 + 8 + 8
+StakePoolLayout.span = 627;
+var ValidatorStakeInfoStatus;
+(function (ValidatorStakeInfoStatus) {
+    ValidatorStakeInfoStatus[ValidatorStakeInfoStatus["Active"] = 0] = "Active";
+    ValidatorStakeInfoStatus[ValidatorStakeInfoStatus["DeactivatingTransient"] = 1] = "DeactivatingTransient";
+    ValidatorStakeInfoStatus[ValidatorStakeInfoStatus["ReadyForRemoval"] = 2] = "ReadyForRemoval";
+})(ValidatorStakeInfoStatus || (ValidatorStakeInfoStatus = {}));
+const ValidatorStakeInfoLayout = borsh.struct([
+    /// Amount of active stake delegated to this validator
+    /// Note that if `last_update_epoch` does not match the current epoch then
+    /// this field may not be accurate
+    borsh.u64('activeStakeLamports'),
+    /// Amount of transient stake delegated to this validator
+    /// Note that if `last_update_epoch` does not match the current epoch then
+    /// this field may not be accurate
+    borsh.u64('transientStakeLamports'),
+    /// Last epoch the active and transient stake lamports fields were updated
+    borsh.u64('lastUpdateEpoch'),
+    /// Start of the validator transient account seed suffixes
+    borsh.u64('transientSeedSuffixStart'),
+    /// End of the validator transient account seed suffixes
+    borsh.u64('transientSeedSuffixEnd'),
+    /// Status of the validator stake account
+    borsh.u8('status'),
+    /// Validator vote account address
+    borsh.publicKey('voteAccountAddress'),
+]);
+const ValidatorListLayout = borsh.struct([
+    borsh.u8('accountType'),
+    borsh.u32('maxValidators'),
+    borsh.vec(ValidatorStakeInfoLayout, 'validators'),
+]);
+// 1 + 4 + 4
+ValidatorListLayout.span = 9;
+
+async function getValidatorListAccount(connection, pubkey) {
+    const account = await connection.getAccountInfo(pubkey);
+    if (!account) {
+        throw new Error('Invalid validator list account');
+    }
+    return {
+        pubkey,
+        account: {
+            data: ValidatorListLayout.decode(account === null || account === void 0 ? void 0 : account.data),
+            executable: account.executable,
+            lamports: account.lamports,
+            owner: account.owner,
+        },
+    };
+}
+async function prepareWithdrawAccounts(connection, stakePool, stakePoolAddress, amount, compareFn, skipFee) {
+    var _a, _b, _c;
+    const validatorListAcc = await connection.getAccountInfo(stakePool.validatorList);
+    const validatorList = ValidatorListLayout.decode(Buffer.from((_a = validatorListAcc === null || validatorListAcc === void 0 ? void 0 : validatorListAcc.data) !== null && _a !== void 0 ? _a : []));
+    if (!(validatorList === null || validatorList === void 0 ? void 0 : validatorList.validators) || (validatorList === null || validatorList === void 0 ? void 0 : validatorList.validators.length) === 0) {
+        throw new Error('No accounts found');
+    }
+    const minBalanceForRentExemption = await connection.getMinimumBalanceForRentExemption(web3_js.StakeProgram.space);
+    const minBalance = minBalanceForRentExemption + MINIMUM_ACTIVE_STAKE;
+    const types = ['preferred', 'active', 'transient', 'reserve'];
+    let accounts = [];
+    // Prepare accounts
+    for (const validator of validatorList.validators) {
+        if (validator.status !== ValidatorStakeInfoStatus.Active) {
+            continue;
+        }
+        const stakeAccountAddress = findStakeProgramAddress(STAKE_POOL_PROGRAM_ID, validator.voteAccountAddress, stakePoolAddress);
+        if (!validator.activeStakeLamports.isZero()) {
+            const isPreferred = (_b = stakePool === null || stakePool === void 0 ? void 0 : stakePool.preferredWithdrawValidatorVoteAddress) === null || _b === void 0 ? void 0 : _b.equals(validator.voteAccountAddress);
+            accounts.push({
+                type: isPreferred ? 'preferred' : 'active',
+                voteAddress: validator.voteAccountAddress,
+                stakeAddress: stakeAccountAddress,
+                lamports: validator.activeStakeLamports.toNumber(),
+            });
+        }
+        const transientStakeLamports = validator.transientStakeLamports.toNumber() - minBalance;
+        if (transientStakeLamports > 0) {
+            const transientStakeAccountAddress = findTransientStakeProgramAddress(STAKE_POOL_PROGRAM_ID, validator.voteAccountAddress, stakePoolAddress, validator.transientSeedSuffixStart);
+            accounts.push({
+                type: 'transient',
+                voteAddress: validator.voteAccountAddress,
+                stakeAddress: transientStakeAccountAddress,
+                lamports: transientStakeLamports,
+            });
+        }
+    }
+    // Sort from highest to lowest balance
+    accounts = accounts.sort(compareFn || ((a, b) => b.lamports - a.lamports));
+    const reserveStake = await connection.getAccountInfo(stakePool.reserveStake);
+    const reserveStakeBalance = ((_c = reserveStake === null || reserveStake === void 0 ? void 0 : reserveStake.lamports) !== null && _c !== void 0 ? _c : 0) - minBalanceForRentExemption - 1;
+    if (reserveStakeBalance > 0) {
+        accounts.push({
+            type: 'reserve',
+            stakeAddress: stakePool.reserveStake,
+            lamports: reserveStakeBalance,
+        });
+    }
+    // Prepare the list of accounts to withdraw from
+    const withdrawFrom = [];
+    let remainingAmount = amount;
+    const fee = stakePool.stakeWithdrawalFee;
+    const inverseFee = {
+        numerator: fee.denominator.sub(fee.numerator),
+        denominator: fee.denominator,
+    };
+    for (const type of types) {
+        const filteredAccounts = accounts.filter((a) => a.type === type);
+        for (const { stakeAddress, voteAddress, lamports } of filteredAccounts) {
+            if (lamports <= minBalance && type === 'transient') {
+                continue;
+            }
+            let availableForWithdrawal = calcPoolTokensForDeposit(stakePool, lamports);
+            if (!skipFee && !inverseFee.numerator.isZero()) {
+                availableForWithdrawal = divideBnToNumber(new BN(availableForWithdrawal).mul(inverseFee.denominator), inverseFee.numerator);
+            }
+            const poolAmount = Math.min(availableForWithdrawal, remainingAmount);
+            if (poolAmount <= 0) {
+                continue;
+            }
+            // Those accounts will be withdrawn completely with `claim` instruction
+            withdrawFrom.push({ stakeAddress, voteAddress, poolAmount });
+            remainingAmount -= poolAmount;
+            if (remainingAmount === 0) {
+                break;
+            }
+        }
+        if (remainingAmount === 0) {
+            break;
+        }
+    }
+    // Not enough stake to withdraw the specified amount
+    if (remainingAmount > 0) {
+        throw new Error(`No stake accounts found in this pool with enough balance to withdraw ${lamportsToSol(amount)} pool tokens.`);
+    }
+    return withdrawFrom;
+}
+/**
+ * Calculate the pool tokens that should be minted for a deposit of `stakeLamports`
+ */
+function calcPoolTokensForDeposit(stakePool, stakeLamports) {
+    if (stakePool.poolTokenSupply.isZero() || stakePool.totalLamports.isZero()) {
+        return stakeLamports;
+    }
+    return Math.floor(divideBnToNumber(new BN(stakeLamports).mul(stakePool.poolTokenSupply), stakePool.totalLamports));
+}
+/**
+ * Calculate lamports amount on withdrawal
+ */
+function calcLamportsWithdrawAmount(stakePool, poolTokens) {
+    const numerator = new BN(poolTokens).mul(stakePool.totalLamports);
+    const denominator = stakePool.poolTokenSupply;
+    if (numerator.lt(denominator)) {
+        return 0;
+    }
+    return divideBnToNumber(numerator, denominator);
+}
+function divideBnToNumber(numerator, denominator) {
+    if (denominator.isZero()) {
+        return 0;
+    }
+    const quotient = numerator.div(denominator).toNumber();
+    const rem = numerator.umod(denominator);
+    const gcd = rem.gcd(denominator);
+    return quotient + rem.div(gcd).toNumber() / denominator.div(gcd).toNumber();
+}
+function newStakeAccount(feePayer, instructions, lamports) {
+    // Account for tokens not specified, creating one
+    const stakeReceiverKeypair = web3_js.Keypair.generate();
+    console.log(`Creating account to receive stake ${stakeReceiverKeypair.publicKey}`);
+    instructions.push(
+    // Creating new account
+    web3_js.SystemProgram.createAccount({
+        fromPubkey: feePayer,
+        newAccountPubkey: stakeReceiverKeypair.publicKey,
+        lamports,
+        space: web3_js.StakeProgram.space,
+        programId: web3_js.StakeProgram.programId,
+    }));
+    return stakeReceiverKeypair;
+}
+
+/**
+ * Populate a buffer of instruction data using an InstructionType
+ * @internal
+ */
+function encodeData(type, fields) {
+    const allocLength = type.layout.span;
+    const data = buffer.Buffer.alloc(allocLength < 0 ? 1024 : allocLength);
+    const layoutFields = Object.assign({ instruction: type.index }, fields);
+    const offset = type.layout.encode(layoutFields, data);
+    return buffer.Buffer.from(new Uint8Array(data.buffer).slice(0, offset));
 }
 
 function arrayChunk(array, size) {
