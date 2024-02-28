@@ -1037,9 +1037,7 @@ interface RedelegateProps {
   stakePoolAddress: PublicKey;
   sourceVoteAccount: PublicKey;
   destinationVoteAccount: PublicKey;
-  sourceTransientStakeSeed: number | BN;
-  destinationTransientStakeSeed: number | BN;
-  ephemeralStakeSeed: number | BN;
+  ephemeralStakeSeed?: number | BN;
   lamports: number | BN;
 }
 
@@ -1051,14 +1049,35 @@ export async function redelegate(props: RedelegateProps) {
     connection,
     stakePoolAddress,
     sourceVoteAccount,
-    sourceTransientStakeSeed,
     destinationVoteAccount,
-    destinationTransientStakeSeed,
     ephemeralStakeSeed,
     lamports,
   } = props;
 
+  const defaultEphemeralStakeSeed = 0;
+
   const stakePool = await getStakePoolAccount(connection, stakePoolAddress);
+
+  const validatorList = await getValidatorListAccount(
+    connection,
+    stakePool.account.data.validatorList,
+  );
+
+  const sourceVoteAccountInfo = validatorList.account.data.validators.find(
+    (v) => v.voteAccountAddress.toBase58() === sourceVoteAccount.toBase58(),
+  );
+
+  if (!sourceVoteAccountInfo) {
+    throw new Error('Source vote account not found in validator list');
+  }
+
+  const destVoteAccountInfo = validatorList.account.data.validators.find(
+    (v) => v.voteAccountAddress.toBase58() === destinationVoteAccount.toBase58(),
+  );
+
+  if (!destVoteAccountInfo) {
+    throw new Error('Destination vote account not found in validator list');
+  }
 
   const stakePoolWithdrawAuthority = findWithdrawAuthorityProgramAddress(
     STAKE_POOL_PROGRAM_ID,
@@ -1070,6 +1089,8 @@ export async function redelegate(props: RedelegateProps) {
     sourceVoteAccount,
     stakePoolAddress,
   );
+
+  const sourceTransientStakeSeed = sourceVoteAccountInfo.transientSeedSuffixStart;
 
   const sourceTransientStake = findTransientStakeProgramAddress(
     STAKE_POOL_PROGRAM_ID,
@@ -1084,6 +1105,8 @@ export async function redelegate(props: RedelegateProps) {
     stakePoolAddress,
   );
 
+  const destinationTransientStakeSeed = destVoteAccountInfo.transientSeedSuffixStart;
+
   const destinationTransientStake = findTransientStakeProgramAddress(
     STAKE_POOL_PROGRAM_ID,
     destinationVoteAccount,
@@ -1094,7 +1117,7 @@ export async function redelegate(props: RedelegateProps) {
   const ephemeralStake = findEphemeralStakeProgramAddress(
     STAKE_POOL_PROGRAM_ID,
     stakePoolAddress,
-    new BN(ephemeralStakeSeed),
+    new BN(ephemeralStakeSeed ?? defaultEphemeralStakeSeed),
   );
 
   const instructions: TransactionInstruction[] = [];
@@ -1107,7 +1130,7 @@ export async function redelegate(props: RedelegateProps) {
       reserveStake: stakePool.account.data.reserveStake,
       stakePoolWithdrawAuthority,
       ephemeralStake,
-      ephemeralStakeSeed,
+      ephemeralStakeSeed: ephemeralStakeSeed ?? defaultEphemeralStakeSeed,
       sourceValidatorStake,
       sourceTransientStake,
       sourceTransientStakeSeed,
