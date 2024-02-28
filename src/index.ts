@@ -1368,7 +1368,7 @@ export async function addValidatorToPool(
 }
 
 /**
- * Creates instructions required to add a validator to the pool.
+ * Creates instructions required to remove a validator from the pool.
  */
 export async function removeValidatorFromPool(
   connection: Connection,
