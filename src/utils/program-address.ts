@@ -28,11 +28,13 @@ export function findStakeProgramAddress(
   programId: PublicKey,
   voteAccountAddress: PublicKey,
   stakePoolAddress: PublicKey,
+  seed?: number,
 ) {
-  const [publicKey] = PublicKey.findProgramAddressSync(
-    [voteAccountAddress.toBuffer(), stakePoolAddress.toBuffer()],
-    programId,
-  );
+  const seeds = [voteAccountAddress.toBuffer(), stakePoolAddress.toBuffer()];
+  if (seed) {
+    seeds.push(new BN(seed).toArrayLike(Buffer, 'le', 4));
+  }
+  const [publicKey] = PublicKey.findProgramAddressSync(seeds, programId);
   return publicKey;
 }
 

@@ -1391,13 +1391,12 @@ export async function addValidatorToPool(
 }
 
 /**
- * Creates instructions required to remove a validator from the pool.
+ * Creates instruction to remove a validator based on their vote account address.
  */
 export async function removeValidatorFromPool(
   connection: Connection,
   stakePoolAddress: PublicKey,
   validatorVote: PublicKey,
-  staker: PublicKey,
 ) {
   const stakePool = await getStakePoolAccount(connection, stakePoolAddress);
 
@@ -1432,34 +1431,20 @@ export async function removeValidatorFromPool(
     stakePoolAddress,
   );
 
-  const destinationStake = Keypair.generate();
-
-  const signers: Signer[] = [destinationStake];
   const instructions: TransactionInstruction[] = [];
-
-  instructions.push(
-    SystemProgram.createAccount({
-      fromPubkey: staker,
-      newAccountPubkey: destinationStake.publicKey,
-      lamports: 0,
-      space: StakeProgram.space,
-      programId: StakeProgram.programId,
-    }),
-  );
 
   instructions.push(
     StakePoolInstruction.removeValidatorFromPool({
       stakePool: stakePoolAddress,
       staker: stakePool.account.data.staker,
-      withdrawAuthority,
       validatorList: stakePool.account.data.validatorList,
       validatorStake,
       transientStake,
+      withdrawAuthority,
     }),
   );
 
   return {
     instructions,
-    signers,
   };
 }
