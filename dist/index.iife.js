@@ -31473,7 +31473,7 @@ var solanaStakePool = (function (exports) {
 	    };
 	}
 	/**
-	 * Creates instructions required to add a validator to the pool.
+	 * Creates instructions required to remove a validator from the pool.
 	 */
 	async function removeValidatorFromPool(connection, stakePoolAddress, validatorVote, staker) {
 	    const stakePool = await getStakePoolAccount(connection, stakePoolAddress);

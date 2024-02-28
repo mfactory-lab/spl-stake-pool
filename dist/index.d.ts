@@ -228,7 +228,7 @@ export declare function addValidatorToPool(connection: Connection, stakePoolAddr
     instructions: TransactionInstruction[];
 }>;
 /**
- * Creates instructions required to add a validator to the pool.
+ * Creates instructions required to remove a validator from the pool.
  */
 export declare function removeValidatorFromPool(connection: Connection, stakePoolAddress: PublicKey, validatorVote: PublicKey, staker: PublicKey): Promise<{
     instructions: TransactionInstruction[];
