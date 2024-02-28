@@ -166,9 +166,7 @@ interface RedelegateProps {
     stakePoolAddress: PublicKey;
     sourceVoteAccount: PublicKey;
     destinationVoteAccount: PublicKey;
-    sourceTransientStakeSeed: number | BN;
-    destinationTransientStakeSeed: number | BN;
-    ephemeralStakeSeed: number | BN;
+    ephemeralStakeSeed?: number | BN;
     lamports: number | BN;
 }
 /**
