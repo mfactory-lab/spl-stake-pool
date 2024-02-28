@@ -72,6 +72,7 @@ function generateConfig(configType, format) {
         '@solana/web3.js',
         'bn.js',
         'buffer',
+        'buffer-layout',
       ];
     }
 
@@ -100,6 +101,7 @@ function generateConfig(configType, format) {
       '@solana/web3.js',
       'bn.js',
       'buffer',
+      'buffer-layout',
     ];
   }
 
