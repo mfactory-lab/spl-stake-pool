@@ -7,7 +7,7 @@ export declare function findWithdrawAuthorityProgramAddress(programId: PublicKey
 /**
  * Generates the stake program address for a validator's vote account
  */
-export declare function findStakeProgramAddress(programId: PublicKey, voteAccountAddress: PublicKey, stakePoolAddress: PublicKey): PublicKey;
+export declare function findStakeProgramAddress(programId: PublicKey, voteAccountAddress: PublicKey, stakePoolAddress: PublicKey, seed?: number): PublicKey;
 /**
  * Generates the stake program address for a validator's vote account
  */

@@ -503,8 +503,12 @@ function findWithdrawAuthorityProgramAddress(programId, stakePoolAddress) {
 /**
  * Generates the stake program address for a validator's vote account
  */
-function findStakeProgramAddress(programId, voteAccountAddress, stakePoolAddress) {
-    const [publicKey] = PublicKey.findProgramAddressSync([voteAccountAddress.toBuffer(), stakePoolAddress.toBuffer()], programId);
+function findStakeProgramAddress(programId, voteAccountAddress, stakePoolAddress, seed) {
+    const seeds = [voteAccountAddress.toBuffer(), stakePoolAddress.toBuffer()];
+    if (seed) {
+        seeds.push(new BN(seed).toArrayLike(Buffer$1, 'le', 4));
+    }
+    const [publicKey] = PublicKey.findProgramAddressSync(seeds, programId);
     return publicKey;
 }
 /**
@@ -2466,9 +2470,9 @@ async function addValidatorToPool(connection, stakePoolAddress, validatorVote, s
     };
 }
 /**
- * Creates instructions required to remove a validator from the pool.
+ * Creates instruction to remove a validator based on their vote account address.
  */
-async function removeValidatorFromPool(connection, stakePoolAddress, validatorVote, staker) {
+async function removeValidatorFromPool(connection, stakePoolAddress, validatorVote) {
     const stakePool = await getStakePoolAccount(connection, stakePoolAddress);
     const validatorList = await getValidatorListAccount(connection, stakePool.account.data.validatorList);
     const validatorInfo = validatorList.account.data.validators.find((v) => v.voteAccountAddress.toBase58() === validatorVote.toBase58());
@@ -2478,27 +2482,17 @@ async function removeValidatorFromPool(connection, stakePoolAddress, validatorVo
     const withdrawAuthority = findWithdrawAuthorityProgramAddress(STAKE_POOL_PROGRAM_ID, stakePoolAddress);
     const transientStake = findTransientStakeProgramAddress(STAKE_POOL_PROGRAM_ID, validatorInfo.voteAccountAddress, stakePoolAddress, validatorInfo.transientSeedSuffixStart);
     const validatorStake = findStakeProgramAddress(STAKE_POOL_PROGRAM_ID, validatorInfo.voteAccountAddress, stakePoolAddress);
-    const destinationStake = Keypair.generate();
-    const signers = [destinationStake];
     const instructions = [];
-    instructions.push(SystemProgram.createAccount({
-        fromPubkey: staker,
-        newAccountPubkey: destinationStake.publicKey,
-        lamports: 0,
-        space: StakeProgram.space,
-        programId: StakeProgram.programId,
-    }));
     instructions.push(StakePoolInstruction.removeValidatorFromPool({
         stakePool: stakePoolAddress,
         staker: stakePool.account.data.staker,
-        withdrawAuthority,
         validatorList: stakePool.account.data.validatorList,
         validatorStake,
         transientStake,
+        withdrawAuthority,
     }));
     return {
         instructions,
-        signers,
     };
 }
 
