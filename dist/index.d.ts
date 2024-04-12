@@ -18,7 +18,7 @@ export interface StakePoolAccount {
 export interface WithdrawAccount {
     stakeAddress: PublicKey;
     voteAddress?: PublicKey;
-    poolAmount: number;
+    poolAmount: BN;
 }
 /**
  * Wrapper class for a stake pool.

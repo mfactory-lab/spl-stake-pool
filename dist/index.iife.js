@@ -29686,12 +29686,11 @@ var solanaStakePool = (function (exports) {
 	    var _a, _b, _c;
 	    const validatorListAcc = await connection.getAccountInfo(stakePool.validatorList);
 	    const validatorList = ValidatorListLayout.decode(Buffer.from((_a = validatorListAcc === null || validatorListAcc === void 0 ? void 0 : validatorListAcc.data) !== null && _a !== void 0 ? _a : []));
-	    if (!(validatorList === null || validatorList === void 0 ? void 0 : validatorList.validators) || (validatorList === null || validatorList === void 0 ? void 0 : validatorList.validators.length) === 0) {
+	    if (!(validatorList === null || validatorList === void 0 ? void 0 : validatorList.validators) || (validatorList === null || validatorList === void 0 ? void 0 : validatorList.validators.length) == 0) {
 	        throw new Error('No accounts found');
 	    }
 	    const minBalanceForRentExemption = await connection.getMinimumBalanceForRentExemption(StakeProgram.space);
-	    const minBalance = minBalanceForRentExemption + MINIMUM_ACTIVE_STAKE;
-	    const types = ['preferred', 'active', 'transient', 'reserve'];
+	    const minBalance = new BN(minBalanceForRentExemption + MINIMUM_ACTIVE_STAKE);
 	    let accounts = [];
 	    // Prepare accounts
 	    for (const validator of validatorList.validators) {
@@ -29705,11 +29704,11 @@ var solanaStakePool = (function (exports) {
 	                type: isPreferred ? 'preferred' : 'active',
 	                voteAddress: validator.voteAccountAddress,
 	                stakeAddress: stakeAccountAddress,
-	                lamports: validator.activeStakeLamports.toNumber(),
+	                lamports: validator.activeStakeLamports,
 	            });
 	        }
-	        const transientStakeLamports = validator.transientStakeLamports.toNumber() - minBalance;
-	        if (transientStakeLamports > 0) {
+	        const transientStakeLamports = validator.transientStakeLamports.sub(minBalance);
+	        if (transientStakeLamports.gt(new BN(0))) {
 	            const transientStakeAccountAddress = findTransientStakeProgramAddress(STAKE_POOL_PROGRAM_ID, validator.voteAccountAddress, stakePoolAddress, validator.transientSeedSuffixStart);
 	            accounts.push({
 	                type: 'transient',
@@ -29720,10 +29719,10 @@ var solanaStakePool = (function (exports) {
 	        }
 	    }
 	    // Sort from highest to lowest balance
-	    accounts = accounts.sort(compareFn || ((a, b) => b.lamports - a.lamports));
+	    accounts = accounts.sort(compareFn ? compareFn : (a, b) => b.lamports.sub(a.lamports).toNumber());
 	    const reserveStake = await connection.getAccountInfo(stakePool.reserveStake);
-	    const reserveStakeBalance = ((_c = reserveStake === null || reserveStake === void 0 ? void 0 : reserveStake.lamports) !== null && _c !== void 0 ? _c : 0) - minBalanceForRentExemption - 1;
-	    if (reserveStakeBalance > 0) {
+	    const reserveStakeBalance = new BN(((_c = reserveStake === null || reserveStake === void 0 ? void 0 : reserveStake.lamports) !== null && _c !== void 0 ? _c : 0) - minBalanceForRentExemption);
+	    if (reserveStakeBalance.gt(new BN(0))) {
 	        accounts.push({
 	            type: 'reserve',
 	            stakeAddress: stakePool.reserveStake,
@@ -29732,39 +29731,41 @@ var solanaStakePool = (function (exports) {
 	    }
 	    // Prepare the list of accounts to withdraw from
 	    const withdrawFrom = [];
-	    let remainingAmount = amount;
+	    let remainingAmount = new BN(amount);
 	    const fee = stakePool.stakeWithdrawalFee;
 	    const inverseFee = {
 	        numerator: fee.denominator.sub(fee.numerator),
 	        denominator: fee.denominator,
 	    };
-	    for (const type of types) {
-	        const filteredAccounts = accounts.filter((a) => a.type === type);
+	    for (const type of ['preferred', 'active', 'transient', 'reserve']) {
+	        const filteredAccounts = accounts.filter((a) => a.type == type);
 	        for (const { stakeAddress, voteAddress, lamports } of filteredAccounts) {
-	            if (lamports <= minBalance && type === 'transient') {
+	            if (lamports.lte(minBalance) && type == 'transient') {
 	                continue;
 	            }
 	            let availableForWithdrawal = calcPoolTokensForDeposit(stakePool, lamports);
 	            if (!skipFee && !inverseFee.numerator.isZero()) {
-	                availableForWithdrawal = divideBnToNumber(new BN(availableForWithdrawal).mul(inverseFee.denominator), inverseFee.numerator);
+	                availableForWithdrawal = availableForWithdrawal
+	                    .mul(inverseFee.denominator)
+	                    .div(inverseFee.numerator);
 	            }
-	            const poolAmount = Math.min(availableForWithdrawal, remainingAmount);
-	            if (poolAmount <= 0) {
+	            const poolAmount = BN.min(availableForWithdrawal, remainingAmount);
+	            if (poolAmount.lte(new BN(0))) {
 	                continue;
 	            }
 	            // Those accounts will be withdrawn completely with `claim` instruction
 	            withdrawFrom.push({ stakeAddress, voteAddress, poolAmount });
-	            remainingAmount -= poolAmount;
-	            if (remainingAmount === 0) {
+	            remainingAmount = remainingAmount.sub(poolAmount);
+	            if (remainingAmount.isZero()) {
 	                break;
 	            }
 	        }
-	        if (remainingAmount === 0) {
+	        if (remainingAmount.isZero()) {
 	            break;
 	        }
 	    }
 	    // Not enough stake to withdraw the specified amount
-	    if (remainingAmount > 0) {
+	    if (remainingAmount.gt(new BN(0))) {
 	        throw new Error(`No stake accounts found in this pool with enough balance to withdraw ${lamportsToSol(amount)} pool tokens.`);
 	    }
 	    return withdrawFrom;
@@ -29776,27 +29777,19 @@ var solanaStakePool = (function (exports) {
 	    if (stakePool.poolTokenSupply.isZero() || stakePool.totalLamports.isZero()) {
 	        return stakeLamports;
 	    }
-	    return Math.floor(divideBnToNumber(new BN(stakeLamports).mul(stakePool.poolTokenSupply), stakePool.totalLamports));
+	    const numerator = stakeLamports.mul(stakePool.poolTokenSupply);
+	    return numerator.div(stakePool.totalLamports);
 	}
 	/**
 	 * Calculate lamports amount on withdrawal
 	 */
 	function calcLamportsWithdrawAmount(stakePool, poolTokens) {
-	    const numerator = new BN(poolTokens).mul(stakePool.totalLamports);
+	    const numerator = poolTokens.mul(stakePool.totalLamports);
 	    const denominator = stakePool.poolTokenSupply;
 	    if (numerator.lt(denominator)) {
-	        return 0;
+	        return new BN(0);
 	    }
-	    return divideBnToNumber(numerator, denominator);
-	}
-	function divideBnToNumber(numerator, denominator) {
-	    if (denominator.isZero()) {
-	        return 0;
-	    }
-	    const quotient = numerator.div(denominator).toNumber();
-	    const rem = numerator.umod(denominator);
-	    const gcd = rem.gcd(denominator);
-	    return quotient + rem.div(gcd).toNumber() / denominator.div(gcd).toNumber();
+	    return numerator.div(denominator);
 	}
 	function newStakeAccount(feePayer, instructions, lamports) {
 	    // Account for tokens not specified, creating one
@@ -30346,7 +30339,7 @@ var solanaStakePool = (function (exports) {
 	     * validator account to transient account)
 	     */
 	    static decreaseAdditionalValidatorStake(params) {
-	        const { stakePool, staker, withdrawAuthority, validatorList, validatorStake, transientStake, lamports, transientStakeSeed, ephemeralStakeSeed, ephemeralStake, } = params;
+	        const { stakePool, staker, withdrawAuthority, validatorList, reserveStake, validatorStake, transientStake, lamports, transientStakeSeed, ephemeralStakeSeed, ephemeralStake, } = params;
 	        const data = encodeData(STAKE_POOL_INSTRUCTION_LAYOUTS.DecreaseAdditionalValidatorStake, {
 	            lamports: new BN(lamports),
 	            transientStakeSeed: new BN(transientStakeSeed),
@@ -30357,6 +30350,7 @@ var solanaStakePool = (function (exports) {
 	            { pubkey: staker, isSigner: true, isWritable: false },
 	            { pubkey: withdrawAuthority, isSigner: false, isWritable: false },
 	            { pubkey: validatorList, isSigner: false, isWritable: true },
+	            { pubkey: reserveStake, isSigner: false, isWritable: true },
 	            { pubkey: validatorStake, isSigner: false, isWritable: true },
 	            { pubkey: ephemeralStake, isSigner: false, isWritable: true },
 	            { pubkey: transientStake, isSigner: false, isWritable: true },
@@ -30883,13 +30877,13 @@ var solanaStakePool = (function (exports) {
 	async function withdrawStake(connection, stakePoolAddress, tokenOwner, amount, useReserve = false, voteAccountAddress, stakeReceiver, poolTokenAccount, validatorComparator) {
 	    var _c, _d, _e, _f, _g;
 	    const stakePool = await getStakePoolAccount(connection, stakePoolAddress);
-	    const poolAmount = solToLamports(amount);
+	    const poolAmount = new BN(solToLamports(amount));
 	    if (!poolTokenAccount) {
 	        poolTokenAccount = getAssociatedTokenAddressSync(stakePool.account.data.poolMint, tokenOwner);
 	    }
 	    const tokenAccount = await getAccount(connection, poolTokenAccount);
 	    // Check withdrawFrom balance
-	    if (tokenAccount.amount < poolAmount) {
+	    if (tokenAccount.amount < poolAmount.toNumber()) {
 	        throw new Error(`Not enough token balance to withdraw ${lamportsToSol(poolAmount)} pool tokens.
         Maximum withdraw amount is ${lamportsToSol(tokenAccount.amount)} pool tokens.`);
 	    }
@@ -30925,8 +30919,8 @@ var solanaStakePool = (function (exports) {
 	            if (!stakeAccount) {
 	                throw new Error("Preferred withdraw validator's stake account is invalid");
 	            }
-	            const availableForWithdrawal = calcLamportsWithdrawAmount(stakePool.account.data, stakeAccount.lamports - MINIMUM_ACTIVE_STAKE - stakeAccountRentExemption);
-	            if (availableForWithdrawal < poolAmount) {
+	            const availableForWithdrawal = calcLamportsWithdrawAmount(stakePool.account.data, new BN(stakeAccount.lamports - MINIMUM_ACTIVE_STAKE - stakeAccountRentExemption));
+	            if (availableForWithdrawal.lt(poolAmount)) {
 	                throw new Error(`Not enough lamports available for withdrawal from ${stakeAccountAddress},
             ${poolAmount} asked, ${availableForWithdrawal} available.`);
 	            }
@@ -30946,8 +30940,12 @@ var solanaStakePool = (function (exports) {
 	        if (!stakeAccount) {
 	            throw new Error('Invalid Stake Account');
 	        }
-	        const availableForWithdrawal = calcLamportsWithdrawAmount(stakePool.account.data, stakeAccount.lamports - MINIMUM_ACTIVE_STAKE - stakeAccountRentExemption);
-	        if (availableForWithdrawal < poolAmount) {
+	        const availableLamports = new BN(stakeAccount.lamports - MINIMUM_ACTIVE_STAKE - stakeAccountRentExemption);
+	        if (availableLamports.lt(new BN(0))) {
+	            throw new Error('Invalid Stake Account');
+	        }
+	        const availableForWithdrawal = calcLamportsWithdrawAmount(stakePool.account.data, availableLamports);
+	        if (availableForWithdrawal.lt(poolAmount)) {
 	            // noinspection ExceptionCaughtLocallyJS
 	            throw new Error(`Not enough lamports available for withdrawal from ${stakeAccountAddress},
           ${poolAmount} asked, ${availableForWithdrawal} available.`);
@@ -30966,7 +30964,7 @@ var solanaStakePool = (function (exports) {
 	    const instructions = [];
 	    const userTransferAuthority = Keypair.generate();
 	    const signers = [userTransferAuthority];
-	    instructions.push(createApproveInstruction(poolTokenAccount, userTransferAuthority.publicKey, tokenOwner, poolAmount));
+	    instructions.push(createApproveInstruction(poolTokenAccount, userTransferAuthority.publicKey, tokenOwner, poolAmount.toNumber()));
 	    let totalRentFreeBalances = 0;
 	    // Max 5 accounts to prevent an error: "Transaction too large"
 	    const maxWithdrawAccounts = 5;
@@ -30977,7 +30975,7 @@ var solanaStakePool = (function (exports) {
 	            break;
 	        }
 	        // Convert pool tokens amount to lamports
-	        const solWithdrawAmount = Math.ceil(calcLamportsWithdrawAmount(stakePool.account.data, withdrawAccount.poolAmount));
+	        const solWithdrawAmount = calcLamportsWithdrawAmount(stakePool.account.data, withdrawAccount.poolAmount);
 	        let infoMsg = `Withdrawing ◎${solWithdrawAmount},
       from stake account ${(_f = withdrawAccount.stakeAddress) === null || _f === void 0 ? void 0 : _f.toBase58()}`;
 	        if (withdrawAccount.voteAddress) {
@@ -31148,6 +31146,7 @@ var solanaStakePool = (function (exports) {
 	            stakePool: stakePoolAddress,
 	            staker: stakePool.account.data.staker,
 	            validatorList: stakePool.account.data.validatorList,
+	            reserveStake: stakePool.account.data.reserveStake,
 	            transientStakeSeed: transientStakeSeed.toNumber(),
 	            withdrawAuthority,
 	            validatorStake,
@@ -31158,10 +31157,11 @@ var solanaStakePool = (function (exports) {
 	        }));
 	    }
 	    else {
-	        instructions.push(StakePoolInstruction.decreaseValidatorStake({
+	        instructions.push(StakePoolInstruction.decreaseValidatorStakeWithReserve({
 	            stakePool: stakePoolAddress,
 	            staker: stakePool.account.data.staker,
 	            validatorList: stakePool.account.data.validatorList,
+	            reserveStake: stakePool.account.data.reserveStake,
 	            transientStakeSeed: transientStakeSeed.toNumber(),
 	            withdrawAuthority,
 	            validatorStake,

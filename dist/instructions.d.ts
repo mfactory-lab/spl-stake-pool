@@ -100,6 +100,7 @@ export interface DecreaseValidatorStakeWithReserveParams extends DecreaseValidat
     reserveStake: PublicKey;
 }
 export interface DecreaseAdditionalValidatorStakeParams extends DecreaseValidatorStakeParams {
+    reserveStake: PublicKey;
     ephemeralStake: PublicKey;
     ephemeralStakeSeed: number | BN;
 }
