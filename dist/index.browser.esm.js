@@ -451,10 +451,12 @@ function futureEpoch(layout, property) {
     return new FutureEpochLayout(layout, property);
 }
 
+const SOL_DECIMALS = Math.log10(LAMPORTS_PER_SOL);
 function solToLamports(amount) {
-    if (isNaN(amount))
+    if (Number.isNaN(amount)) {
         return Number(0);
-    return Number(amount * LAMPORTS_PER_SOL);
+    }
+    return new BN(Number(amount).toFixed(SOL_DECIMALS).replace('.', '')).toNumber();
 }
 function lamportsToSol(lamports) {
     if (typeof lamports === 'number') {
@@ -2128,7 +2130,7 @@ async function decreaseValidatorStake(connection, stakePoolAddress, validatorVot
             staker: stakePool.account.data.staker,
             validatorList: stakePool.account.data.validatorList,
             reserveStake: stakePool.account.data.reserveStake,
-            transientStakeSeed: transientStakeSeed.toNumber(),
+            transientStakeSeed,
             withdrawAuthority,
             validatorStake,
             transientStake,
@@ -2143,7 +2145,7 @@ async function decreaseValidatorStake(connection, stakePoolAddress, validatorVot
             staker: stakePool.account.data.staker,
             validatorList: stakePool.account.data.validatorList,
             reserveStake: stakePool.account.data.reserveStake,
-            transientStakeSeed: transientStakeSeed.toNumber(),
+            transientStakeSeed,
             withdrawAuthority,
             validatorStake,
             transientStake,

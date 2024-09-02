@@ -29242,10 +29242,12 @@ var solanaStakePool = (function (exports) {
 	    return new FutureEpochLayout(layout, property);
 	}
 
+	const SOL_DECIMALS = Math.log10(LAMPORTS_PER_SOL);
 	function solToLamports(amount) {
-	    if (isNaN(amount))
+	    if (Number.isNaN(amount)) {
 	        return Number(0);
-	    return Number(amount * LAMPORTS_PER_SOL);
+	    }
+	    return new BN(Number(amount).toFixed(SOL_DECIMALS).replace('.', '')).toNumber();
 	}
 	function lamportsToSol(lamports) {
 	    if (typeof lamports === 'number') {
@@ -31147,7 +31149,7 @@ var solanaStakePool = (function (exports) {
 	            staker: stakePool.account.data.staker,
 	            validatorList: stakePool.account.data.validatorList,
 	            reserveStake: stakePool.account.data.reserveStake,
-	            transientStakeSeed: transientStakeSeed.toNumber(),
+	            transientStakeSeed,
 	            withdrawAuthority,
 	            validatorStake,
 	            transientStake,
@@ -31162,7 +31164,7 @@ var solanaStakePool = (function (exports) {
 	            staker: stakePool.account.data.staker,
 	            validatorList: stakePool.account.data.validatorList,
 	            reserveStake: stakePool.account.data.reserveStake,
-	            transientStakeSeed: transientStakeSeed.toNumber(),
+	            transientStakeSeed,
 	            withdrawAuthority,
 	            validatorStake,
 	            transientStake,
