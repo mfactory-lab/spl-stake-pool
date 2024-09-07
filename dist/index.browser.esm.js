@@ -1776,7 +1776,7 @@ async function depositStake(connection, stakePoolAddress, authorizedPubkey, vali
     const poolMint = stakePool.account.data.poolMint;
     // Create token account if not specified
     if (!poolTokenReceiverAccount) {
-        const associatedAddress = getAssociatedTokenAddressSync(poolMint, authorizedPubkey);
+        const associatedAddress = getAssociatedTokenAddressSync(poolMint, authorizedPubkey, true);
         instructions.push(createAssociatedTokenAccountIdempotentInstruction(authorizedPubkey, associatedAddress, authorizedPubkey, poolMint));
         poolTokenReceiverAccount = associatedAddress;
     }
@@ -1832,7 +1832,7 @@ async function depositSol(connection, stakePoolAddress, from, lamports, destinat
     }));
     // Create token account if not specified
     if (!destinationTokenAccount) {
-        const associatedAddress = getAssociatedTokenAddressSync(stakePool.poolMint, from);
+        const associatedAddress = getAssociatedTokenAddressSync(stakePool.poolMint, from, true);
         instructions.push(createAssociatedTokenAccountIdempotentInstruction(from, associatedAddress, from, stakePool.poolMint));
         destinationTokenAccount = associatedAddress;
     }
@@ -1862,7 +1862,7 @@ async function withdrawStake(connection, stakePoolAddress, tokenOwner, amount, u
     const stakePool = await getStakePoolAccount(connection, stakePoolAddress);
     const poolAmount = new BN(solToLamports(amount));
     if (!poolTokenAccount) {
-        poolTokenAccount = getAssociatedTokenAddressSync(stakePool.account.data.poolMint, tokenOwner);
+        poolTokenAccount = getAssociatedTokenAddressSync(stakePool.account.data.poolMint, tokenOwner, true);
     }
     const tokenAccount = await getAccount(connection, poolTokenAccount);
     // Check withdrawFrom balance
@@ -2012,7 +2012,7 @@ async function withdrawStake(connection, stakePoolAddress, tokenOwner, amount, u
 async function withdrawSol(connection, stakePoolAddress, tokenOwner, solReceiver, amount, solWithdrawAuthority) {
     const stakePool = await getStakePoolAccount(connection, stakePoolAddress);
     const poolAmount = solToLamports(amount);
-    const poolTokenAccount = getAssociatedTokenAddressSync(stakePool.account.data.poolMint, tokenOwner);
+    const poolTokenAccount = getAssociatedTokenAddressSync(stakePool.account.data.poolMint, tokenOwner, true);
     const tokenAccount = await getAccount(connection, poolTokenAccount);
     // Check withdrawFrom balance
     if (tokenAccount.amount < poolAmount) {

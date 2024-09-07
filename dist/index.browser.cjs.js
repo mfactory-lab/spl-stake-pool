@@ -1778,7 +1778,7 @@ async function depositStake(connection, stakePoolAddress, authorizedPubkey, vali
     const poolMint = stakePool.account.data.poolMint;
     // Create token account if not specified
     if (!poolTokenReceiverAccount) {
-        const associatedAddress = splToken.getAssociatedTokenAddressSync(poolMint, authorizedPubkey);
+        const associatedAddress = splToken.getAssociatedTokenAddressSync(poolMint, authorizedPubkey, true);
         instructions.push(splToken.createAssociatedTokenAccountIdempotentInstruction(authorizedPubkey, associatedAddress, authorizedPubkey, poolMint));
         poolTokenReceiverAccount = associatedAddress;
     }
@@ -1834,7 +1834,7 @@ async function depositSol(connection, stakePoolAddress, from, lamports, destinat
     }));
     // Create token account if not specified
     if (!destinationTokenAccount) {
-        const associatedAddress = splToken.getAssociatedTokenAddressSync(stakePool.poolMint, from);
+        const associatedAddress = splToken.getAssociatedTokenAddressSync(stakePool.poolMint, from, true);
         instructions.push(splToken.createAssociatedTokenAccountIdempotentInstruction(from, associatedAddress, from, stakePool.poolMint));
         destinationTokenAccount = associatedAddress;
     }
@@ -1864,7 +1864,7 @@ async function withdrawStake(connection, stakePoolAddress, tokenOwner, amount, u
     const stakePool = await getStakePoolAccount(connection, stakePoolAddress);
     const poolAmount = new BN(solToLamports(amount));
     if (!poolTokenAccount) {
-        poolTokenAccount = splToken.getAssociatedTokenAddressSync(stakePool.account.data.poolMint, tokenOwner);
+        poolTokenAccount = splToken.getAssociatedTokenAddressSync(stakePool.account.data.poolMint, tokenOwner, true);
     }
     const tokenAccount = await splToken.getAccount(connection, poolTokenAccount);
     // Check withdrawFrom balance
@@ -2014,7 +2014,7 @@ async function withdrawStake(connection, stakePoolAddress, tokenOwner, amount, u
 async function withdrawSol(connection, stakePoolAddress, tokenOwner, solReceiver, amount, solWithdrawAuthority) {
     const stakePool = await getStakePoolAccount(connection, stakePoolAddress);
     const poolAmount = solToLamports(amount);
-    const poolTokenAccount = splToken.getAssociatedTokenAddressSync(stakePool.account.data.poolMint, tokenOwner);
+    const poolTokenAccount = splToken.getAssociatedTokenAddressSync(stakePool.account.data.poolMint, tokenOwner, true);
     const tokenAccount = await splToken.getAccount(connection, poolTokenAccount);
     // Check withdrawFrom balance
     if (tokenAccount.amount < poolAmount) {
