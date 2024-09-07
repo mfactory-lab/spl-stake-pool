@@ -197,7 +197,7 @@ export async function depositStake(
 
   // Create token account if not specified
   if (!poolTokenReceiverAccount) {
-    const associatedAddress = getAssociatedTokenAddressSync(poolMint, authorizedPubkey);
+    const associatedAddress = getAssociatedTokenAddressSync(poolMint, authorizedPubkey, true);
     instructions.push(
       createAssociatedTokenAccountIdempotentInstruction(
         authorizedPubkey,
@@ -289,7 +289,7 @@ export async function depositSol(
 
   // Create token account if not specified
   if (!destinationTokenAccount) {
-    const associatedAddress = getAssociatedTokenAddressSync(stakePool.poolMint, from);
+    const associatedAddress = getAssociatedTokenAddressSync(stakePool.poolMint, from, true);
     instructions.push(
       createAssociatedTokenAccountIdempotentInstruction(
         from,
@@ -345,7 +345,11 @@ export async function withdrawStake(
   const poolAmount = new BN(solToLamports(amount));
 
   if (!poolTokenAccount) {
-    poolTokenAccount = getAssociatedTokenAddressSync(stakePool.account.data.poolMint, tokenOwner);
+    poolTokenAccount = getAssociatedTokenAddressSync(
+      stakePool.account.data.poolMint,
+      tokenOwner,
+      true,
+    );
   }
 
   const tokenAccount = await getAccount(connection, poolTokenAccount);
@@ -585,6 +589,7 @@ export async function withdrawSol(
   const poolTokenAccount = getAssociatedTokenAddressSync(
     stakePool.account.data.poolMint,
     tokenOwner,
+    true,
   );
 
   const tokenAccount = await getAccount(connection, poolTokenAccount);
