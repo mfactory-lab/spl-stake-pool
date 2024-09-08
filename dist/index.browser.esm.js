@@ -2028,12 +2028,12 @@ async function withdrawSol(connection, stakePoolAddress, tokenOwner, solReceiver
     // Construct transaction to withdraw from withdrawAccounts account list
     const instructions = [];
     const signers = [];
-    let sourcePoolAccount = ephemeralAddress;
-    if (!sourcePoolAccount) {
+    let sourceTransferAuthority = ephemeralAddress;
+    if (!sourceTransferAuthority) {
         const userTransferAuthority = Keypair.generate();
-        sourcePoolAccount = userTransferAuthority.publicKey;
+        sourceTransferAuthority = userTransferAuthority.publicKey;
         signers.push(userTransferAuthority);
-        instructions.push(createApproveInstruction(poolTokenAccount, userTransferAuthority.publicKey, tokenOwner, poolAmount));
+        instructions.push(createApproveInstruction(poolTokenAccount, sourceTransferAuthority, tokenOwner, poolAmount));
     }
     const poolWithdrawAuthority = findWithdrawAuthorityProgramAddress(STAKE_POOL_PROGRAM_ID, stakePoolAddress);
     if (solWithdrawAuthority) {
@@ -2041,16 +2041,16 @@ async function withdrawSol(connection, stakePoolAddress, tokenOwner, solReceiver
         if (!expectedSolWithdrawAuthority) {
             throw new Error('SOL withdraw authority specified in arguments but stake pool has none');
         }
-        if (solWithdrawAuthority.toBase58() !== expectedSolWithdrawAuthority.toBase58()) {
-            throw new Error(`Invalid deposit withdraw specified, expected ${expectedSolWithdrawAuthority.toBase58()}, received ${solWithdrawAuthority.toBase58()}`);
+        if (String(solWithdrawAuthority) !== String(expectedSolWithdrawAuthority)) {
+            throw new Error(`Invalid deposit withdraw specified, expected ${expectedSolWithdrawAuthority}, received ${solWithdrawAuthority}`);
         }
     }
     const withdrawTransaction = StakePoolInstruction.withdrawSol({
         stakePool: stakePoolAddress,
         withdrawAuthority: poolWithdrawAuthority,
         reserveStake: stakePool.account.data.reserveStake,
-        sourcePoolAccount,
-        sourceTransferAuthority: tokenOwner,
+        sourcePoolAccount: poolTokenAccount,
+        sourceTransferAuthority,
         destinationSystemAccount: solReceiver,
         managerFeeAccount: stakePool.account.data.managerFeeAccount,
         poolMint: stakePool.account.data.poolMint,
