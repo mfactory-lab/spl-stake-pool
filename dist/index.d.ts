@@ -56,14 +56,14 @@ export declare function depositStake(connection: Connection, stakePoolAddress: P
 /**
  * Creates instructions required to deposit sol to stake pool.
  */
-export declare function depositSol(connection: Connection, stakePoolAddress: PublicKey, from: PublicKey, lamports: number, destinationTokenAccount?: PublicKey, referrerTokenAccount?: PublicKey, depositAuthority?: PublicKey): Promise<{
+export declare function depositSol(connection: Connection, stakePoolAddress: PublicKey, from: PublicKey, lamports: number, destinationTokenAccount?: PublicKey, referrerTokenAccount?: PublicKey, depositAuthority?: PublicKey, ephemeralAddress?: PublicKey): Promise<{
     instructions: TransactionInstruction[];
     signers: Signer[];
 }>;
 /**
  * Creates instructions required to withdraw stake from a stake pool.
  */
-export declare function withdrawStake(connection: Connection, stakePoolAddress: PublicKey, tokenOwner: PublicKey, amount: number, useReserve?: boolean, voteAccountAddress?: PublicKey, stakeReceiver?: PublicKey, poolTokenAccount?: PublicKey, validatorComparator?: (_a: ValidatorAccount, _b: ValidatorAccount) => number): Promise<{
+export declare function withdrawStake(connection: Connection, stakePoolAddress: PublicKey, tokenOwner: PublicKey, amount: number, useReserve?: boolean, voteAccountAddress?: PublicKey, stakeReceiver?: PublicKey, poolTokenAccount?: PublicKey, validatorComparator?: (_a: ValidatorAccount, _b: ValidatorAccount) => number, ephemeralAddress?: PublicKey): Promise<{
     instructions: TransactionInstruction[];
     signers: Signer[];
     stakeReceiver: PublicKey | undefined;
@@ -72,7 +72,7 @@ export declare function withdrawStake(connection: Connection, stakePoolAddress: 
 /**
  * Creates instructions required to withdraw SOL directly from a stake pool.
  */
-export declare function withdrawSol(connection: Connection, stakePoolAddress: PublicKey, tokenOwner: PublicKey, solReceiver: PublicKey, amount: number, solWithdrawAuthority?: PublicKey): Promise<{
+export declare function withdrawSol(connection: Connection, stakePoolAddress: PublicKey, tokenOwner: PublicKey, solReceiver: PublicKey, amount: number, solWithdrawAuthority?: PublicKey, ephemeralAddress?: PublicKey): Promise<{
     instructions: TransactionInstruction[];
     signers: Signer[];
 }>;

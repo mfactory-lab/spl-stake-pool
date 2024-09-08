@@ -30832,26 +30832,24 @@ var solanaStakePool = (function (exports) {
 	/**
 	 * Creates instructions required to deposit sol to stake pool.
 	 */
-	async function depositSol(connection, stakePoolAddress, from, lamports, destinationTokenAccount, referrerTokenAccount, depositAuthority) {
+	async function depositSol(connection, stakePoolAddress, from, lamports, destinationTokenAccount, referrerTokenAccount, depositAuthority, ephemeralAddress) {
 	    const fromBalance = await connection.getBalance(from, 'confirmed');
 	    if (fromBalance < lamports) {
 	        throw new Error(`Not enough SOL to deposit into pool. Maximum deposit amount is ${lamportsToSol(fromBalance)} SOL.`);
 	    }
 	    const stakePoolAccount = await getStakePoolAccount(connection, stakePoolAddress);
 	    const stakePool = stakePoolAccount.account.data;
-	    // Ephemeral SOL account just to do the transfer
-	    // const userSolTransfer = new Keypair();
-	    // const signers: Signer[] = [userSolTransfer];
 	    const signers = [];
 	    const instructions = [];
-	    // // Create the ephemeral SOL account
-	    // instructions.push(
-	    //   SystemProgram.transfer({
-	    //     fromPubkey: from,
-	    //     toPubkey: userSolTransfer.publicKey,
-	    //     lamports,
-	    //   }),
-	    // );
+	    let fundingAccount = ephemeralAddress;
+	    // Ephemeral SOL account just to do the transfer
+	    if (!fundingAccount) {
+	        const userSolTransfer = Keypair.generate();
+	        fundingAccount = userSolTransfer.publicKey;
+	        signers.push(userSolTransfer);
+	    }
+	    // Create the ephemeral SOL account
+	    instructions.push(SystemProgram.transfer({ fromPubkey: from, toPubkey: fundingAccount, lamports }));
 	    // Create token account if not specified
 	    if (!destinationTokenAccount) {
 	        const associatedAddress = getAssociatedTokenAddressSync(stakePool.poolMint, from, true);
@@ -30862,8 +30860,7 @@ var solanaStakePool = (function (exports) {
 	    instructions.push(StakePoolInstruction.depositSol({
 	        stakePool: stakePoolAddress,
 	        reserveStake: stakePool.reserveStake,
-	        fundingAccount: from,
-	        // fundingAccount: userSolTransfer.publicKey,
+	        fundingAccount,
 	        destinationPoolAccount: destinationTokenAccount,
 	        managerFeeAccount: stakePool.managerFeeAccount,
 	        referralPoolAccount: referrerTokenAccount !== null && referrerTokenAccount !== void 0 ? referrerTokenAccount : destinationTokenAccount,
@@ -30880,7 +30877,7 @@ var solanaStakePool = (function (exports) {
 	/**
 	 * Creates instructions required to withdraw stake from a stake pool.
 	 */
-	async function withdrawStake(connection, stakePoolAddress, tokenOwner, amount, useReserve = false, voteAccountAddress, stakeReceiver, poolTokenAccount, validatorComparator) {
+	async function withdrawStake(connection, stakePoolAddress, tokenOwner, amount, useReserve = false, voteAccountAddress, stakeReceiver, poolTokenAccount, validatorComparator, ephemeralAddress) {
 	    var _c, _d, _e, _f, _g;
 	    const stakePool = await getStakePoolAccount(connection, stakePoolAddress);
 	    const poolAmount = new BN(solToLamports(amount));
@@ -30968,9 +30965,14 @@ var solanaStakePool = (function (exports) {
 	    }
 	    // Construct transaction to withdraw from withdrawAccounts account list
 	    const instructions = [];
-	    const userTransferAuthority = Keypair.generate();
-	    const signers = [userTransferAuthority];
-	    instructions.push(createApproveInstruction(poolTokenAccount, userTransferAuthority.publicKey, tokenOwner, poolAmount.toNumber()));
+	    const signers = [];
+	    let sourceTransferAuthority = ephemeralAddress;
+	    if (!sourceTransferAuthority) {
+	        const userTransferAuthority = Keypair.generate();
+	        sourceTransferAuthority = userTransferAuthority.publicKey;
+	        signers.push(userTransferAuthority);
+	        instructions.push(createApproveInstruction(poolTokenAccount, userTransferAuthority.publicKey, tokenOwner, poolAmount.toNumber()));
+	    }
 	    let totalRentFreeBalances = 0;
 	    // Max 5 accounts to prevent an error: "Transaction too large"
 	    const maxWithdrawAccounts = 5;
@@ -31004,7 +31006,7 @@ var solanaStakePool = (function (exports) {
 	            validatorStake: withdrawAccount.stakeAddress,
 	            destinationStake: stakeToReceive,
 	            destinationStakeAuthority: tokenOwner,
-	            sourceTransferAuthority: userTransferAuthority.publicKey,
+	            sourceTransferAuthority,
 	            sourcePoolAccount: poolTokenAccount,
 	            managerFeeAccount: stakePool.account.data.managerFeeAccount,
 	            poolMint: stakePool.account.data.poolMint,
@@ -31032,7 +31034,7 @@ var solanaStakePool = (function (exports) {
 	/**
 	 * Creates instructions required to withdraw SOL directly from a stake pool.
 	 */
-	async function withdrawSol(connection, stakePoolAddress, tokenOwner, solReceiver, amount, solWithdrawAuthority) {
+	async function withdrawSol(connection, stakePoolAddress, tokenOwner, solReceiver, amount, solWithdrawAuthority, ephemeralAddress) {
 	    const stakePool = await getStakePoolAccount(connection, stakePoolAddress);
 	    const poolAmount = solToLamports(amount);
 	    const poolTokenAccount = getAssociatedTokenAddressSync(stakePool.account.data.poolMint, tokenOwner, true);
@@ -31045,16 +31047,13 @@ var solanaStakePool = (function (exports) {
 	    // Construct transaction to withdraw from withdrawAccounts account list
 	    const instructions = [];
 	    const signers = [];
-	    // const userTransferAuthority = Keypair.generate();
-	    // const signers: Signer[] = [userTransferAuthority];
-	    // instructions.push(
-	    //   createApproveInstruction(
-	    //     poolTokenAccount,
-	    //     userTransferAuthority.publicKey,
-	    //     tokenOwner,
-	    //     poolAmount,
-	    //   ),
-	    // );
+	    let sourcePoolAccount = ephemeralAddress;
+	    if (!sourcePoolAccount) {
+	        const userTransferAuthority = Keypair.generate();
+	        sourcePoolAccount = userTransferAuthority.publicKey;
+	        signers.push(userTransferAuthority);
+	        instructions.push(createApproveInstruction(poolTokenAccount, userTransferAuthority.publicKey, tokenOwner, poolAmount));
+	    }
 	    const poolWithdrawAuthority = findWithdrawAuthorityProgramAddress(STAKE_POOL_PROGRAM_ID, stakePoolAddress);
 	    if (solWithdrawAuthority) {
 	        const expectedSolWithdrawAuthority = stakePool.account.data.solWithdrawAuthority;
@@ -31069,7 +31068,7 @@ var solanaStakePool = (function (exports) {
 	        stakePool: stakePoolAddress,
 	        withdrawAuthority: poolWithdrawAuthority,
 	        reserveStake: stakePool.account.data.reserveStake,
-	        sourcePoolAccount: poolTokenAccount,
+	        sourcePoolAccount,
 	        sourceTransferAuthority: tokenOwner,
 	        destinationSystemAccount: solReceiver,
 	        managerFeeAccount: stakePool.account.data.managerFeeAccount,
