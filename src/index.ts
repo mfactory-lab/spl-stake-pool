@@ -606,17 +606,18 @@ export async function withdrawSol(
 
   // Construct transaction to withdraw from withdrawAccounts account list
   const instructions: TransactionInstruction[] = [];
-  const userTransferAuthority = Keypair.generate();
-  const signers: Signer[] = [userTransferAuthority];
+  const signers: Signer[] = [];
 
-  instructions.push(
-    createApproveInstruction(
-      poolTokenAccount,
-      userTransferAuthority.publicKey,
-      tokenOwner,
-      poolAmount,
-    ),
-  );
+  // const userTransferAuthority = Keypair.generate();
+  // const signers: Signer[] = [userTransferAuthority];
+  // instructions.push(
+  //   createApproveInstruction(
+  //     poolTokenAccount,
+  //     userTransferAuthority.publicKey,
+  //     tokenOwner,
+  //     poolAmount,
+  //   ),
+  // );
 
   const poolWithdrawAuthority = findWithdrawAuthorityProgramAddress(
     STAKE_POOL_PROGRAM_ID,
@@ -640,7 +641,7 @@ export async function withdrawSol(
     withdrawAuthority: poolWithdrawAuthority,
     reserveStake: stakePool.account.data.reserveStake,
     sourcePoolAccount: poolTokenAccount,
-    sourceTransferAuthority: userTransferAuthority.publicKey,
+    sourceTransferAuthority: tokenOwner,
     destinationSystemAccount: solReceiver,
     managerFeeAccount: stakePool.account.data.managerFeeAccount,
     poolMint: stakePool.account.data.poolMint,
