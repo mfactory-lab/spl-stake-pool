@@ -31044,9 +31044,17 @@ var solanaStakePool = (function (exports) {
 	    }
 	    // Construct transaction to withdraw from withdrawAccounts account list
 	    const instructions = [];
-	    const userTransferAuthority = Keypair.generate();
-	    const signers = [userTransferAuthority];
-	    instructions.push(createApproveInstruction(poolTokenAccount, userTransferAuthority.publicKey, tokenOwner, poolAmount));
+	    const signers = [];
+	    // const userTransferAuthority = Keypair.generate();
+	    // const signers: Signer[] = [userTransferAuthority];
+	    // instructions.push(
+	    //   createApproveInstruction(
+	    //     poolTokenAccount,
+	    //     userTransferAuthority.publicKey,
+	    //     tokenOwner,
+	    //     poolAmount,
+	    //   ),
+	    // );
 	    const poolWithdrawAuthority = findWithdrawAuthorityProgramAddress(STAKE_POOL_PROGRAM_ID, stakePoolAddress);
 	    if (solWithdrawAuthority) {
 	        const expectedSolWithdrawAuthority = stakePool.account.data.solWithdrawAuthority;
@@ -31062,7 +31070,7 @@ var solanaStakePool = (function (exports) {
 	        withdrawAuthority: poolWithdrawAuthority,
 	        reserveStake: stakePool.account.data.reserveStake,
 	        sourcePoolAccount: poolTokenAccount,
-	        sourceTransferAuthority: userTransferAuthority.publicKey,
+	        sourceTransferAuthority: tokenOwner,
 	        destinationSystemAccount: solReceiver,
 	        managerFeeAccount: stakePool.account.data.managerFeeAccount,
 	        poolMint: stakePool.account.data.poolMint,
