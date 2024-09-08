@@ -617,19 +617,14 @@ export async function withdrawSol(
   const instructions: TransactionInstruction[] = [];
   const signers: Signer[] = [];
 
-  let sourcePoolAccount = ephemeralAddress;
+  let sourceTransferAuthority = ephemeralAddress;
 
-  if (!sourcePoolAccount) {
+  if (!sourceTransferAuthority) {
     const userTransferAuthority = Keypair.generate();
-    sourcePoolAccount = userTransferAuthority.publicKey;
+    sourceTransferAuthority = userTransferAuthority.publicKey;
     signers.push(userTransferAuthority);
     instructions.push(
-      createApproveInstruction(
-        poolTokenAccount,
-        userTransferAuthority.publicKey,
-        tokenOwner,
-        poolAmount,
-      ),
+      createApproveInstruction(poolTokenAccount, sourceTransferAuthority, tokenOwner, poolAmount),
     );
   }
 
@@ -643,9 +638,9 @@ export async function withdrawSol(
     if (!expectedSolWithdrawAuthority) {
       throw new Error('SOL withdraw authority specified in arguments but stake pool has none');
     }
-    if (solWithdrawAuthority.toBase58() !== expectedSolWithdrawAuthority.toBase58()) {
+    if (String(solWithdrawAuthority) !== String(expectedSolWithdrawAuthority)) {
       throw new Error(
-        `Invalid deposit withdraw specified, expected ${expectedSolWithdrawAuthority.toBase58()}, received ${solWithdrawAuthority.toBase58()}`,
+        `Invalid deposit withdraw specified, expected ${expectedSolWithdrawAuthority}, received ${solWithdrawAuthority}`,
       );
     }
   }
@@ -654,8 +649,8 @@ export async function withdrawSol(
     stakePool: stakePoolAddress,
     withdrawAuthority: poolWithdrawAuthority,
     reserveStake: stakePool.account.data.reserveStake,
-    sourcePoolAccount,
-    sourceTransferAuthority: tokenOwner,
+    sourcePoolAccount: poolTokenAccount,
+    sourceTransferAuthority,
     destinationSystemAccount: solReceiver,
     managerFeeAccount: stakePool.account.data.managerFeeAccount,
     poolMint: stakePool.account.data.poolMint,
