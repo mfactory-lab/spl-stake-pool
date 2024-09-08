@@ -344,7 +344,7 @@ export async function withdrawStake(
   stakeReceiver?: PublicKey,
   poolTokenAccount?: PublicKey,
   validatorComparator?: (_a: ValidatorAccount, _b: ValidatorAccount) => number,
-  ephemeralAddress?: PublicKey,
+  ephemeralSourceTransferAuthority?: PublicKey,
 ) {
   const stakePool = await getStakePoolAccount(connection, stakePoolAddress);
   const poolAmount = new BN(solToLamports(amount));
@@ -493,21 +493,22 @@ export async function withdrawStake(
   const instructions: TransactionInstruction[] = [];
   const signers: Signer[] = [];
 
-  let sourceTransferAuthority = ephemeralAddress;
+  let sourceTransferAuthority = ephemeralSourceTransferAuthority;
 
   if (!sourceTransferAuthority) {
-    const userTransferAuthority = Keypair.generate();
-    sourceTransferAuthority = userTransferAuthority.publicKey;
-    signers.push(userTransferAuthority);
-    instructions.push(
-      createApproveInstruction(
-        poolTokenAccount,
-        userTransferAuthority.publicKey,
-        tokenOwner,
-        poolAmount.toNumber(),
-      ),
-    );
+    const signer = Keypair.generate();
+    signers.push(signer);
+    sourceTransferAuthority = signer.publicKey;
   }
+
+  instructions.push(
+    createApproveInstruction(
+      poolTokenAccount,
+      sourceTransferAuthority,
+      tokenOwner,
+      poolAmount.toNumber(),
+    ),
+  );
 
   let totalRentFreeBalances = 0;
 
@@ -592,7 +593,7 @@ export async function withdrawSol(
   solReceiver: PublicKey,
   amount: number,
   solWithdrawAuthority?: PublicKey,
-  ephemeralAddress?: PublicKey,
+  ephemeralSourceTransferAuthority?: PublicKey,
 ) {
   const stakePool = await getStakePoolAccount(connection, stakePoolAddress);
   const poolAmount = solToLamports(amount);
@@ -617,16 +618,17 @@ export async function withdrawSol(
   const instructions: TransactionInstruction[] = [];
   const signers: Signer[] = [];
 
-  let sourceTransferAuthority = ephemeralAddress;
+  let sourceTransferAuthority = ephemeralSourceTransferAuthority;
 
   if (!sourceTransferAuthority) {
-    const userTransferAuthority = Keypair.generate();
-    sourceTransferAuthority = userTransferAuthority.publicKey;
-    signers.push(userTransferAuthority);
-    instructions.push(
-      createApproveInstruction(poolTokenAccount, sourceTransferAuthority, tokenOwner, poolAmount),
-    );
+    const signer = Keypair.generate();
+    signers.push(signer);
+    sourceTransferAuthority = signer.publicKey;
   }
+
+  instructions.push(
+    createApproveInstruction(poolTokenAccount, sourceTransferAuthority, tokenOwner, poolAmount),
+  );
 
   const poolWithdrawAuthority = findWithdrawAuthorityProgramAddress(
     STAKE_POOL_PROGRAM_ID,
