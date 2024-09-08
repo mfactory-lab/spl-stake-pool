@@ -63,7 +63,7 @@ export declare function depositSol(connection: Connection, stakePoolAddress: Pub
 /**
  * Creates instructions required to withdraw stake from a stake pool.
  */
-export declare function withdrawStake(connection: Connection, stakePoolAddress: PublicKey, tokenOwner: PublicKey, amount: number, useReserve?: boolean, voteAccountAddress?: PublicKey, stakeReceiver?: PublicKey, poolTokenAccount?: PublicKey, validatorComparator?: (_a: ValidatorAccount, _b: ValidatorAccount) => number, ephemeralAddress?: PublicKey): Promise<{
+export declare function withdrawStake(connection: Connection, stakePoolAddress: PublicKey, tokenOwner: PublicKey, amount: number, useReserve?: boolean, voteAccountAddress?: PublicKey, stakeReceiver?: PublicKey, poolTokenAccount?: PublicKey, validatorComparator?: (_a: ValidatorAccount, _b: ValidatorAccount) => number, ephemeralSourceTransferAuthority?: PublicKey): Promise<{
     instructions: TransactionInstruction[];
     signers: Signer[];
     stakeReceiver: PublicKey | undefined;
@@ -72,7 +72,7 @@ export declare function withdrawStake(connection: Connection, stakePoolAddress: 
 /**
  * Creates instructions required to withdraw SOL directly from a stake pool.
  */
-export declare function withdrawSol(connection: Connection, stakePoolAddress: PublicKey, tokenOwner: PublicKey, solReceiver: PublicKey, amount: number, solWithdrawAuthority?: PublicKey, ephemeralAddress?: PublicKey): Promise<{
+export declare function withdrawSol(connection: Connection, stakePoolAddress: PublicKey, tokenOwner: PublicKey, solReceiver: PublicKey, amount: number, solWithdrawAuthority?: PublicKey, ephemeralSourceTransferAuthority?: PublicKey): Promise<{
     instructions: TransactionInstruction[];
     signers: Signer[];
 }>;

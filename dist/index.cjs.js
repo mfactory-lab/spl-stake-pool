@@ -1860,7 +1860,7 @@ async function depositSol(connection, stakePoolAddress, from, lamports, destinat
 /**
  * Creates instructions required to withdraw stake from a stake pool.
  */
-async function withdrawStake(connection, stakePoolAddress, tokenOwner, amount, useReserve = false, voteAccountAddress, stakeReceiver, poolTokenAccount, validatorComparator, ephemeralAddress) {
+async function withdrawStake(connection, stakePoolAddress, tokenOwner, amount, useReserve = false, voteAccountAddress, stakeReceiver, poolTokenAccount, validatorComparator, ephemeralSourceTransferAuthority) {
     var _c, _d, _e, _f, _g;
     const stakePool = await getStakePoolAccount(connection, stakePoolAddress);
     const poolAmount = new BN(solToLamports(amount));
@@ -1949,13 +1949,13 @@ async function withdrawStake(connection, stakePoolAddress, tokenOwner, amount, u
     // Construct transaction to withdraw from withdrawAccounts account list
     const instructions = [];
     const signers = [];
-    let sourceTransferAuthority = ephemeralAddress;
+    let sourceTransferAuthority = ephemeralSourceTransferAuthority;
     if (!sourceTransferAuthority) {
-        const userTransferAuthority = web3_js.Keypair.generate();
-        sourceTransferAuthority = userTransferAuthority.publicKey;
-        signers.push(userTransferAuthority);
-        instructions.push(splToken.createApproveInstruction(poolTokenAccount, userTransferAuthority.publicKey, tokenOwner, poolAmount.toNumber()));
+        const signer = web3_js.Keypair.generate();
+        signers.push(signer);
+        sourceTransferAuthority = signer.publicKey;
     }
+    instructions.push(splToken.createApproveInstruction(poolTokenAccount, sourceTransferAuthority, tokenOwner, poolAmount.toNumber()));
     let totalRentFreeBalances = 0;
     // Max 5 accounts to prevent an error: "Transaction too large"
     const maxWithdrawAccounts = 5;
@@ -2017,7 +2017,7 @@ async function withdrawStake(connection, stakePoolAddress, tokenOwner, amount, u
 /**
  * Creates instructions required to withdraw SOL directly from a stake pool.
  */
-async function withdrawSol(connection, stakePoolAddress, tokenOwner, solReceiver, amount, solWithdrawAuthority, ephemeralAddress) {
+async function withdrawSol(connection, stakePoolAddress, tokenOwner, solReceiver, amount, solWithdrawAuthority, ephemeralSourceTransferAuthority) {
     const stakePool = await getStakePoolAccount(connection, stakePoolAddress);
     const poolAmount = solToLamports(amount);
     const poolTokenAccount = splToken.getAssociatedTokenAddressSync(stakePool.account.data.poolMint, tokenOwner, true);
@@ -2030,13 +2030,13 @@ async function withdrawSol(connection, stakePoolAddress, tokenOwner, solReceiver
     // Construct transaction to withdraw from withdrawAccounts account list
     const instructions = [];
     const signers = [];
-    let sourceTransferAuthority = ephemeralAddress;
+    let sourceTransferAuthority = ephemeralSourceTransferAuthority;
     if (!sourceTransferAuthority) {
-        const userTransferAuthority = web3_js.Keypair.generate();
-        sourceTransferAuthority = userTransferAuthority.publicKey;
-        signers.push(userTransferAuthority);
-        instructions.push(splToken.createApproveInstruction(poolTokenAccount, sourceTransferAuthority, tokenOwner, poolAmount));
+        const signer = web3_js.Keypair.generate();
+        signers.push(signer);
+        sourceTransferAuthority = signer.publicKey;
     }
+    instructions.push(splToken.createApproveInstruction(poolTokenAccount, sourceTransferAuthority, tokenOwner, poolAmount));
     const poolWithdrawAuthority = findWithdrawAuthorityProgramAddress(STAKE_POOL_PROGRAM_ID, stakePoolAddress);
     if (solWithdrawAuthority) {
         const expectedSolWithdrawAuthority = stakePool.account.data.solWithdrawAuthority;
