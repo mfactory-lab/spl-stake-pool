@@ -274,18 +274,19 @@ export async function depositSol(
   const stakePool = stakePoolAccount.account.data;
 
   // Ephemeral SOL account just to do the transfer
-  const userSolTransfer = new Keypair();
-  const signers: Signer[] = [userSolTransfer];
+  // const userSolTransfer = new Keypair();
+  // const signers: Signer[] = [userSolTransfer];
+  const signers: Signer[] = [];
   const instructions: TransactionInstruction[] = [];
 
-  // Create the ephemeral SOL account
-  instructions.push(
-    SystemProgram.transfer({
-      fromPubkey: from,
-      toPubkey: userSolTransfer.publicKey,
-      lamports,
-    }),
-  );
+  // // Create the ephemeral SOL account
+  // instructions.push(
+  //   SystemProgram.transfer({
+  //     fromPubkey: from,
+  //     toPubkey: userSolTransfer.publicKey,
+  //     lamports,
+  //   }),
+  // );
 
   // Create token account if not specified
   if (!destinationTokenAccount) {
@@ -310,7 +311,8 @@ export async function depositSol(
     StakePoolInstruction.depositSol({
       stakePool: stakePoolAddress,
       reserveStake: stakePool.reserveStake,
-      fundingAccount: userSolTransfer.publicKey,
+      fundingAccount: from,
+      // fundingAccount: userSolTransfer.publicKey,
       destinationPoolAccount: destinationTokenAccount,
       managerFeeAccount: stakePool.managerFeeAccount,
       referralPoolAccount: referrerTokenAccount ?? destinationTokenAccount,
