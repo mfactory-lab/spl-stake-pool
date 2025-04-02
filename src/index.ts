@@ -1057,7 +1057,9 @@ export async function stakePoolInfo(connection: Connection, stakePoolAddress: Pu
       currentNumberOfValidators,
       maxNumberOfValidators,
       updateRequired,
-    }, // CliStakePoolDetails
+    },
+    // CliStakePoolDetails
+    epochInfo,
   };
 }
 
