@@ -160,6 +160,7 @@ export declare function stakePoolInfo(connection: Connection, stakePoolAddress: 
         maxNumberOfValidators: number;
         updateRequired: boolean;
     };
+    epochInfo: import("@solana/web3.js").EpochInfo;
 }>;
 interface RedelegateProps {
     connection: Connection;

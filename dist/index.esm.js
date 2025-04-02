@@ -2304,7 +2304,9 @@ async function stakePoolInfo(connection, stakePoolAddress) {
             currentNumberOfValidators,
             maxNumberOfValidators,
             updateRequired,
-        }, // CliStakePoolDetails
+        },
+        // CliStakePoolDetails
+        epochInfo,
     };
 }
 /**

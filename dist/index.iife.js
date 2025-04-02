@@ -31323,7 +31323,9 @@ var solanaStakePool = (function (exports) {
 	            currentNumberOfValidators,
 	            maxNumberOfValidators,
 	            updateRequired,
-	        }, // CliStakePoolDetails
+	        },
+	        // CliStakePoolDetails
+	        epochInfo,
 	    };
 	}
 	/**
