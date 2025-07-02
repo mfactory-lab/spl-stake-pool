@@ -14,7 +14,7 @@ import {
 } from '@solana/spl-token';
 import { create } from 'superstruct';
 import BN from 'bn.js';
-import type { ValidatorAccount } from './utils';
+import { __StakeProgram_authorize, ValidatorAccount } from './utils';
 import {
   arrayChunk,
   calcLamportsWithdrawAmount,
@@ -210,7 +210,7 @@ export async function depositStake(
   }
 
   instructions.push(
-    ...StakeProgram.authorize({
+    ...__StakeProgram_authorize({
       stakePubkey: depositStake,
       authorizedPubkey,
       newAuthorizedPubkey: stakePool.account.data.stakeDepositAuthority,
@@ -219,7 +219,7 @@ export async function depositStake(
   );
 
   instructions.push(
-    ...StakeProgram.authorize({
+    ...__StakeProgram_authorize({
       stakePubkey: depositStake,
       authorizedPubkey,
       newAuthorizedPubkey: stakePool.account.data.stakeDepositAuthority,

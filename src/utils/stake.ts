@@ -1,4 +1,10 @@
-import type { Connection, PublicKey, TransactionInstruction } from '@solana/web3.js';
+import {
+  AuthorizeStakeParams,
+  Connection,
+  PublicKey,
+  Transaction,
+  TransactionInstruction,
+} from '@solana/web3.js';
 import { Keypair, StakeProgram, SystemProgram } from '@solana/web3.js';
 import BN from 'bn.js';
 import type { WithdrawAccount } from '../index';
@@ -215,4 +221,13 @@ export function newStakeAccount(
   );
 
   return stakeReceiverKeypair;
+}
+
+export function __StakeProgram_authorize(params: AuthorizeStakeParams): Transaction {
+  const tx = StakeProgram.authorize(params);
+
+  // fixed `squads.so` execution error, the clock account is not writable
+  tx.instructions[0].keys[1].isWritable = false;
+
+  return tx;
 }
