@@ -791,6 +791,12 @@ function newStakeAccount(feePayer, instructions, lamports) {
     }));
     return stakeReceiverKeypair;
 }
+function __StakeProgram_authorize(params) {
+    const tx = web3_js.StakeProgram.authorize(params);
+    // SYSVAR_CLOCK_PUBKEY is not writable
+    tx.instructions[0].keys[1].isWritable = false;
+    return tx;
+}
 
 /**
  * Populate a buffer of instruction data using an InstructionType
@@ -1782,13 +1788,13 @@ async function depositStake(connection, stakePoolAddress, authorizedPubkey, vali
         instructions.push(splToken.createAssociatedTokenAccountIdempotentInstruction(authorizedPubkey, associatedAddress, authorizedPubkey, poolMint));
         poolTokenReceiverAccount = associatedAddress;
     }
-    instructions.push(...web3_js.StakeProgram.authorize({
+    instructions.push(...__StakeProgram_authorize({
         stakePubkey: depositStake,
         authorizedPubkey,
         newAuthorizedPubkey: stakePool.account.data.stakeDepositAuthority,
         stakeAuthorizationType: web3_js.StakeAuthorizationLayout.Staker,
     }).instructions);
-    instructions.push(...web3_js.StakeProgram.authorize({
+    instructions.push(...__StakeProgram_authorize({
         stakePubkey: depositStake,
         authorizedPubkey,
         newAuthorizedPubkey: stakePool.account.data.stakeDepositAuthority,

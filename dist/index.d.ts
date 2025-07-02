@@ -1,7 +1,7 @@
 import type { AccountInfo, Connection, Signer, TransactionInstruction } from '@solana/web3.js';
 import { Keypair, PublicKey } from '@solana/web3.js';
 import BN from 'bn.js';
-import type { ValidatorAccount } from './utils';
+import { ValidatorAccount } from './utils';
 import type { Fee, StakePool, ValidatorList } from './layouts';
 import { StakeAccount } from './layouts';
 export type { StakePool, AccountType, ValidatorList, ValidatorStakeInfo } from './layouts';

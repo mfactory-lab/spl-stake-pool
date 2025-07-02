@@ -29808,6 +29808,12 @@ var solanaStakePool = (function (exports) {
 	    }));
 	    return stakeReceiverKeypair;
 	}
+	function __StakeProgram_authorize(params) {
+	    const tx = StakeProgram.authorize(params);
+	    // SYSVAR_CLOCK_PUBKEY is not writable
+	    tx.instructions[0].keys[1].isWritable = false;
+	    return tx;
+	}
 
 	/**
 	 * Populate a buffer of instruction data using an InstructionType
@@ -30799,13 +30805,13 @@ var solanaStakePool = (function (exports) {
 	        instructions.push(createAssociatedTokenAccountIdempotentInstruction(authorizedPubkey, associatedAddress, authorizedPubkey, poolMint));
 	        poolTokenReceiverAccount = associatedAddress;
 	    }
-	    instructions.push(...StakeProgram.authorize({
+	    instructions.push(...__StakeProgram_authorize({
 	        stakePubkey: depositStake,
 	        authorizedPubkey,
 	        newAuthorizedPubkey: stakePool.account.data.stakeDepositAuthority,
 	        stakeAuthorizationType: StakeAuthorizationLayout.Staker,
 	    }).instructions);
-	    instructions.push(...StakeProgram.authorize({
+	    instructions.push(...__StakeProgram_authorize({
 	        stakePubkey: depositStake,
 	        authorizedPubkey,
 	        newAuthorizedPubkey: stakePool.account.data.stakeDepositAuthority,

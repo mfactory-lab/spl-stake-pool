@@ -1,4 +1,4 @@
-import type { Connection, PublicKey, TransactionInstruction } from '@solana/web3.js';
+import { AuthorizeStakeParams, Connection, PublicKey, Transaction, TransactionInstruction } from '@solana/web3.js';
 import { Keypair } from '@solana/web3.js';
 import BN from 'bn.js';
 import type { WithdrawAccount } from '../index';
@@ -28,3 +28,4 @@ export declare function calcPoolTokensForDeposit(stakePool: StakePool, stakeLamp
  */
 export declare function calcLamportsWithdrawAmount(stakePool: StakePool, poolTokens: BN): BN;
 export declare function newStakeAccount(feePayer: PublicKey, instructions: TransactionInstruction[], lamports: number): Keypair;
+export declare function __StakeProgram_authorize(params: AuthorizeStakeParams): Transaction;
