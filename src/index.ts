@@ -521,6 +521,7 @@ export async function withdrawStake(
     if (i > maxWithdrawAccounts) {
       break;
     }
+
     // Convert pool tokens amount to lamports
     const solWithdrawAmount = calcLamportsWithdrawAmount(
       stakePool.account.data,

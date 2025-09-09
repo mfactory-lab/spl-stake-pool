@@ -72,38 +72,56 @@ export async function prepareWithdrawAccounts(
       continue;
     }
 
+    const totalValidatorStake = validator.activeStakeLamports.add(validator.transientStakeLamports);
+    if (totalValidatorStake.lte(minBalance)) {
+      continue;
+    }
+
     const stakeAccountAddress = findStakeProgramAddress(
       STAKE_POOL_PROGRAM_ID,
       validator.voteAccountAddress,
       stakePoolAddress,
     );
 
-    if (!validator.activeStakeLamports.isZero()) {
-      const isPreferred = stakePool?.preferredWithdrawValidatorVoteAddress?.equals(
-        validator.voteAccountAddress,
-      );
-      accounts.push({
-        type: isPreferred ? 'preferred' : 'active',
-        voteAddress: validator.voteAccountAddress,
-        stakeAddress: stakeAccountAddress,
-        lamports: validator.activeStakeLamports,
-      });
+    // Active stake: use full amount if transient covers minimum, otherwise leave minimum
+    if (validator.activeStakeLamports.gt(new BN(0))) {
+      const activeAvailable = validator.transientStakeLamports.gte(minBalance)
+        ? validator.activeStakeLamports
+        : validator.activeStakeLamports.sub(minBalance.sub(validator.transientStakeLamports));
+
+      if (activeAvailable.gt(new BN(0))) {
+        const isPreferred = stakePool?.preferredWithdrawValidatorVoteAddress?.equals(
+          validator.voteAccountAddress,
+        );
+        accounts.push({
+          type: isPreferred ? 'preferred' : 'active',
+          voteAddress: validator.voteAccountAddress,
+          stakeAddress: stakeAccountAddress,
+          lamports: activeAvailable,
+        });
+      }
     }
 
-    const transientStakeLamports = validator.transientStakeLamports.sub(minBalance);
-    if (transientStakeLamports.gt(new BN(0))) {
-      const transientStakeAccountAddress = findTransientStakeProgramAddress(
-        STAKE_POOL_PROGRAM_ID,
-        validator.voteAccountAddress,
-        stakePoolAddress,
-        validator.transientSeedSuffixStart,
-      );
-      accounts.push({
-        type: 'transient',
-        voteAddress: validator.voteAccountAddress,
-        stakeAddress: transientStakeAccountAddress,
-        lamports: transientStakeLamports,
-      });
+    // Transient stake: use full amount if active covers minimum, otherwise leave minimum
+    if (validator.transientStakeLamports.gt(new BN(0))) {
+      const transientAvailable = validator.activeStakeLamports.gte(minBalance)
+        ? validator.transientStakeLamports
+        : validator.transientStakeLamports.sub(minBalance.sub(validator.activeStakeLamports));
+
+      if (transientAvailable.gt(new BN(0))) {
+        const transientStakeAccountAddress = findTransientStakeProgramAddress(
+          STAKE_POOL_PROGRAM_ID,
+          validator.voteAccountAddress,
+          stakePoolAddress,
+          validator.transientSeedSuffixStart,
+        );
+        accounts.push({
+          type: 'transient',
+          voteAddress: validator.voteAccountAddress,
+          stakeAddress: transientStakeAccountAddress,
+          lamports: transientAvailable,
+        });
+      }
     }
   }
 
@@ -150,6 +168,12 @@ export async function prepareWithdrawAccounts(
       if (poolAmount.lte(new BN(0))) {
         continue;
       }
+
+      // console.log(`type: ${type}`);
+      // console.log(`voteAddress: ${voteAddress}`);
+      // console.log(`lamports: ${lamports}`);
+      // console.log(`minBalance: ${minBalance}`);
+      // console.log(`poolAmount : ${poolAmount}`);
 
       // Those accounts will be withdrawn completely with `claim` instruction
       withdrawFrom.push({ stakeAddress, voteAddress, poolAmount });
