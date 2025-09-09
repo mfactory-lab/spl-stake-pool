@@ -682,25 +682,40 @@ async function prepareWithdrawAccounts(connection, stakePool, stakePoolAddress, 
         if (validator.status !== ValidatorStakeInfoStatus.Active) {
             continue;
         }
-        const stakeAccountAddress = findStakeProgramAddress(STAKE_POOL_PROGRAM_ID, validator.voteAccountAddress, stakePoolAddress);
-        if (!validator.activeStakeLamports.isZero()) {
-            const isPreferred = (_b = stakePool === null || stakePool === void 0 ? void 0 : stakePool.preferredWithdrawValidatorVoteAddress) === null || _b === void 0 ? void 0 : _b.equals(validator.voteAccountAddress);
-            accounts.push({
-                type: isPreferred ? 'preferred' : 'active',
-                voteAddress: validator.voteAccountAddress,
-                stakeAddress: stakeAccountAddress,
-                lamports: validator.activeStakeLamports,
-            });
+        const totalValidatorStake = validator.activeStakeLamports.add(validator.transientStakeLamports);
+        if (totalValidatorStake.lte(minBalance)) {
+            continue;
         }
-        const transientStakeLamports = validator.transientStakeLamports.sub(minBalance);
-        if (transientStakeLamports.gt(new BN(0))) {
-            const transientStakeAccountAddress = findTransientStakeProgramAddress(STAKE_POOL_PROGRAM_ID, validator.voteAccountAddress, stakePoolAddress, validator.transientSeedSuffixStart);
-            accounts.push({
-                type: 'transient',
-                voteAddress: validator.voteAccountAddress,
-                stakeAddress: transientStakeAccountAddress,
-                lamports: transientStakeLamports,
-            });
+        const stakeAccountAddress = findStakeProgramAddress(STAKE_POOL_PROGRAM_ID, validator.voteAccountAddress, stakePoolAddress);
+        // Active stake: use full amount if transient covers minimum, otherwise leave minimum
+        if (validator.activeStakeLamports.gt(new BN(0))) {
+            const activeAvailable = validator.transientStakeLamports.gte(minBalance)
+                ? validator.activeStakeLamports
+                : validator.activeStakeLamports.sub(minBalance.sub(validator.transientStakeLamports));
+            if (activeAvailable.gt(new BN(0))) {
+                const isPreferred = (_b = stakePool === null || stakePool === void 0 ? void 0 : stakePool.preferredWithdrawValidatorVoteAddress) === null || _b === void 0 ? void 0 : _b.equals(validator.voteAccountAddress);
+                accounts.push({
+                    type: isPreferred ? 'preferred' : 'active',
+                    voteAddress: validator.voteAccountAddress,
+                    stakeAddress: stakeAccountAddress,
+                    lamports: activeAvailable,
+                });
+            }
+        }
+        // Transient stake: use full amount if active covers minimum, otherwise leave minimum
+        if (validator.transientStakeLamports.gt(new BN(0))) {
+            const transientAvailable = validator.activeStakeLamports.gte(minBalance)
+                ? validator.transientStakeLamports
+                : validator.transientStakeLamports.sub(minBalance.sub(validator.activeStakeLamports));
+            if (transientAvailable.gt(new BN(0))) {
+                const transientStakeAccountAddress = findTransientStakeProgramAddress(STAKE_POOL_PROGRAM_ID, validator.voteAccountAddress, stakePoolAddress, validator.transientSeedSuffixStart);
+                accounts.push({
+                    type: 'transient',
+                    voteAddress: validator.voteAccountAddress,
+                    stakeAddress: transientStakeAccountAddress,
+                    lamports: transientAvailable,
+                });
+            }
         }
     }
     // Sort from highest to lowest balance
@@ -738,6 +753,11 @@ async function prepareWithdrawAccounts(connection, stakePool, stakePoolAddress, 
             if (poolAmount.lte(new BN(0))) {
                 continue;
             }
+            // console.log(`type: ${type}`);
+            // console.log(`voteAddress: ${voteAddress}`);
+            // console.log(`lamports: ${lamports}`);
+            // console.log(`minBalance: ${minBalance}`);
+            // console.log(`poolAmount : ${poolAmount}`);
             // Those accounts will be withdrawn completely with `claim` instruction
             withdrawFrom.push({ stakeAddress, voteAddress, poolAmount });
             remainingAmount = remainingAmount.sub(poolAmount);
@@ -793,7 +813,7 @@ function newStakeAccount(feePayer, instructions, lamports) {
 }
 function __StakeProgram_authorize(params) {
     const tx = web3_js.StakeProgram.authorize(params);
-    // SYSVAR_CLOCK_PUBKEY is not writable
+    // fixed `squads.so` execution error, the clock account is not writable
     tx.instructions[0].keys[1].isWritable = false;
     return tx;
 }
