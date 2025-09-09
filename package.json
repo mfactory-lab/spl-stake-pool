@@ -1,6 +1,6 @@
 {
   "name": "@solana/spl-stake-pool",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "SPL Stake Pool Program JS API",
   "scripts": {
     "build": "tsc && cross-env NODE_ENV=production rollup -c",
@@ -8,7 +8,8 @@
     "lint": "eslint --max-warnings 0 .",
     "lint:fix": "eslint . --fix",
     "test": "jest",
-    "clean": "rimraf ./dist"
+    "clean": "rimraf ./dist",
+    "dev": "tsc -w & cross-env NODE_ENV=development rollup -c -w"
   },
   "keywords": [],
   "contributors": [
