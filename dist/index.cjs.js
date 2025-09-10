@@ -1884,10 +1884,10 @@ async function depositSol(connection, stakePoolAddress, from, lamports, destinat
     };
 }
 /**
- * Creates instructions required to withdraw stake from a stake pool.
+ * Common logic for preparing withdraw accounts and validation
  */
-async function withdrawStake(connection, stakePoolAddress, tokenOwner, amount, useReserve = false, voteAccountAddress, stakeReceiver, poolTokenAccount, validatorComparator, ephemeralSourceTransferAuthority) {
-    var _c, _d, _e, _f, _g;
+async function prepareWithdrawOperation(connection, stakePoolAddress, tokenOwner, amount, useReserve = false, voteAccountAddress, stakeReceiver, poolTokenAccount, validatorComparator) {
+    var _c, _d, _e;
     const stakePool = await getStakePoolAccount(connection, stakePoolAddress);
     const poolAmount = new BN(solToLamports(amount));
     if (!poolTokenAccount) {
@@ -1958,7 +1958,6 @@ async function withdrawStake(connection, stakePoolAddress, tokenOwner, amount, u
         }
         const availableForWithdrawal = calcLamportsWithdrawAmount(stakePool.account.data, availableLamports);
         if (availableForWithdrawal.lt(poolAmount)) {
-            // noinspection ExceptionCaughtLocallyJS
             throw new Error(`Not enough lamports available for withdrawal from ${stakeAccountAddress},
           ${poolAmount} asked, ${availableForWithdrawal} available.`);
         }
@@ -1969,9 +1968,110 @@ async function withdrawStake(connection, stakePoolAddress, tokenOwner, amount, u
         });
     }
     else {
-        // Get the list of accounts to withdraw from
         withdrawAccounts.push(...(await prepareWithdrawAccounts(connection, stakePool.account.data, stakePoolAddress, poolAmount, validatorComparator, poolTokenAccount.equals(stakePool.account.data.managerFeeAccount))));
     }
+    return {
+        stakePool,
+        poolAmount,
+        poolTokenAccount,
+        stakeAccountRentExemption,
+        withdrawAuthority,
+        stakeReceiverAccount,
+        withdrawAccounts,
+    };
+}
+/**
+ * Creates batched instruction sets for withdrawing stake from a stake pool.
+ */
+async function withdrawStakeBatched(connection, stakePoolAddress, tokenOwner, amount, useReserve = false, voteAccountAddress, stakeReceiver, poolTokenAccount, validatorComparator, ephemeralSourceTransferAuthority) {
+    var _c, _d;
+    const { stakePool, poolTokenAccount: finalPoolTokenAccount, stakeAccountRentExemption, withdrawAuthority, stakeReceiverAccount, withdrawAccounts, } = await prepareWithdrawOperation(connection, stakePoolAddress, tokenOwner, amount, useReserve, voteAccountAddress, stakeReceiver, poolTokenAccount, validatorComparator);
+    const instructionSet = [];
+    const signerSet = [];
+    let sourceTransferKeypair;
+    let sourceTransferAuthority = ephemeralSourceTransferAuthority;
+    if (!sourceTransferAuthority) {
+        sourceTransferKeypair = web3_js.Keypair.generate();
+        sourceTransferAuthority = sourceTransferKeypair.publicKey;
+    }
+    let totalRentFreeBalances = 0;
+    // Max 5 accounts to prevent "Transaction too large"
+    const maxWithdrawAccounts = 5;
+    let i = 0;
+    // Process withdraw accounts
+    for (const withdrawAccount of withdrawAccounts) {
+        if (i >= maxWithdrawAccounts) {
+            break;
+        }
+        const instructions = [];
+        const signers = [];
+        if (sourceTransferKeypair) {
+            signers.push(sourceTransferKeypair);
+        }
+        const solWithdrawAmount = calcLamportsWithdrawAmount(stakePool.account.data, withdrawAccount.poolAmount);
+        let infoMsg = `Withdrawing ◎${solWithdrawAmount},
+      from stake account ${(_c = withdrawAccount.stakeAddress) === null || _c === void 0 ? void 0 : _c.toBase58()}`;
+        if (withdrawAccount.voteAddress) {
+            infoMsg = `${infoMsg}, delegated to ${(_d = withdrawAccount.voteAddress) === null || _d === void 0 ? void 0 : _d.toBase58()}`;
+        }
+        console.info(infoMsg);
+        let stakeToReceive;
+        if (!stakeReceiver || (stakeReceiverAccount && stakeReceiverAccount.type === 'delegated')) {
+            const stakeKeypair = newStakeAccount(tokenOwner, instructions, stakeAccountRentExemption);
+            signers.push(stakeKeypair);
+            totalRentFreeBalances += stakeAccountRentExemption;
+            stakeToReceive = stakeKeypair.publicKey;
+            console.info(`Creating an account to receive stake ${stakeToReceive.toBase58()}`);
+        }
+        else {
+            stakeToReceive = stakeReceiver;
+        }
+        // Add Approve instruction for this specific withdraw amount
+        instructions.push(splToken.createApproveInstruction(finalPoolTokenAccount, sourceTransferAuthority, tokenOwner, withdrawAccount.poolAmount.toNumber()));
+        instructions.push(StakePoolInstruction.withdrawStake({
+            stakePool: stakePoolAddress,
+            validatorList: stakePool.account.data.validatorList,
+            validatorStake: withdrawAccount.stakeAddress,
+            destinationStake: stakeToReceive,
+            destinationStakeAuthority: tokenOwner,
+            sourceTransferAuthority,
+            sourcePoolAccount: finalPoolTokenAccount,
+            managerFeeAccount: stakePool.account.data.managerFeeAccount,
+            poolMint: stakePool.account.data.poolMint,
+            poolTokens: withdrawAccount.poolAmount,
+            withdrawAuthority,
+        }));
+        // add merge instruction for delegated stakeReceiver
+        if (stakeReceiver && (stakeReceiverAccount === null || stakeReceiverAccount === void 0 ? void 0 : stakeReceiverAccount.type) === 'delegated') {
+            instructions.push(...web3_js.StakeProgram.merge({
+                stakePubkey: stakeReceiver,
+                sourceStakePubKey: stakeToReceive,
+                authorizedPubkey: tokenOwner,
+            }).instructions);
+        }
+        else {
+            // otherwise deactivate immediately
+            instructions.push(...web3_js.StakeProgram.deactivate({
+                stakePubkey: stakeToReceive,
+                authorizedPubkey: tokenOwner,
+            }).instructions);
+        }
+        instructionSet.push(instructions);
+        signerSet.push(signers);
+        i++;
+    }
+    return {
+        instructionSet,
+        signerSet,
+        totalRentFreeBalances,
+    };
+}
+/**
+ * Creates instructions required to withdraw stake from a stake pool.
+ */
+async function withdrawStake(connection, stakePoolAddress, tokenOwner, amount, useReserve = false, voteAccountAddress, stakeReceiver, poolTokenAccount, validatorComparator, ephemeralSourceTransferAuthority) {
+    var _c, _d;
+    const { stakePool, poolAmount, poolTokenAccount: finalPoolTokenAccount, stakeAccountRentExemption, withdrawAuthority, stakeReceiverAccount, withdrawAccounts, } = await prepareWithdrawOperation(connection, stakePoolAddress, tokenOwner, amount, useReserve, voteAccountAddress, stakeReceiver, poolTokenAccount, validatorComparator);
     // Construct transaction to withdraw from withdrawAccounts account list
     const instructions = [];
     const signers = [];
@@ -1981,7 +2081,8 @@ async function withdrawStake(connection, stakePoolAddress, tokenOwner, amount, u
         signers.push(signer);
         sourceTransferAuthority = signer.publicKey;
     }
-    instructions.push(splToken.createApproveInstruction(poolTokenAccount, sourceTransferAuthority, tokenOwner, poolAmount.toNumber()));
+    // Single approve instruction for total amount
+    instructions.push(splToken.createApproveInstruction(finalPoolTokenAccount, sourceTransferAuthority, tokenOwner, poolAmount.toNumber()));
     let totalRentFreeBalances = 0;
     // Max 5 accounts to prevent an error: "Transaction too large"
     const maxWithdrawAccounts = 5;
@@ -1994,9 +2095,9 @@ async function withdrawStake(connection, stakePoolAddress, tokenOwner, amount, u
         // Convert pool tokens amount to lamports
         const solWithdrawAmount = calcLamportsWithdrawAmount(stakePool.account.data, withdrawAccount.poolAmount);
         let infoMsg = `Withdrawing ◎${solWithdrawAmount},
-      from stake account ${(_f = withdrawAccount.stakeAddress) === null || _f === void 0 ? void 0 : _f.toBase58()}`;
+      from stake account ${(_c = withdrawAccount.stakeAddress) === null || _c === void 0 ? void 0 : _c.toBase58()}`;
         if (withdrawAccount.voteAddress) {
-            infoMsg = `${infoMsg}, delegated to ${(_g = withdrawAccount.voteAddress) === null || _g === void 0 ? void 0 : _g.toBase58()}`;
+            infoMsg = `${infoMsg}, delegated to ${(_d = withdrawAccount.voteAddress) === null || _d === void 0 ? void 0 : _d.toBase58()}`;
         }
         console.info(infoMsg);
         let stakeToReceive;
@@ -2016,7 +2117,7 @@ async function withdrawStake(connection, stakePoolAddress, tokenOwner, amount, u
             destinationStake: stakeToReceive,
             destinationStakeAuthority: tokenOwner,
             sourceTransferAuthority,
-            sourcePoolAccount: poolTokenAccount,
+            sourcePoolAccount: finalPoolTokenAccount,
             managerFeeAccount: stakePool.account.data.managerFeeAccount,
             poolMint: stakePool.account.data.poolMint,
             poolTokens: withdrawAccount.poolAmount,
@@ -2560,4 +2661,5 @@ exports.updatePoolTokenMetadata = updatePoolTokenMetadata;
 exports.updateStakePool = updateStakePool;
 exports.withdrawSol = withdrawSol;
 exports.withdrawStake = withdrawStake;
+exports.withdrawStakeBatched = withdrawStakeBatched;
 //# sourceMappingURL=index.cjs.js.map
