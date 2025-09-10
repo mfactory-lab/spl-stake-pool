@@ -332,9 +332,9 @@ export async function depositSol(
 }
 
 /**
- * Creates instructions required to withdraw stake from a stake pool.
+ * Common logic for preparing withdraw accounts and validation
  */
-export async function withdrawStake(
+async function prepareWithdrawOperation(
   connection: Connection,
   stakePoolAddress: PublicKey,
   tokenOwner: PublicKey,
@@ -344,7 +344,6 @@ export async function withdrawStake(
   stakeReceiver?: PublicKey,
   poolTokenAccount?: PublicKey,
   validatorComparator?: (_a: ValidatorAccount, _b: ValidatorAccount) => number,
-  ephemeralSourceTransferAuthority?: PublicKey,
 ) {
   const stakePool = await getStakePoolAccount(connection, stakePoolAddress);
   const poolAmount = new BN(solToLamports(amount));
@@ -464,7 +463,6 @@ export async function withdrawStake(
     );
 
     if (availableForWithdrawal.lt(poolAmount)) {
-      // noinspection ExceptionCaughtLocallyJS
       throw new Error(
         `Not enough lamports available for withdrawal from ${stakeAccountAddress},
           ${poolAmount} asked, ${availableForWithdrawal} available.`,
@@ -476,7 +474,6 @@ export async function withdrawStake(
       poolAmount,
     });
   } else {
-    // Get the list of accounts to withdraw from
     withdrawAccounts.push(
       ...(await prepareWithdrawAccounts(
         connection,
@@ -488,6 +485,199 @@ export async function withdrawStake(
       )),
     );
   }
+
+  return {
+    stakePool,
+    poolAmount,
+    poolTokenAccount,
+    stakeAccountRentExemption,
+    withdrawAuthority,
+    stakeReceiverAccount,
+    withdrawAccounts,
+  };
+}
+
+/**
+ * Creates batched instruction sets for withdrawing stake from a stake pool.
+ */
+export async function withdrawStakeBatched(
+  connection: Connection,
+  stakePoolAddress: PublicKey,
+  tokenOwner: PublicKey,
+  amount: number,
+  useReserve = false,
+  voteAccountAddress?: PublicKey,
+  stakeReceiver?: PublicKey,
+  poolTokenAccount?: PublicKey,
+  validatorComparator?: (_a: ValidatorAccount, _b: ValidatorAccount) => number,
+  ephemeralSourceTransferAuthority?: PublicKey,
+) {
+  const {
+    stakePool,
+    poolTokenAccount: finalPoolTokenAccount,
+    stakeAccountRentExemption,
+    withdrawAuthority,
+    stakeReceiverAccount,
+    withdrawAccounts,
+  } = await prepareWithdrawOperation(
+    connection,
+    stakePoolAddress,
+    tokenOwner,
+    amount,
+    useReserve,
+    voteAccountAddress,
+    stakeReceiver,
+    poolTokenAccount,
+    validatorComparator,
+  );
+
+  const instructionSet: TransactionInstruction[][] = [];
+  const signerSet: Signer[][] = [];
+
+  let sourceTransferKeypair;
+  let sourceTransferAuthority = ephemeralSourceTransferAuthority;
+
+  if (!sourceTransferAuthority) {
+    sourceTransferKeypair = Keypair.generate();
+    sourceTransferAuthority = sourceTransferKeypair.publicKey;
+  }
+
+  let totalRentFreeBalances = 0;
+
+  // Max 5 accounts to prevent "Transaction too large"
+  const maxWithdrawAccounts = 5;
+  let i = 0;
+
+  // Process withdraw accounts
+  for (const withdrawAccount of withdrawAccounts) {
+    if (i >= maxWithdrawAccounts) {
+      break;
+    }
+
+    const instructions: TransactionInstruction[] = [];
+    const signers: Signer[] = [];
+
+    if (sourceTransferKeypair) {
+      signers.push(sourceTransferKeypair);
+    }
+
+    const solWithdrawAmount = calcLamportsWithdrawAmount(
+      stakePool.account.data,
+      withdrawAccount.poolAmount,
+    );
+
+    let infoMsg = `Withdrawing ◎${solWithdrawAmount},
+      from stake account ${withdrawAccount.stakeAddress?.toBase58()}`;
+
+    if (withdrawAccount.voteAddress) {
+      infoMsg = `${infoMsg}, delegated to ${withdrawAccount.voteAddress?.toBase58()}`;
+    }
+
+    console.info(infoMsg);
+
+    let stakeToReceive: PublicKey;
+
+    if (!stakeReceiver || (stakeReceiverAccount && stakeReceiverAccount.type === 'delegated')) {
+      const stakeKeypair = newStakeAccount(tokenOwner, instructions, stakeAccountRentExemption);
+      signers.push(stakeKeypair);
+      totalRentFreeBalances += stakeAccountRentExemption;
+      stakeToReceive = stakeKeypair.publicKey;
+      console.info(`Creating an account to receive stake ${stakeToReceive.toBase58()}`);
+    } else {
+      stakeToReceive = stakeReceiver;
+    }
+
+    // Add Approve instruction for this specific withdraw amount
+    instructions.push(
+      createApproveInstruction(
+        finalPoolTokenAccount,
+        sourceTransferAuthority,
+        tokenOwner,
+        withdrawAccount.poolAmount.toNumber(),
+      ),
+    );
+
+    instructions.push(
+      StakePoolInstruction.withdrawStake({
+        stakePool: stakePoolAddress,
+        validatorList: stakePool.account.data.validatorList,
+        validatorStake: withdrawAccount.stakeAddress,
+        destinationStake: stakeToReceive,
+        destinationStakeAuthority: tokenOwner,
+        sourceTransferAuthority,
+        sourcePoolAccount: finalPoolTokenAccount,
+        managerFeeAccount: stakePool.account.data.managerFeeAccount,
+        poolMint: stakePool.account.data.poolMint,
+        poolTokens: withdrawAccount.poolAmount,
+        withdrawAuthority,
+      }),
+    );
+
+    // add merge instruction for delegated stakeReceiver
+    if (stakeReceiver && stakeReceiverAccount?.type === 'delegated') {
+      instructions.push(
+        ...StakeProgram.merge({
+          stakePubkey: stakeReceiver,
+          sourceStakePubKey: stakeToReceive,
+          authorizedPubkey: tokenOwner,
+        }).instructions,
+      );
+    } else {
+      // otherwise deactivate immediately
+      instructions.push(
+        ...StakeProgram.deactivate({
+          stakePubkey: stakeToReceive,
+          authorizedPubkey: tokenOwner,
+        }).instructions,
+      );
+    }
+
+    instructionSet.push(instructions);
+    signerSet.push(signers);
+    i++;
+  }
+
+  return {
+    instructionSet,
+    signerSet,
+    totalRentFreeBalances,
+  };
+}
+
+/**
+ * Creates instructions required to withdraw stake from a stake pool.
+ */
+export async function withdrawStake(
+  connection: Connection,
+  stakePoolAddress: PublicKey,
+  tokenOwner: PublicKey,
+  amount: number,
+  useReserve = false,
+  voteAccountAddress?: PublicKey,
+  stakeReceiver?: PublicKey,
+  poolTokenAccount?: PublicKey,
+  validatorComparator?: (_a: ValidatorAccount, _b: ValidatorAccount) => number,
+  ephemeralSourceTransferAuthority?: PublicKey,
+) {
+  const {
+    stakePool,
+    poolAmount,
+    poolTokenAccount: finalPoolTokenAccount,
+    stakeAccountRentExemption,
+    withdrawAuthority,
+    stakeReceiverAccount,
+    withdrawAccounts,
+  } = await prepareWithdrawOperation(
+    connection,
+    stakePoolAddress,
+    tokenOwner,
+    amount,
+    useReserve,
+    voteAccountAddress,
+    stakeReceiver,
+    poolTokenAccount,
+    validatorComparator,
+  );
 
   // Construct transaction to withdraw from withdrawAccounts account list
   const instructions: TransactionInstruction[] = [];
@@ -501,9 +691,10 @@ export async function withdrawStake(
     sourceTransferAuthority = signer.publicKey;
   }
 
+  // Single approve instruction for total amount
   instructions.push(
     createApproveInstruction(
-      poolTokenAccount,
+      finalPoolTokenAccount,
       sourceTransferAuthority,
       tokenOwner,
       poolAmount.toNumber(),
@@ -555,7 +746,7 @@ export async function withdrawStake(
         destinationStake: stakeToReceive,
         destinationStakeAuthority: tokenOwner,
         sourceTransferAuthority,
-        sourcePoolAccount: poolTokenAccount,
+        sourcePoolAccount: finalPoolTokenAccount,
         managerFeeAccount: stakePool.account.data.managerFeeAccount,
         poolMint: stakePool.account.data.poolMint,
         poolTokens: withdrawAccount.poolAmount,
@@ -564,6 +755,7 @@ export async function withdrawStake(
     );
     i++;
   }
+
   if (stakeReceiver && stakeReceiverAccount?.type === 'delegated') {
     signers.forEach((newStakeKeypair) => {
       instructions.concat(
