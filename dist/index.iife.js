@@ -29766,6 +29766,10 @@ var solanaStakePool = (function (exports) {
 	                    .mul(inverseFee.denominator)
 	                    .div(inverseFee.numerator);
 	            }
+	            // TODO: find a better way, doesnt work with low `availableForWithdrawal`
+	            if (availableForWithdrawal.lte(new BN(10))) {
+	                continue;
+	            }
 	            const poolAmount = BN.min(availableForWithdrawal, remainingAmount);
 	            if (poolAmount.lte(new BN(0))) {
 	                continue;
