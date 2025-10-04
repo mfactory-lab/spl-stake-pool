@@ -29760,6 +29760,10 @@ var solanaStakePool = (function (exports) {
 	            if (lamports.lte(minBalance) && type == 'transient') {
 	                continue;
 	            }
+	            // // skip accounts that are too small to withdraw from
+	            // if (lamports.lte(minBalance.add(new BN(10)))) {
+	            //   continue;
+	            // }
 	            let availableForWithdrawal = calcPoolTokensForDeposit(stakePool, lamports);
 	            if (!skipFee && !inverseFee.numerator.isZero()) {
 	                availableForWithdrawal = availableForWithdrawal
@@ -29767,7 +29771,7 @@ var solanaStakePool = (function (exports) {
 	                    .div(inverseFee.numerator);
 	            }
 	            // TODO: find a better way, doesnt work with low `availableForWithdrawal`
-	            if (availableForWithdrawal.lte(new BN(10))) {
+	            if (availableForWithdrawal.lte(new BN(100))) {
 	                continue;
 	            }
 	            const poolAmount = BN.min(availableForWithdrawal, remainingAmount);
@@ -29779,6 +29783,8 @@ var solanaStakePool = (function (exports) {
 	            // console.log(`lamports: ${lamports}`);
 	            // console.log(`minBalance: ${minBalance}`);
 	            // console.log(`poolAmount : ${poolAmount}`);
+	            // console.log(`remainingAmount : ${remainingAmount}`);
+	            // console.log(`availableForWithdrawal : ${availableForWithdrawal}`);
 	            // Those accounts will be withdrawn completely with `claim` instruction
 	            withdrawFrom.push({ stakeAddress, voteAddress, poolAmount });
 	            remainingAmount = remainingAmount.sub(poolAmount);
