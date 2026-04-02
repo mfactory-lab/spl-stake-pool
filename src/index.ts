@@ -918,20 +918,22 @@ export async function increaseValidatorStake(
       stakePoolAddress,
       new BN(ephemeralStakeSeed),
     );
-    StakePoolInstruction.increaseAdditionalValidatorStake({
-      stakePool: stakePoolAddress,
-      staker: stakePool.account.data.staker,
-      validatorList: stakePool.account.data.validatorList,
-      reserveStake: stakePool.account.data.reserveStake,
-      transientStakeSeed: transientStakeSeed.toNumber(),
-      withdrawAuthority,
-      transientStake,
-      validatorStake,
-      validatorVote,
-      lamports,
-      ephemeralStake,
-      ephemeralStakeSeed,
-    });
+    instructions.push(
+      StakePoolInstruction.increaseAdditionalValidatorStake({
+        stakePool: stakePoolAddress,
+        staker: stakePool.account.data.staker,
+        validatorList: stakePool.account.data.validatorList,
+        reserveStake: stakePool.account.data.reserveStake,
+        transientStakeSeed: transientStakeSeed.toNumber(),
+        withdrawAuthority,
+        transientStake,
+        validatorStake,
+        validatorVote,
+        lamports,
+        ephemeralStake,
+        ephemeralStakeSeed,
+      }),
+    );
   } else {
     instructions.push(
       StakePoolInstruction.increaseValidatorStake({

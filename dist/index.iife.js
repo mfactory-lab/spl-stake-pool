@@ -29778,13 +29778,13 @@ var solanaStakePool = (function (exports) {
 	            if (poolAmount.lte(new BN(0))) {
 	                continue;
 	            }
-	            // console.log(`type: ${type}`);
-	            // console.log(`voteAddress: ${voteAddress}`);
-	            // console.log(`lamports: ${lamports}`);
-	            // console.log(`minBalance: ${minBalance}`);
-	            // console.log(`poolAmount : ${poolAmount}`);
-	            // console.log(`remainingAmount : ${remainingAmount}`);
-	            // console.log(`availableForWithdrawal : ${availableForWithdrawal}`);
+	            console.log(`type: ${type}`);
+	            console.log(`voteAddress: ${voteAddress}`);
+	            console.log(`lamports: ${lamports}`);
+	            console.log(`minBalance: ${minBalance}`);
+	            console.log(`poolAmount : ${poolAmount}`);
+	            console.log(`remainingAmount : ${remainingAmount}`);
+	            console.log(`availableForWithdrawal : ${availableForWithdrawal}`);
 	            // Those accounts will be withdrawn completely with `claim` instruction
 	            withdrawFrom.push({ stakeAddress, voteAddress, poolAmount });
 	            remainingAmount = remainingAmount.sub(poolAmount);
@@ -31239,7 +31239,7 @@ var solanaStakePool = (function (exports) {
 	    const instructions = [];
 	    if (ephemeralStakeSeed !== undefined) {
 	        const ephemeralStake = findEphemeralStakeProgramAddress(STAKE_POOL_PROGRAM_ID, stakePoolAddress, new BN(ephemeralStakeSeed));
-	        StakePoolInstruction.increaseAdditionalValidatorStake({
+	        instructions.push(StakePoolInstruction.increaseAdditionalValidatorStake({
 	            stakePool: stakePoolAddress,
 	            staker: stakePool.account.data.staker,
 	            validatorList: stakePool.account.data.validatorList,
@@ -31252,7 +31252,7 @@ var solanaStakePool = (function (exports) {
 	            lamports,
 	            ephemeralStake,
 	            ephemeralStakeSeed,
-	        });
+	        }));
 	    }
 	    else {
 	        instructions.push(StakePoolInstruction.increaseValidatorStake({
