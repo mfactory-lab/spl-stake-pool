@@ -1867,8 +1867,10 @@ async function depositSol(connection, stakePoolAddress, from, lamports, destinat
         fundingAccount = userSolTransfer.publicKey;
         signers.push(userSolTransfer);
     }
-    // Create the ephemeral SOL account
-    instructions.push(web3_js.SystemProgram.transfer({ fromPubkey: from, toPubkey: fundingAccount, lamports }));
+    // Create the ephemeral SOL account if needed
+    if (from.toString() !== fundingAccount.toString()) {
+        instructions.push(web3_js.SystemProgram.transfer({ fromPubkey: from, toPubkey: fundingAccount, lamports }));
+    }
     // Create token account if not specified
     if (!destinationTokenAccount) {
         const associatedAddress = splToken.getAssociatedTokenAddressSync(stakePool.poolMint, from, true);
