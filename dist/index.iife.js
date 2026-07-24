@@ -29684,6 +29684,21 @@ var solanaStakePool = (function (exports) {
 	        },
 	    };
 	}
+	/**
+	 * Minimum lamports of stake the stake-pool program requires a validator stake
+	 * account to retain: `max(stakeProgramMinimumDelegation, MINIMUM_ACTIVE_STAKE)`.
+	 *
+	 * The stake program's minimum delegation is a RUNTIME value — raised to 1 SOL on
+	 * clusters where the `stake_raise_minimum_delegation_to_1_sol` feature is active —
+	 * so it must be read from the chain, not hardcoded. Mirrors `minimum_delegation()`
+	 * in the on-chain program. Using the stale hardcoded floor makes WithdrawStake
+	 * leave a validator account below the required minimum, which the program rejects
+	 * with StakeLamportsNotEqualToMinimum (custom error 0x17).
+	 */
+	async function getStakePoolMinimumDelegation(connection) {
+	    const { value } = await connection.getStakeMinimumDelegation();
+	    return Math.max(value, MINIMUM_ACTIVE_STAKE);
+	}
 	async function prepareWithdrawAccounts(connection, stakePool, stakePoolAddress, amount, compareFn, skipFee) {
 	    var _a, _b, _c;
 	    const validatorListAcc = await connection.getAccountInfo(stakePool.validatorList);
@@ -29692,7 +29707,8 @@ var solanaStakePool = (function (exports) {
 	        throw new Error('No accounts found');
 	    }
 	    const minBalanceForRentExemption = await connection.getMinimumBalanceForRentExemption(StakeProgram.space);
-	    const minBalance = new BN(minBalanceForRentExemption + MINIMUM_ACTIVE_STAKE);
+	    const stakeMinimumDelegation = await getStakePoolMinimumDelegation(connection);
+	    const minBalance = new BN(minBalanceForRentExemption + stakeMinimumDelegation);
 	    let accounts = [];
 	    // Prepare accounts
 	    for (const validator of validatorList.validators) {
@@ -29778,13 +29794,13 @@ var solanaStakePool = (function (exports) {
 	            if (poolAmount.lte(new BN(0))) {
 	                continue;
 	            }
-	            console.log(`type: ${type}`);
-	            console.log(`voteAddress: ${voteAddress}`);
-	            console.log(`lamports: ${lamports}`);
-	            console.log(`minBalance: ${minBalance}`);
-	            console.log(`poolAmount : ${poolAmount}`);
-	            console.log(`remainingAmount : ${remainingAmount}`);
-	            console.log(`availableForWithdrawal : ${availableForWithdrawal}`);
+	            // console.log(`type: ${type}`);
+	            // console.log(`voteAddress: ${voteAddress}`);
+	            // console.log(`lamports: ${lamports}`);
+	            // console.log(`minBalance: ${minBalance}`);
+	            // console.log(`poolAmount : ${poolAmount}`);
+	            // console.log(`remainingAmount : ${remainingAmount}`);
+	            // console.log(`availableForWithdrawal : ${availableForWithdrawal}`);
 	            // Those accounts will be withdrawn completely with `claim` instruction
 	            withdrawFrom.push({ stakeAddress, voteAddress, poolAmount });
 	            remainingAmount = remainingAmount.sub(poolAmount);
@@ -30929,6 +30945,7 @@ var solanaStakePool = (function (exports) {
         Maximum withdraw amount is ${lamportsToSol(tokenAccount.amount)} pool tokens.`);
 	    }
 	    const stakeAccountRentExemption = await connection.getMinimumBalanceForRentExemption(StakeProgram.space);
+	    const stakeMinimumDelegation = await getStakePoolMinimumDelegation(connection);
 	    const withdrawAuthority = findWithdrawAuthorityProgramAddress(STAKE_POOL_PROGRAM_ID, stakePoolAddress);
 	    let stakeReceiverAccount = null;
 	    if (stakeReceiver) {
@@ -30960,7 +30977,7 @@ var solanaStakePool = (function (exports) {
 	            if (!stakeAccount) {
 	                throw new Error("Preferred withdraw validator's stake account is invalid");
 	            }
-	            const availableForWithdrawal = calcLamportsWithdrawAmount(stakePool.account.data, new BN(stakeAccount.lamports - MINIMUM_ACTIVE_STAKE - stakeAccountRentExemption));
+	            const availableForWithdrawal = calcLamportsWithdrawAmount(stakePool.account.data, new BN(stakeAccount.lamports - stakeMinimumDelegation - stakeAccountRentExemption));
 	            if (availableForWithdrawal.lt(poolAmount)) {
 	                throw new Error(`Not enough lamports available for withdrawal from ${stakeAccountAddress},
             ${poolAmount} asked, ${availableForWithdrawal} available.`);
@@ -30981,7 +30998,7 @@ var solanaStakePool = (function (exports) {
 	        if (!stakeAccount) {
 	            throw new Error('Invalid Stake Account');
 	        }
-	        const availableLamports = new BN(stakeAccount.lamports - MINIMUM_ACTIVE_STAKE - stakeAccountRentExemption);
+	        const availableLamports = new BN(stakeAccount.lamports - stakeMinimumDelegation - stakeAccountRentExemption);
 	        if (availableLamports.lt(new BN(0))) {
 	            throw new Error('Invalid Stake Account');
 	        }

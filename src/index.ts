@@ -23,6 +23,7 @@ import {
   findMetadataAddress,
   findTransientStakeProgramAddress,
   findWithdrawAuthorityProgramAddress,
+  getStakePoolMinimumDelegation,
   getValidatorListAccount,
   lamportsToSol,
   newStakeAccount,
@@ -40,7 +41,6 @@ import {
 import {
   DEFAULT_MAX_VALIDATORS,
   MAX_VALIDATORS_TO_UPDATE,
-  MINIMUM_ACTIVE_STAKE,
   STAKE_POOL_PROGRAM_ID,
 } from './constants';
 
@@ -371,6 +371,7 @@ async function prepareWithdrawOperation(
   const stakeAccountRentExemption = await connection.getMinimumBalanceForRentExemption(
     StakeProgram.space,
   );
+  const stakeMinimumDelegation = await getStakePoolMinimumDelegation(connection);
 
   const withdrawAuthority = findWithdrawAuthorityProgramAddress(
     STAKE_POOL_PROGRAM_ID,
@@ -422,7 +423,7 @@ async function prepareWithdrawOperation(
 
       const availableForWithdrawal = calcLamportsWithdrawAmount(
         stakePool.account.data,
-        new BN(stakeAccount.lamports - MINIMUM_ACTIVE_STAKE - stakeAccountRentExemption),
+        new BN(stakeAccount.lamports - stakeMinimumDelegation - stakeAccountRentExemption),
       );
 
       if (availableForWithdrawal.lt(poolAmount)) {
@@ -453,7 +454,7 @@ async function prepareWithdrawOperation(
     }
 
     const availableLamports = new BN(
-      stakeAccount.lamports - MINIMUM_ACTIVE_STAKE - stakeAccountRentExemption,
+      stakeAccount.lamports - stakeMinimumDelegation - stakeAccountRentExemption,
     );
     if (availableLamports.lt(new BN(0))) {
       throw new Error('Invalid Stake Account');

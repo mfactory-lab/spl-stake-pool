@@ -37,6 +37,22 @@ export interface ValidatorAccount {
   lamports: BN;
 }
 
+/**
+ * Minimum lamports of stake the stake-pool program requires a validator stake
+ * account to retain: `max(stakeProgramMinimumDelegation, MINIMUM_ACTIVE_STAKE)`.
+ *
+ * The stake program's minimum delegation is a RUNTIME value — raised to 1 SOL on
+ * clusters where the `stake_raise_minimum_delegation_to_1_sol` feature is active —
+ * so it must be read from the chain, not hardcoded. Mirrors `minimum_delegation()`
+ * in the on-chain program. Using the stale hardcoded floor makes WithdrawStake
+ * leave a validator account below the required minimum, which the program rejects
+ * with StakeLamportsNotEqualToMinimum (custom error 0x17).
+ */
+export async function getStakePoolMinimumDelegation(connection: Connection): Promise<number> {
+  const { value } = await connection.getStakeMinimumDelegation();
+  return Math.max(value, MINIMUM_ACTIVE_STAKE);
+}
+
 export async function prepareWithdrawAccounts(
   connection: Connection,
   stakePool: StakePool,
@@ -57,7 +73,8 @@ export async function prepareWithdrawAccounts(
   const minBalanceForRentExemption = await connection.getMinimumBalanceForRentExemption(
     StakeProgram.space,
   );
-  const minBalance = new BN(minBalanceForRentExemption + MINIMUM_ACTIVE_STAKE);
+  const stakeMinimumDelegation = await getStakePoolMinimumDelegation(connection);
+  const minBalance = new BN(minBalanceForRentExemption + stakeMinimumDelegation);
 
   let accounts = [] as Array<{
     type: 'preferred' | 'active' | 'transient' | 'reserve';
